@@ -18,7 +18,7 @@ import { IdentityFailure, sessionTiming, type IdentitySession } from '../identit
 import { CatalogReadGate } from './catalog-editor-state';
 import { buyerCategoryLabel, buyerCurrentCode, createBuyerCatalogGateway, type BuyerCategoryCount, type BuyerVariant } from './catalog-buyer-client';
 import { CatalogBuyerPhoto } from './CatalogBuyerPhoto';
-import { catalogHistoryUrl, guestCatalogHref, memberCatalogPath, readCatalogHistoryQuery, type CatalogHistoryQuery } from './catalog-history';
+import { catalogHistoryUrl, guestCatalogHref, memberCatalogPath, nonBuyerCatalogHref, readCatalogHistoryQuery, type CatalogHistoryQuery } from './catalog-history';
 import catalog from './storefront-catalog.module.css';
 import styles from './buyer-catalog.module.css';
 import { BuyBox } from './BuyBox';
@@ -90,6 +90,7 @@ export function BuyerCatalog({ publicId, returnPath = '/shop', requestOnly = fal
   const [categories, setCategories] = useState<BuyerCategoryCount[]>([]), [layout, setLayout] = useState<'grid' | 'list'>('grid');
   const [busy, setBusy] = useState(true), [detailBusy, setDetailBusy] = useState<string | null>(null), [selected, setSelected] = useState<BuyerVariant | null>(null);
   const [error, setError] = useState<unknown>(null), [notice, setNotice] = useState(''), [elapsed, setElapsed] = useState(0);
+  const [notBuyer, setNotBuyer] = useState<string | null>(null);
   const dialog = useRef<HTMLDialogElement>(null), alive = useRef(false), opener = useRef<HTMLButtonElement | null>(null);
   const appliedQuery = useRef<CatalogHistoryQuery | null>(null);
   const current = useCallback(() => alive.current && account !== null && !sessionTiming(account.session, performance.now() - account.observedAt).expired, [account]);
@@ -132,6 +133,8 @@ export function BuyerCatalog({ publicId, returnPath = '/shop', requestOnly = fal
         if (!session.authenticated || !session.account) throw new IdentityFailure(401, 'unauthenticated');
         const scope = await access.current(); if (!request.current()) return;
         if (scope.userId !== session.account.userId) throw new AccessFailure(409, 'actor_changed');
+        const elsewhere = nonBuyerCatalogHref(scope.allowedActions, publicId, window.location.search);
+        if (elsewhere) { setNotBuyer(elsewhere); return; }
         const page = publicId === undefined ? await gateway.query(scope.userId, query, offset, request.signal, { category, sort }) : null;
         const variant = publicId === undefined ? null : await gateway.variant(scope.userId, publicId, request.signal); if (!request.current()) return;
         if (sessionTiming(session, performance.now() - observedAt).expired) throw new IdentityFailure(401, 'session_expired');
@@ -183,6 +186,7 @@ export function BuyerCatalog({ publicId, returnPath = '/shop', requestOnly = fal
     if (!needsSignIn) return;
     router.replace(guestCatalogHref(publicId, window.location.search));
   }, [needsSignIn, publicId, router]);
+  useEffect(() => { if (notBuyer) router.replace(notBuyer); }, [notBuyer, router]);
   const signInPath = memberCatalogPath(publicId);
   const signInLink = <Link className={buttonClassName({ variant: 'primary' })} href={'/identity/login?returnPath=' + encodeURIComponent(signInPath)}>Masuk atau periksa akun <ArrowRight aria-hidden="true" /></Link>;
   const crumbs = <span className={catalog.crumbs}><Link href="/">Beranda</Link><ChevronRight size={14} aria-hidden="true" />

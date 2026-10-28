@@ -418,7 +418,7 @@ public sealed partial class AccessHttpTests(MongoFixture fixture)
     }
 
     [Fact]
-    public async Task Catalog_has_six_roles_and_separate_finance_packs_without_implicit_payment_verification()
+    public async Task Catalog_lists_every_role_template_and_separate_finance_packs_without_implicit_payment_verification()
     {
         await using var data = await StoreTestData.CreateAsync(fixture);
         var actor = await data.AddActorAsync(1000, new(GrantScopeKind.System), Permissions.AccessPropose);
@@ -427,7 +427,7 @@ public sealed partial class AccessHttpTests(MongoFixture fixture)
         var response = await client.GetAsync("/api/v1/access/catalog");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var body = await Body(response);
-        Assert.Equal(6, body["roles"]!.AsArray().Count);
+        Assert.Equal(15, body["roles"]!.AsArray().Count);
         Assert.Equal(4, body["financePacks"]!.AsArray().Count);
         Assert.Empty(body["roles"]!.AsArray().Single(role => role!["id"]!.GetValue<string>() == "finance")!["permissions"]!.AsArray());
         Assert.DoesNotContain(body["financePacks"]!.AsArray(), pack => pack!["permissions"]!.AsArray()

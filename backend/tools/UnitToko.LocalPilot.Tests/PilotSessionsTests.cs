@@ -13,7 +13,8 @@ public sealed class PilotSessionsTests
         "petugas-gudang", "petugas-kirim", "kurir", "keuangan-tagihan", "pemeriksa-pembayaran", "pengadaan", "penyetuju-pengadaan", "admin-akses", "penyetuju-akses",
         "staf-pembeli"];
 
-    /// <summary>Every maker/checker pair in Permissions.cs: the proposing side, then the deciding side. No persona may hold both.</summary>
+    /// <summary>Every maker/checker pair: the proposing side, then the deciding side. No persona may hold both. Same list as
+    /// MakerCheckerPairs.All in UnitToko.Tests/Authorization/RoleTemplateJobTests.cs (a separate project, so it is kept in step by hand).</summary>
     private static readonly (string Maker, string Checker)[] MakerChecker = [
         (Permissions.OrderSubmit, Permissions.OrderSpendApprove), (Permissions.OrderSubmit, Permissions.OrderApprove),
         (Permissions.BranchOrderRequestSubmit, Permissions.BranchOrderRequestDecide), (Permissions.SubstitutionPropose, Permissions.SubstitutionAccept),
@@ -36,6 +37,25 @@ public sealed class PilotSessionsTests
         (Permissions.AccountingBookPropose, Permissions.AccountingBookApprove), (Permissions.AccessPropose, Permissions.AccessApprove),
         (Permissions.MembershipPropose, Permissions.MembershipApprove), (Permissions.PersonReviewPropose, Permissions.PersonReviewApprove),
         (Permissions.TechnicalConfigure, Permissions.OrganizationApprove),
+        // Independence the services and ApprovalPolicy enforce from recorded history (RequestedBy / RecordedBy / ApprovedBy / SubmittedBy ...):
+        (Permissions.BankStatementStage, Permissions.BankReceiptConfirm),          // BankReceiptService.PeopleAsync: the statement importer
+        (Permissions.BankStatementStage, Permissions.DisbursementVerify),          // ProcurementSettlementService, RefundPayoutService.Settlement: the importer
+        (Permissions.FundingApprove, Permissions.DisbursementRecord),              // ProcurementDisbursementService, ApprovalPolicy: the funding approver
+        (Permissions.RefundApprove, Permissions.DisbursementRecord),               // RefundPayoutService, ApprovalPolicy: the refund approver
+        (Permissions.ProcurementSupplierDocumentMatch, Permissions.ProcurementStockValuationDecide), // ProcurementStockValuationService: the matcher
+        (Permissions.CaseRequest, Permissions.CaseManage),                         // ApprovalPolicy (AfterSalesCaseService): the case requester
+        (Permissions.CaseRequest, Permissions.CreditRequest), (Permissions.CaseRequest, Permissions.RefundRequest), // ReturnEntitlementService: the case requester
+        (Permissions.CaseRequest, Permissions.CreditApprove), (Permissions.CaseRequest, Permissions.RefundApprove), // ReturnFinancialApprovalService: every maker so far
+        (Permissions.PaymentEvidence, Permissions.PaymentVerify),                  // PaymentVerificationService: the payment submitter
+        (Permissions.PaymentEvidence, Permissions.PaymentAllocate),                // PaymentAllocationService (RecordedBy): the payment submitter
+        (Permissions.PaymentEvidence, Permissions.PaymentReviewManual),            // manual payment review: the payment submitter
+        (Permissions.PaymentEvidence, Permissions.PaymentReviewManage),            // payment review actions (RecordedBy): the payment submitter
+        (Permissions.PaymentEvidence, Permissions.CreditApprove), (Permissions.PaymentEvidence, Permissions.RefundApprove), // ReturnFinancialApprovalService
+        (Permissions.PaymentAllocate, Permissions.CreditApprove), (Permissions.PaymentAllocate, Permissions.RefundApprove), // ReturnFinancialApprovalService
+        (Permissions.PaymentVerify, Permissions.CreditApprove), (Permissions.PaymentVerify, Permissions.RefundApprove),     // ReturnFinancialApprovalService
+        (Permissions.StockCount, Permissions.StockAdjustApprove),                  // ApprovalPolicy: the counter (CountedBy)
+        (Permissions.PeriodSubmit, Permissions.PeriodClose), (Permissions.PeriodApprove, Permissions.PeriodClose), // ApprovalPolicy: submitter and approver
+        (Permissions.PeriodClose, Permissions.PeriodReopenApprove),                // ApprovalPolicy: ClosedBy
     ];
 
     [Fact]
