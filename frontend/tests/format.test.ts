@@ -82,3 +82,26 @@ test("formatDecimal keeps up to the given decimals without trailing zeros", () =
   assert.equal(formatDecimal(1.2345, 3), "1,235");
   assert.equal(formatDecimal(12500, 3), "12.500");
 });
+
+// A malformed or empty date must show as typed (or a dash), never throw out of a render.
+test("display date formatters never throw on malformed or empty input", () => {
+  for (const show of [formatDate, formatMonth, formatTime, formatDateTime, dateFormatter.format, dateTimeFormatter.format]) {
+    assert.equal(show(""), "—");
+    assert.equal(show("   "), "—");
+    assert.equal(show("22-10-2026"), "22-10-2026", "malformed text is returned unchanged");
+    assert.equal(show("not a date"), "not a date");
+    assert.equal(show(Number.NaN), "—");
+    assert.equal(show(new Date("garbage")), "—");
+    assert.equal(show(null as unknown as string), "—");
+    assert.equal(show(undefined as unknown as string), "—");
+  }
+  assert.equal(formatDate("2026-13-45", "long"), "2026-13-45");
+  assert.equal(formatDate("", "full"), "—");
+  // Valid input is unchanged, including the date-only and year-month forms the server sends.
+  assert.equal(formatDate("2026-10-22"), "22 Okt 2026");
+  assert.equal(formatMonth("2026-10"), "Oktober 2026");
+  assert.equal(formatDate("2026-10-17T07:30:00Z", "full"), "Sabtu, 17 Oktober 2026");
+  assert.equal(formatDateTime("2026-10-17T07:30:00Z"), "17 Okt 2026 14.30 WIB");
+  // The key used for comparisons keeps failing loudly: a wrong day must not pass silently.
+  assert.throws(() => jakartaDateKey("garbage"), RangeError);
+});

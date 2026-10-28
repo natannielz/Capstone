@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { recordNumber } from '@/lib/document-numbers';
 import { createUnitTokoClient, RequestNotSentError } from '../../api/client';
 import { AccessFailure } from '../administration/workflow';
 import { createProcurementStockReceiptGateway, type StockReceiptPool } from './procurement-stock-receipt-client';
@@ -103,4 +104,9 @@ export function createPurchaseOrderGateway(client: ReturnType<typeof createUnitT
     async decide(command: ReturnType<typeof preparePurchaseOrderDecision>, key: string, current: () => boolean) { const op = 'procurement.purchase.order.' + command.decision; if (purchaseOrderKeyOwner(key, op).id !== command.proposalId) return invalid(); ensure(current); const saved = parsePurchaseOrderResult(data(await client.POST('/api/v1/procurement/purchase-orders/proposals/{id}/decisions', { body: command.body, params: { path: { id: command.proposalId }, header: { ...headers(command.actorId), 'Idempotency-Key': key, 'If-Match': '"1"' } } })), key, op); after(current); return saved; },
     async recover(actorId: string, op: string, key: string) { const owner = purchaseOrderKeyOwner(key, op), checked = parse(recovery, data(await client.POST('/api/v1/procurement/purchase-orders/operations/query', { body: { purpose: 'operation-recovery', operation: op, key }, params: { header: headers(actorId) } }))); if (!checked.result) return null; const saved = parsePurchaseOrderResult(checked.result, key, op); if (owner.action === 'propose') { const actual = parsePurchaseOrderProposal(data(await client.POST('/api/v1/procurement/purchase-orders/proposals/{id}/query', { body: { purpose }, params: { path: { id: saved.proposalId }, header: headers(actorId) } })), saved.proposalId); if (actual.request.id !== owner.id) return invalid(); } return { state: 'committed' as const, result: saved }; },
   };
+}
+
+/** How a supplier order is named (F-021): its SP number once approval created the order; before that it is still a proposal. */
+export function purchaseOrderLabel(value: { id: string; state: 'pending' | 'approved' | 'rejected'; decision: { orderId: string | null } | null }): string {
+  return value.state === 'approved' && value.decision?.orderId ? recordNumber('purchaseOrder', value.decision.orderId) : 'Usulan pesanan ' + value.id;
 }
