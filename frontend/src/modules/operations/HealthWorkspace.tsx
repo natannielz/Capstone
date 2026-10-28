@@ -1,8 +1,7 @@
 'use client';
 
-import Link from 'next/link';
 import { SessionAccessState } from '@/components/workspace-kit/session-access-state';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { createIdentityGateway } from '../identity/identity-client';
 import { IdentityFailure } from '../identity/identity-workflow';
 import { createAccessGateway } from '../administration/access-client';
@@ -11,6 +10,9 @@ import common from '../administration/access.module.css';
 import { createOperatorHealthGateway, type OperatorHealth } from './health-client';
 import { HealthReportView } from './HealthReportView';
 import styles from './health.module.css';
+import { Button } from '@/components/workspace-kit/button';
+import { PageHeader } from '@/components/workspace-kit/page-header';
+import { StateView } from '@/components/workspace-kit/state-view';
 
 // The report is cheap (counts on indexed fields); a minute keeps the page current without hammering the database.
 const REFRESH_MS = 60_000;
@@ -62,19 +64,18 @@ export function HealthWorkspace() {
   }, [actorId, read, refresh]);
 
   const denied = error instanceof IdentityFailure || error instanceof AccessFailure && [401, 403, 409].includes(error.status) && report === null;
+  const header = (action?: ReactNode) => <PageHeader title="Kesehatan sistem" secondaryAction={action}
+    description="Antrean latar, OCR dokumen, pembersihan draf, versi skema dan replikasi basis data. Hanya jumlah dan umur; tidak ada data pelanggan." />;
   return <main className={common.page}>
-    <header className={common.header}>
-      <div><Link className={common.brand} href="/identity/account">Unit Toko</Link><h1>Kesehatan sistem</h1>
-        <p>Antrean latar, OCR dokumen, pembersihan draf, versi skema dan replikasi basis data. Hanya jumlah dan umur; tidak ada data pelanggan.</p></div>
-      <Link href="/identity/account">Akun saya</Link>
-    </header>
-    {error !== null && !denied && <p className={common.alert} role="alert">{message(error)}</p>}
-    {denied ? <SessionAccessState error={error} returnPath="/operations/health" onRetry={() => { setError(null); setBusy(true); setAttempt(value => value + 1); }} />
+    {denied ? <>{header()}<div className="ui-stack"><SessionAccessState error={error} returnPath="/operations/health" onRetry={() => { setError(null); setBusy(true); setAttempt(value => value + 1); }} /></div></>
       : <>
-        {report === null ? <p className={styles.notice} aria-live="polite">{busy ? 'Membaca laporan kesehatan…' : 'Laporan belum tersedia.'}</p> : <HealthReportView report={report} />}
-        <div className={styles.actions}>
-          <button type="button" disabled={busy || actorId === null} onClick={() => { if (actorId) refresh(actorId); }}>{busy ? 'Memeriksa…' : 'Periksa ulang'}</button>
-          <span aria-live="polite">Diperbarui otomatis setiap menit selama halaman terbuka.</span>
+        {header(<Button type="button" disabled={actorId === null} busy={busy} onClick={() => { if (actorId) refresh(actorId); }}>Periksa ulang</Button>)}
+        <div className="ui-stack">
+          {error !== null && <StateView kind="error" title={message(error)} />}
+          {report !== null ? <HealthReportView report={report} />
+            : busy ? <StateView kind="loading" title="Membaca laporan kesehatan…" />
+            : error === null && <StateView kind="unknown" title="Laporan belum tersedia." />}
+          <p className={styles.refreshNote} aria-live="polite">Diperbarui otomatis setiap menit selama halaman terbuka.</p>
         </div>
       </>}
   </main>;
