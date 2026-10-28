@@ -87,7 +87,8 @@ function mountPayment(replies: {save?: () => Response; recoverDraft?: () => Resp
     useCallback(callback: unknown, dependencies?: readonly unknown[]) {const index = position++, previous = active.slots[index] as {value: unknown; dependencies?: readonly unknown[]} | undefined;
       if (!previous || changed(previous.dependencies, dependencies)) active.slots[index] = {value: callback, dependencies}; return (active.slots[index] as {value: unknown}).value;},
     useEffect(effect: () => void | (() => void), dependencies?: readonly unknown[]) {pending.push({frame: active, index: position++, effect, dependencies});}};
-  let rupiahInputKit: Record<string, unknown> | undefined, sessionStateKit: Record<string, unknown> | undefined;
+  let rupiahInputKit: Record<string, unknown> | undefined, sessionStateKit: Record<string, unknown> | undefined, statusDictionary: Record<string, unknown> | undefined;
+  const kit: Record<string, Record<string, unknown>> = {};
   const runtimeRequire = createRequire(resolve('package.json')), ts = runtimeRequire('typescript') as typeof import('typescript');
   const marker = () => null;
   const imports = (name: string): unknown => {
@@ -118,6 +119,12 @@ function mountPayment(replies: {save?: () => Response; recoverDraft?: () => Resp
     if (name === '@/components/workspace-kit/rupiah-input') return rupiahInputKit ??= load('src/components/workspace-kit/rupiah-input.tsx');
     if (name === '@/modules/identity/return-query') return returnQuery;
     if (name === '@/components/workspace-kit/session-access-state') return sessionStateKit ??= load('src/components/workspace-kit/session-access-state.tsx');
+    // The page renders through the shared workspace kit (UI-PAGES-C): load the real primitives, not stand-ins.
+    const kitModule = name.startsWith('@/components/workspace-kit/') ? name.slice('@/components/workspace-kit/'.length)
+      : /^\.\/(button|pagination|state-view|list-table)$/.test(name) ? name.slice(2) : null;
+    if (kitModule) return kit[kitModule] ??= load('src/components/workspace-kit/' + kitModule + '.tsx');
+    if (name === 'lucide-react') return runtimeRequire(name);
+    if (name === '@/lib/status/dictionary') return statusDictionary ??= load('src/lib/status/dictionary.ts');
     throw new Error('Unexpected mounted payment import: ' + name);
   };
   function load(file: string) {

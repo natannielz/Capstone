@@ -4,10 +4,10 @@ import { useEffect, useRef, useState } from 'react';
 import { accessMessage } from '../administration/workflow';
 import type { PaymentDraft } from './payment-client';
 import { createPaymentReviewGateway, type PaymentDuplicatePage } from './payment-review-client';
-import common from '../administration/access.module.css';
 import styles from './invoice.module.css';
 import { dateTimeFormatter } from '@/lib/format';
 import { autoLoadEndsSession } from './payment-review-session';
+import { Button } from '@/components/workspace-kit/button';
 
 export function PaymentDuplicatePanel({ actorId, owner, locked, current, onOpen, onDenied, onBusyChange }: {
   actorId: string; owner: PaymentDraft; locked: boolean; current: () => boolean; onOpen: (id: string) => void;
@@ -33,7 +33,7 @@ export function PaymentDuplicatePanel({ actorId, owner, locked, current, onOpen,
   useEffect(() => { if (locked || autoLoaded.current) return; autoLoaded.current = true; void Promise.resolve().then(() => load(null, true /* automatic */)); }, [locked]);
   return <section className={styles.correctionPanel} aria-label="Indikasi pengajuan berulang"><h3>Indikasi pengajuan berulang</h3>
     <p>Bandingkan gambar asli yang identik dan referensi pembeli yang sama dalam cakupan akses Anda. Hasil ini tidak membuktikan transfer ganda dan tidak mengubah pembayaran.</p>
-    <button className={common.secondary} disabled={locked || busy} onClick={() => void load(null)}>Periksa ulang kecocokan pengajuan</button>
+    <Button variant="secondary" disabled={locked || busy} onClick={() => void load(null)}>Periksa ulang kecocokan pengajuan</Button>
     {busy && <p role="status">Memeriksa gambar dan referensi…</p>}
     {error !== null && <p role="alert">{accessMessage(error)}</p>}
     {page && <><h4 ref={heading} tabIndex={-1}>Hasil perbandingan pengajuan</h4>
@@ -41,9 +41,9 @@ export function PaymentDuplicatePanel({ actorId, owner, locked, current, onOpen,
         <ul className={styles.lines}>{page.items.map(item => <li key={item.declarationId}><strong>Pengajuan {item.declarationId}</strong>
           <p>{item.signals.map(signal => signal === 'same_image' ? 'Berkas gambar asli identik' : 'Referensi yang dinyatakan pembeli sama').join(' · ')}</p>
           <p>Diajukan {dateTimeFormatter.format(new Date(item.submittedAt))}</p>
-          <button className={common.secondary} disabled={locked || busy} onClick={() => onOpen(item.declarationId)}>Buka pengajuan pembanding {item.declarationId}</button>
+          <Button variant="secondary" disabled={locked || busy} onClick={() => onOpen(item.declarationId)}>Buka pengajuan pembanding {item.declarationId}</Button>
         </li>)}</ul>}
-      {page.hasMore && <button className={common.secondary} disabled={locked || busy} onClick={() => void load(page.items.at(-1)!.declarationId)}>Kecocokan lebih lama</button>}
+      {page.hasMore && <Button variant="secondary" disabled={locked || busy} onClick={() => void load(page.items.at(-1)!.declarationId)}>Kecocokan lebih lama</Button>}
     </>}
   </section>;
 }

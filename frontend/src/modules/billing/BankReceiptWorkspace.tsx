@@ -13,11 +13,16 @@ import { orderAmount } from '../ordering/order-quote-client';
 import { createBankStatementGateway, type StatementSummary, type StatementDetail } from './bank-statement-client';
 import { createBankReceiptGateway, prepareBankReceipt, type BankReceiptCommand, type BankReceiptPreview, type BankReceiptResult, type BankReceiptView } from './bank-receipt-client';
 import common from '../administration/access.module.css';
-import styles from './invoice.module.css';
 import sheet from './bank-statement.module.css';
 import { dateTimeFormatter } from '@/lib/format';
 import { rupiahAmount } from '@/lib/rupiah-input';
 import { SessionAccessState } from "@/components/workspace-kit/session-access-state";
+import { Button } from '@/components/workspace-kit/button';
+import { PageHeader } from '@/components/workspace-kit/page-header';
+import { Section } from '@/components/workspace-kit/section';
+import { StateView } from '@/components/workspace-kit/state-view';
+import { DataList } from '@/components/workspace-kit/data-list';
+import { Field } from '@/components/workspace-kit/field';
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 const rupiah = (value: string) => orderAmount('IDR', value);
@@ -65,11 +70,11 @@ export function BankReceiptWorkspace() {
     const restored = (event: PageTransitionEvent) => { if (event.persisted) { setAccount(null); setRefresh(value => value + 1); } };
     window.addEventListener('pageshow', restored); return () => { window.clearInterval(timer); window.removeEventListener('pageshow', restored); }; }, [account]);
   const denied = useCallback((failure: unknown) => { if (failure instanceof AccessFailure && failure.code !== 'step_up_required' && (failure.status === 401 || failure.status === 403 || failure.code === 'actor_changed')) { setAccount(null); setError(failure); } }, []);
-  return <main className={common.page}><header className={common.header}><div><Link href="/identity/account" className={common.brand}>Unit Toko</Link><h1>Penerimaan bank</h1><p>Periksa dana masuk secara independen dan telusuri pencatatan kasnya.</p></div></header>
-    {error !== null && account !== null && <p role="alert" className={common.alert}>{message(error)}</p>}
-    {loading ? <p role="status">Memeriksa akun…</p> : !account || sessionTiming(account.session, elapsed).expired ? <SessionAccessState kind={account ? "expired" : undefined} error={error} returnPath="/billing/bank-receipts" onRetry={() => setRefresh(value => value + 1)} />
+  return <main className={common.page}><PageHeader title="Penerimaan bank" description="Periksa dana masuk secara independen dan telusuri pencatatan kasnya." /><div className="ui-stack">
+    {error !== null && account !== null && <StateView kind="error" title={message(error)} />}
+    {loading ? <StateView kind="loading" title="Memeriksa akun…" /> : !account || sessionTiming(account.session, elapsed).expired ? <SessionAccessState kind={account ? "expired" : undefined} error={error} returnPath="/billing/bank-receipts" onRetry={() => setRefresh(value => value + 1)} />
       : <ReceiptDesk key={account.actorId + ':' + account.observedAt} account={account} fresh={sessionTiming(account.session, elapsed).fresh} onDenied={denied} />}
-  </main>;
+  </div></main>;
 }
 
 function ReceiptDesk({ account, fresh, onDenied }: { account: Account; fresh: boolean; onDenied: (failure: unknown) => void }) {
@@ -82,6 +87,8 @@ function ReceiptDesk({ account, fresh, onDenied }: { account: Account; fresh: bo
   const [sourceReference, setSourceReference] = useState(''), [reason, setReason] = useState(''), [attested, setAttested] = useState(false);
   const [busy, setBusy] = useState(false), [recovering, setRecovering] = useState(false), [offline, setOffline] = useState(false), [error, setError] = useState<unknown>(null), [notice, setNotice] = useState('');
   const alive = useRef(false), pending = useRef(false), title = useRef<HTMLHeadingElement>(null), confirmTitle = useRef<HTMLHeadingElement>(null);
+  // A failed first read (not a failed command) replaces the lists with one error body (U-036).
+  const [readFailed, setReadFailed] = useState(false);
   const current = useCallback(() => alive.current && navigator.onLine && !sessionTiming(account.session, performance.now() - account.observedAt).expired, [account]);
   const locked = busy || recovering || offline, commandLocked = locked || recovery.locked || !fresh, canConfirm = account.actions.includes('bank.receipt.confirm');
   useEffect(() => { alive.current = true; const online = () => setOffline(!navigator.onLine); online(); window.addEventListener('online', online); window.addEventListener('offline', online);
@@ -89,7 +96,7 @@ function ReceiptDesk({ account, fresh, onDenied }: { account: Account; fresh: bo
   useEffect(() => { let active = true; void Promise.resolve().then(async () => {
     if (!active || !current()) return; setBusy(true);
     try { const [sources, history] = await Promise.all([statements.list(account.actorId), gateway.list(account.actorId)]); if (active && current()) { setImports(sources); setReceipts(history); } }
-    catch (failure) { if (active && current()) { setError(failure); onDenied(failure); } } finally { if (active) setBusy(false); }
+    catch (failure) { if (active && current()) { setError(failure); setReadFailed(true); onDenied(failure); } } finally { if (active) setBusy(false); }
   }); return () => { active = false; }; }, [gateway, statements, account.actorId, current, onDenied]);
   useEffect(() => { if (preview) title.current?.focus(); }, [preview]); useEffect(() => { if (command) confirmTitle.current?.focus(); }, [command]);
   async function work(action: () => Promise<void>) {
@@ -102,54 +109,63 @@ function ReceiptDesk({ account, fresh, onDenied }: { account: Account; fresh: bo
     clearReview(); setView(null); setConfirmed([]); const [source, results] = await Promise.all([statements.read(account.actorId, importId), gateway.imports(account.actorId, importId)]);
     if (current()) { setView(source); setConfirmed(results); setRowPage(0); }
   }
+  const reload = () => void work(async () => { clearReview(); setView(null); const [sources, history] = await Promise.all([statements.list(account.actorId), gateway.list(account.actorId)]); if (current()) { setImports(sources); setReceipts(history); setReadFailed(false); } });
+  const readError = <StateView kind="error" title={message(error)} action={<Button disabled={locked} onClick={reload}>Coba lagi</Button>} />;
   return <><AdministrationNavigation current="bank-receipts" actions={account.actions} locked={busy || recovering} />
     <OperationRecovery entries={recovery.entries} journal={recovery.journal} disabled={busy || offline} onBusyChange={setRecovering}
       recoveryAdapters={{ 'billing.bank-receipt': { lookup: async entry => { const result = await gateway.recover(entry.actorId, entry.key); if (!current()) throw new AccessFailure(409, 'recovery_request_stale'); return result; } } }}
       onFailure={onDenied} onResolved={() => { recovery.refresh(); clearReview(); setView(null); setNotice('Hasil konfirmasi telah dipastikan. Muat data terbaru untuk melihat penerimaannya.'); }} />
-    {recovery.error !== null && <p role="alert">{accessMessage(recovery.error)}</p>}{offline && <p role="status" className={common.alert}>Koneksi terputus. Hasil pemeriksaan belum dikirim.</p>}
-    {error !== null && <p role="alert" className={common.alert}>{message(error)}</p>}{notice && <p role="status">{notice}</p>}{busy && <p role="status">Memeriksa sumber dan penerimaan…</p>}
+    {recovery.error !== null && <StateView kind="error" title={accessMessage(recovery.error)} />}{offline && <StateView kind="offline" title="Koneksi terputus. Hasil pemeriksaan belum dikirim." />}
+    {error !== null && !readFailed && <StateView kind="error" title={message(error)} />}{notice && <p role="status">{notice}</p>}{busy && <p role="status">Memeriksa sumber dan penerimaan…</p>}
     {canConfirm && (!fresh || error instanceof AccessFailure && error.code === 'step_up_required') && <p><Link href="/identity/account?operation=bank.receipt.confirm&returnPath=%2Fbilling%2Fbank-receipts">Verifikasi dua langkah untuk konfirmasi bank</Link></p>}
-    <section className={common.accountSection} aria-label="Sumber pemeriksaan"><h2>Pilih mutasi untuk diperiksa</h2><p>Pemeriksa harus berbeda dari pengimpor. Bandingkan dengan sumber bank independen yang disetujui; gambar pembayaran dan hasil OCR tidak membuktikan dana masuk.</p>
-      <button className={common.secondary} disabled={locked} onClick={() => void work(async () => { clearReview(); setView(null); const [sources, history] = await Promise.all([statements.list(account.actorId), gateway.list(account.actorId)]); if (current()) { setImports(sources); setReceipts(history); } })}>Muat data terbaru</button>
-      {!busy && !imports.items.length && <p>Belum ada sumber dalam cakupan akses Anda.</p>}<ul className={styles.candidates}>{imports.items.map(item => <li key={item.importId}><strong>{item.filename}</strong><p>{item.profileName} · {item.maskedAccount} · {item.rowCount} baris · {at(item.recordedAt)}</p>
-        <button className={common.secondary} disabled={locked} onClick={() => void work(() => open(item.importId))}>Tinjau sumber {item.importId}</button></li>)}</ul>
-      {imports.hasMore && <button className={common.secondary} disabled={locked} onClick={() => void work(async () => { const next = await statements.list(account.actorId, imports.items.at(-1)!.importId); if (current()) { setImports(next); setView(null); clearReview(); } })}>Sumber berikutnya</button>}
-    </section>
-    {view && <section className={common.accountSection} aria-label="Baris bank"><h2>{view.filename}</h2><p>{view.account.details.bankCode} · {view.account.details.accountNumber} · {view.account.details.holderName} · Versi {view.account.version}</p>
+    <Section title="Pilih mutasi untuk diperiksa" label="Sumber pemeriksaan" description="Pemeriksa harus berbeda dari pengimpor. Bandingkan dengan sumber bank independen yang disetujui; gambar pembayaran dan hasil OCR tidak membuktikan dana masuk."
+      actions={<Button variant="secondary" disabled={locked} onClick={reload}>Muat data terbaru</Button>}>
+      {readFailed ? readError : <DataList label="Sumber mutasi" items={imports.items} getKey={item => item.importId} loading={busy && !imports.items.length} empty={{ title: 'Belum ada sumber dalam cakupan akses Anda.' }}
+        renderTitle={item => item.filename} renderMeta={item => <>{item.profileName} · {item.maskedAccount} · {item.rowCount} baris · {at(item.recordedAt)}</>}
+        renderActions={item => <Button variant="secondary" disabled={locked} onClick={() => void work(() => open(item.importId))}>Tinjau sumber {item.importId}</Button>} />}
+      {imports.hasMore && <Button variant="secondary" disabled={locked} onClick={() => void work(async () => { const next = await statements.list(account.actorId, imports.items.at(-1)!.importId); if (current()) { setImports(next); setView(null); clearReview(); } })}>Sumber berikutnya</Button>}
+    </Section>
+    {view && <Section title={view.filename} label="Baris bank" description={<>{view.account.details.bankCode} · {view.account.details.accountNumber} · {view.account.details.holderName} · Versi {view.account.version}</>}>
       <p>Sumber impor: {view.sourceReference} · Pengimpor: akun {view.actorId}</p><p>Referensi yang sama dapat dipakai pada transaksi berbeda. Baris tanpa identitas bank yang unik tetap menunggu penyelesaian sumber.</p>
-      <ul className={styles.candidates}>{view.preview.rows.slice(rowPage * 25, (rowPage + 1) * 25).map(row => { const saved = confirmed.find(item => item.rowNumber === row.number), eligible = row.direction === 'credit' && !!row.identityCandidate && !view.preview.issues.some(issue => issue.row === row.number && issue.code === 'identity_repeated');
-        return <li key={row.number}><strong>Baris {row.number} · {row.bookedDate} · {row.direction === 'credit' ? 'Masuk' : 'Keluar'} {rupiah(row.amount)}</strong><p>Identitas bank: {row.transactionId ?? 'belum tersedia'} · Referensi: {row.reference ?? 'tidak tersedia'} · Pengirim: {row.payerName ?? 'belum diketahui'}</p>
-          {saved ? <p role="status">Terhubung ke penerimaan {saved.receiptId}. {saved.createdReceipt ? 'Kas dicatat sekali pada pemeriksaan ini.' : 'Penerimaan sudah ada; kas tidak dicatat ulang.'}</p> : <>
-            {!eligible && <p>Belum memenuhi syarat konfirmasi kredit; perlu penyelesaian sumber.</p>}{canConfirm && eligible && <button className={common.secondary} disabled={commandLocked || view.actorId === account.actorId} onClick={() => void work(async () => { clearReview(); const shown = await gateway.preview(account.actorId, view.importId, row.number); if (current()) setPreview(shown); })}>Periksa kredit baris {row.number}</button>}
-            {canConfirm && eligible && view.actorId === account.actorId && <p>Minta orang lain yang berwenang memeriksa impor Anda.</p>}</>}</li>;
-      })}</ul><div className={sheet.actions}><button className={common.secondary} disabled={locked || rowPage === 0} onClick={() => setRowPage(value => value - 1)}>Baris sebelumnya</button><span>Halaman {rowPage + 1} dari {Math.ceil(view.preview.rows.length / 25)}</span><button className={common.secondary} disabled={locked || (rowPage + 1) * 25 >= view.preview.rows.length} onClick={() => setRowPage(value => value + 1)}>Baris berikutnya</button></div>
-    </section>}
-    {preview && <section className={common.accountSection} aria-label="Pemeriksaan independen"><h2 ref={title} tabIndex={-1}>Periksa kredit dengan sumber bank</h2><p>Baris {preview.rowNumber} · {preview.row.bookedDate} · {rupiah(preview.row.amount)} · Identitas {preview.row.transactionId}</p>
+      <DataList label="Baris bank" items={view.preview.rows.slice(rowPage * 25, (rowPage + 1) * 25)} getKey={row => String(row.number)}
+        renderTitle={row => <>Baris {row.number} · {row.bookedDate} · {row.direction === 'credit' ? 'Masuk' : 'Keluar'} {rupiah(row.amount)}</>}
+        renderMeta={row => <>Identitas bank: {row.transactionId ?? 'belum tersedia'} · Referensi: {row.reference ?? 'tidak tersedia'} · Pengirim: {row.payerName ?? 'belum diketahui'}</>}
+        renderContent={row => { const saved = confirmed.find(item => item.rowNumber === row.number), eligible = row.direction === 'credit' && !!row.identityCandidate && !view.preview.issues.some(issue => issue.row === row.number && issue.code === 'identity_repeated');
+          return saved ? <p role="status">Terhubung ke penerimaan {saved.receiptId}. {saved.createdReceipt ? 'Kas dicatat sekali pada pemeriksaan ini.' : 'Penerimaan sudah ada; kas tidak dicatat ulang.'}</p>
+            : !eligible ? <p>Belum memenuhi syarat konfirmasi kredit; perlu penyelesaian sumber.</p> : canConfirm && view.actorId === account.actorId ? <p>Minta orang lain yang berwenang memeriksa impor Anda.</p> : null; }}
+        renderActions={row => { const saved = confirmed.find(item => item.rowNumber === row.number), eligible = row.direction === 'credit' && !!row.identityCandidate && !view.preview.issues.some(issue => issue.row === row.number && issue.code === 'identity_repeated');
+          return !saved && canConfirm && eligible ? <Button variant="secondary" disabled={commandLocked || view.actorId === account.actorId} onClick={() => void work(async () => { clearReview(); const shown = await gateway.preview(account.actorId, view.importId, row.number); if (current()) setPreview(shown); })}>Periksa kredit baris {row.number}</Button> : null; }} />
+      <div className={sheet.pager}><Button variant="secondary" disabled={locked || rowPage === 0} onClick={() => setRowPage(value => value - 1)}>Baris sebelumnya</Button><span>Halaman {rowPage + 1} dari {Math.ceil(view.preview.rows.length / 25)}</span><Button variant="secondary" disabled={locked || (rowPage + 1) * 25 >= view.preview.rows.length} onClick={() => setRowPage(value => value + 1)}>Baris berikutnya</Button></div>
+    </Section>}
+    {preview && <section className="ui-section" aria-label="Pemeriksaan independen"><h2 ref={title} tabIndex={-1}>Periksa kredit dengan sumber bank</h2><p>Baris {preview.rowNumber} · {preview.row.bookedDate} · {rupiah(preview.row.amount)} · Identitas {preview.row.transactionId}</p>
       <div className={sheet.source}><strong>Kanal pemeriksaan: {preview.policy.trustedSourceReference}</strong><p>Penanggung jawab: {preview.policy.operatingOwnerReference}</p><p>Persetujuan: {preview.policy.approvalReference} · Berlaku hingga {at(preview.policy.expiresAt)}</p><p>Pemetaan buku: kas {preview.policy.cashMapping} → dana belum teralokasi {preview.policy.suspenseMapping}.</p></div>
       {preview.existingReceiptId ? <p role="status">Transfer ini sudah memiliki penerimaan {preview.existingReceiptId}. Pemeriksaan ini menambahkan tautan sumber tanpa mencatat kas lagi.</p> : <p>Konfirmasi akan mencatat penerimaan kas ke dana belum teralokasi. Identitas pembayar dan pelunasan tagihan memerlukan pemeriksaan terpisah.</p>}
-      <form className={sheet.form} onSubmit={event => { event.preventDefault(); if (commandLocked) return; try { setError(null); setCommand(prepareBankReceipt(account.actorId, preview, { accountNumber, transactionId, bookedDate, amount: rupiahAmount(amount, true) ?? amount }, sourceReference.trim(), attested, reason.trim())); } catch (failure) { setError(failure); } }}>
+      <form className="ui-form" onSubmit={event => { event.preventDefault(); if (commandLocked) return; try { setError(null); setCommand(prepareBankReceipt(account.actorId, preview, { accountNumber, transactionId, bookedDate, amount: rupiahAmount(amount, true) ?? amount }, sourceReference.trim(), attested, reason.trim())); } catch (failure) { setError(failure); } }}>
         <p>Masukkan hasil yang Anda baca dari kanal bank tersebut. Isian tidak diisi otomatis dari impor.</p>
-        <label htmlFor="receipt-account">Nomor rekening pada sumber bank</label><input id="receipt-account" required inputMode="numeric" maxLength={34} value={accountNumber} disabled={commandLocked || !!command} onChange={event => setAccountNumber(event.target.value)} />
-        <label htmlFor="receipt-transaction">Identitas transaksi bank yang diamati</label><input id="receipt-transaction" required maxLength={80} value={transactionId} disabled={commandLocked || !!command} onChange={event => setTransactionId(event.target.value)} />
-        <label htmlFor="receipt-date">Tanggal pembukuan bank</label><input id="receipt-date" required type="date" value={bookedDate} disabled={commandLocked || !!command} onChange={event => setBookedDate(event.target.value)} />
-        <label htmlFor="receipt-amount">Nominal masuk IDR</label><input id="receipt-amount" required inputMode="decimal" placeholder="Contoh: 1.000,25" aria-describedby="receipt-amount-help" maxLength={32} value={amount} disabled={commandLocked || !!command} onChange={event => setAmount(event.target.value)} /><small id="receipt-amount-help">Tulis seperti pada mutasi, misalnya 1.000,25 atau 1000.25.</small>
-        <label htmlFor="receipt-source">Referensi pemeriksaan bank independen</label><input id="receipt-source" required maxLength={256} value={sourceReference} disabled={commandLocked || !!command} onChange={event => setSourceReference(event.target.value)} />
-        <label htmlFor="receipt-reason">Catatan keputusan</label><textarea id="receipt-reason" required maxLength={1000} value={reason} disabled={commandLocked || !!command} onChange={event => setReason(event.target.value)} />
+        <Field id="receipt-account" label="Nomor rekening pada sumber bank"><input required inputMode="numeric" maxLength={34} value={accountNumber} disabled={commandLocked || !!command} onChange={event => setAccountNumber(event.target.value)} /></Field>
+        <Field id="receipt-transaction" label="Identitas transaksi bank yang diamati"><input required maxLength={80} value={transactionId} disabled={commandLocked || !!command} onChange={event => setTransactionId(event.target.value)} /></Field>
+        <Field id="receipt-date" label="Tanggal pembukuan bank" width="date"><input required type="date" value={bookedDate} disabled={commandLocked || !!command} onChange={event => setBookedDate(event.target.value)} /></Field>
+        <Field id="receipt-amount" label="Nominal masuk IDR" width="rupiah" help="Tulis seperti pada mutasi, misalnya 1.000,25 atau 1000.25."><input required inputMode="decimal" placeholder="Contoh: 1.000,25" maxLength={32} value={amount} disabled={commandLocked || !!command} onChange={event => setAmount(event.target.value)} /></Field>
+        <Field id="receipt-source" label="Referensi pemeriksaan bank independen"><input required maxLength={256} value={sourceReference} disabled={commandLocked || !!command} onChange={event => setSourceReference(event.target.value)} /></Field>
+        <Field id="receipt-reason" label="Catatan keputusan"><textarea required maxLength={1000} value={reason} disabled={commandLocked || !!command} onChange={event => setReason(event.target.value)} /></Field>
         <label className={sheet.check}><input type="checkbox" required checked={attested} disabled={commandLocked || !!command} onChange={event => setAttested(event.target.checked)} />Saya memeriksa kredit aktual melalui kanal bank yang disetujui, secara independen dari pengimpor.</label>
-        <button className={common.primary} disabled={commandLocked || !!command}>Tinjau keputusan bank</button>
+        <Button variant="primary" type="submit" disabled={commandLocked || !!command}>Tinjau keputusan bank</Button>
       </form>
     </section>}
-    {command && preview && <section className={common.accountSection} aria-label="Konfirmasi penerimaan"><h2 ref={confirmTitle} tabIndex={-1}>Konfirmasi hasil pemeriksaan</h2><p>{rupiah(command.body.observed.amount)} · {command.body.observed.bookedDate} · {command.body.observed.transactionId}</p><p>Rekening {command.body.observed.accountNumber} · Sumber {command.body.sourceReference}</p><p>{command.body.reason}</p>
+    {command && preview && <section className="ui-section" aria-label="Konfirmasi penerimaan"><h2 ref={confirmTitle} tabIndex={-1}>Konfirmasi hasil pemeriksaan</h2><p>{rupiah(command.body.observed.amount)} · {command.body.observed.bookedDate} · {command.body.observed.transactionId}</p><p>Rekening {command.body.observed.accountNumber} · Sumber {command.body.sourceReference}</p><p>{command.body.reason}</p>
       <p>{preview.existingReceiptId ? 'Tautkan sumber ke penerimaan yang sudah ada; tidak ada kas tambahan.' : 'Catat kas sekali ke dana belum teralokasi.'} Tagihan belum dilunasi oleh tindakan ini.</p>
-      <div className={sheet.actions}><button className={common.primary} disabled={commandLocked} onClick={() => void work(async () => {
+      <div className="ui-actions"><Button variant="primary" disabled={commandLocked} onClick={() => void work(async () => {
         const frozen = command, operation = 'billing.bank-receipt.confirm'; const ledger = new MutationLedger(() => `br.confirm.${frozen.body.importId}.${frozen.body.rowNumber}.${crypto.randomUUID()}`);
         const result = await submitTrackedRequest(ledger, recovery.journal, account.actorId, operation, operation, frozen, key => gateway.send(frozen, key, current));
         if (current()) { clearReview(); setView(null); setNotice(`Penerimaan ${result.receiptId} telah dipastikan. ${result.createdReceipt ? 'Kas tercatat sekali.' : 'Sumber terhubung tanpa kas tambahan.'} Muat data terbaru.`); }
-      })}>Konfirmasi kredit bank</button><button className={common.secondary} disabled={locked} onClick={() => setCommand(null)}>Kembali memeriksa</button></div>
+      })}>Konfirmasi kredit bank</Button><Button variant="secondary" disabled={locked} onClick={() => setCommand(null)}>Kembali memeriksa</Button></div>
     </section>}
-    <section className={common.accountSection} aria-label="Riwayat penerimaan"><h2>Penerimaan yang dikonfirmasi</h2><p>Riwayat kas mempertahankan identitas bank dan sumber pertamanya. Konfirmasi ini tidak menetapkan pembayar atau mengurangi tagihan.</p>
-      {!busy && !receipts.items.length && <p>Belum ada penerimaan dalam cakupan akses Anda.</p>}<ul className={styles.candidates}>{receipts.items.map(item => <li key={item.receiptId}><strong>Penerimaan {item.receiptId} · {rupiah(item.amount)}</strong><p>{item.bookedDate} · Identitas bank {item.transactionId} · Jurnal {item.journalId}</p><p>Diperiksa {at(item.recordedAt)} oleh akun {item.actorId}</p><button className={common.secondary} disabled={locked} onClick={() => void work(() => open(item.importId))}>Lihat sumber penerimaan {item.receiptId}</button></li>)}</ul>
-      {receipts.hasMore && <button className={common.secondary} disabled={locked} onClick={() => void work(async () => { const result = await gateway.list(account.actorId, receipts.items.at(-1)!.receiptId); if (current()) setReceipts(result); })}>Penerimaan berikutnya</button>}
-    </section>
+    {!readFailed && <Section title="Penerimaan yang dikonfirmasi" label="Riwayat penerimaan" description="Riwayat kas mempertahankan identitas bank dan sumber pertamanya. Konfirmasi ini tidak menetapkan pembayar atau mengurangi tagihan.">
+      <DataList label="Penerimaan yang dikonfirmasi" items={receipts.items} getKey={item => item.receiptId} loading={busy && !receipts.items.length} empty={{ title: 'Belum ada penerimaan dalam cakupan akses Anda.' }}
+        renderTitle={item => <>Penerimaan {item.receiptId} · {rupiah(item.amount)}</>} renderMeta={item => <>{item.bookedDate} · Identitas bank {item.transactionId} · Jurnal {item.journalId}</>}
+        renderContent={item => <p className={sheet.note}>Diperiksa {at(item.recordedAt)} oleh akun {item.actorId}</p>}
+        renderActions={item => <Button variant="secondary" disabled={locked} onClick={() => void work(() => open(item.importId))}>Lihat sumber penerimaan {item.receiptId}</Button>} />
+      {receipts.hasMore && <Button variant="secondary" disabled={locked} onClick={() => void work(async () => { const result = await gateway.list(account.actorId, receipts.items.at(-1)!.receiptId); if (current()) setReceipts(result); })}>Penerimaan berikutnya</Button>}
+    </Section>}
   </>;
 }
