@@ -92,7 +92,7 @@ function OrderHistoryDesk({ account, onFailure }: { account: Account; onFailure:
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [page, setPage] = useState<{ items: SubmittedOrder[]; hasMore: boolean }>({ items: [], hasMore: false });
   const [cursor, setCursor] = useState<string | null>(null), [reload, setReload] = useState(0), [selected, setSelected] = useState<SubmittedOrder | null>(null);
-  const [busy, setBusy] = useState(false), [error, setError] = useState<unknown>(null), detail = useRef<HTMLElement>(null), alive = useRef(false), pending = useRef(false);
+  const [busy, setBusy] = useState(false), [acting, setActing] = useState<string | null>(null), [error, setError] = useState<unknown>(null), detail = useRef<HTMLElement>(null), alive = useRef(false), pending = useRef(false);
   const [repeat, setRepeat] = useState<ReturnType<typeof prepareReorderDraft> | null>(null), [saved, setSaved] = useState<DraftResult | null>(null), [notice, setNotice] = useState('');
   const [cart] = useState(() => createCartGateway()), [catalog] = useState(() => createBuyerCatalogGateway()), router = useRouter(), [cartError, setCartError] = useState<unknown>(null);
   const repeatRegion = useRef<HTMLDivElement>(null), repeatReadEpoch = useRef(0), requested = useRef<string | null | undefined>(undefined);
@@ -131,26 +131,26 @@ function OrderHistoryDesk({ account, onFailure }: { account: Account; onFailure:
   useEffect(() => { if (selected && repeat === null) detail.current?.focus(); }, [selected, repeat]);
   async function select(id: string) {
     const current = () => alive.current && !sessionTiming(account.session, performance.now() - account.observedAt).expired;
-    if (!current() || locked || pending.current) return; pending.current = true; setBusy(true); setError(null); setSelected(null);
+    if (!current() || locked || pending.current) return; pending.current = true; setBusy(true); setActing('open:' + id); setError(null); setSelected(null);
     try { const result = await gateway.read(account.actorId, id); if (current()) { setSelected(result); setPage(previous => ({ ...previous, items: previous.items.map(order => order.submission.orderId === id ? result : order) })); } }
     catch (failure) { if (current()) { setError(failure); onFailure(failure); } }
-    finally { pending.current = false; if (alive.current) setBusy(false); }
+    finally { pending.current = false; if (alive.current) { setBusy(false); setActing(null); } }
   }
   async function beginRepeat(id: string) {
     if (!current() || locked || pending.current || !account.actions.includes('order.submit')) return;
     const epoch = ++repeatReadEpoch.current;
-    pending.current = true; setBusy(true); setError(null); setSaved(null); setNotice('');
+    pending.current = true; setBusy(true); setActing('repeat:' + id); setError(null); setSaved(null); setNotice('');
     try {
       // Reload through the historical owner before using an old snapshot as editable draft input.
       const original = await gateway.read(account.actorId, id);
       if (current() && repeatReadEpoch.current === epoch) { setSelected(original); setRepeat(prepareReorderDraft(original)); }
     } catch (failure) { if (current()) { setError(failure); onFailure(failure); } }
-    finally { pending.current = false; if (alive.current) setBusy(false); }
+    finally { pending.current = false; if (alive.current) { setBusy(false); setActing(null); } }
   }
   /** "Pesan lagi": the order's packages go into the branch cart at today's package and price, and the buyer lands on the cart to check them. */
   async function orderAgain(order: SubmittedOrder) {
     if (!current() || locked || pending.current || !account.actions.includes('order.submit')) return;
-    pending.current = true; setBusy(true); setError(null); setCartError(null); setNotice('');
+    pending.current = true; setBusy(true); setActing('again:' + order.submission.orderId); setError(null); setCartError(null); setNotice('');
     try {
       const { choices, unavailable } = reorderChoices(order.input.selections, await catalog.bySku(account.actorId, order.input.selections.map(line => line.skuId)));
       if (choices.length === 0) { setNotice('Barang dari pesanan ini tidak lagi tersedia untuk cabang Anda.'); return; }
@@ -158,7 +158,7 @@ function OrderHistoryDesk({ account, onFailure }: { account: Account; onFailure:
       rememberCartBranch(account.actorId, order.input.context);
       router.push(unavailable.length ? '/cart?terlewat=' + unavailable.length : '/cart');
     } catch (failure) { if (current()) { setCartError(failure); onFailure(failure); } }
-    finally { pending.current = false; if (alive.current) setBusy(false); }
+    finally { pending.current = false; if (alive.current) { setBusy(false); setActing(null); } }
   }
   const canOrder = account.actions.includes('order.submit');
   return <>
@@ -196,8 +196,8 @@ function OrderHistoryDesk({ account, onFailure }: { account: Account; onFailure:
           <p className={styles.orderNext}>{buyerOrderStatus(order).detail}</p>
           <p className={styles.orderTotal}>Total <strong>{orderDisplayAmount(order.quote.currency, order.total)}</strong></p></>; }}
         renderActions={order => { const id = order.submission.orderId; return <>
-          <Button disabled={locked} aria-label={'Lihat rincian pesanan ' + orderNumber(id)} onClick={() => void select(id)}>Lihat rincian</Button>
-          {canOrder && <Button disabled={locked} onClick={() => void orderAgain(order)}>Pesan lagi</Button>}</>; }} />
+          <Button disabled={locked} busy={acting === 'open:' + id} aria-label={'Lihat rincian pesanan ' + orderNumber(id)} onClick={() => void select(id)}>Lihat rincian</Button>
+          {canOrder && <Button disabled={locked} busy={acting === 'again:' + id} onClick={() => void orderAgain(order)}>Pesan lagi</Button>}</>; }} />
       {page.hasMore && <div className="ui-actions"><Button disabled={locked} onClick={() => setCursor(nextCursor)}>{filter?.sort === 'oldest' ? 'Pesanan lebih baru' : 'Pesanan lebih lama'}</Button></div>}
     </Section>
     {selected && <section ref={detail} tabIndex={-1} className={styles.detail} aria-label="Rincian pesanan"><h2>Pesanan {orderNumber(selected.submission.orderId)}</h2>
@@ -217,8 +217,8 @@ function OrderHistoryDesk({ account, onFailure }: { account: Account; onFailure:
       <OrderTimelinePanel key={selected.submission.orderId} actorId={account.actorId} orderId={selected.submission.orderId}
         actions={account.actions} isCurrent={current} onFailure={onFailure} />
       <div className="ui-actions"><Button disabled={locked} onClick={() => void select(selected.submission.orderId)}>Perbarui perkembangan</Button>
-        {canOrder && <><Button variant="primary" disabled={locked} onClick={() => void orderAgain(selected)}>Pesan lagi</Button>
-          <Button disabled={locked} onClick={() => void beginRepeat(selected.submission.orderId)}>Pesan ulang sebagai draf</Button></>}
+        {canOrder && <><Button variant="primary" disabled={locked} busy={acting === 'again:' + selected.submission.orderId} onClick={() => void orderAgain(selected)}>Pesan lagi</Button>
+          <Button disabled={locked} busy={acting === 'repeat:' + selected.submission.orderId} onClick={() => void beginRepeat(selected.submission.orderId)}>Pesan ulang sebagai draf</Button></>}
       </div>
     </section>}
   </>;

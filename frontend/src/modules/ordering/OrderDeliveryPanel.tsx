@@ -77,7 +77,7 @@ export function OrderDeliveryPanel({ actorId, draft, locked, onSaved, onFailure 
       {error !== null && <StateView kind="error" title={error instanceof AccessFailure && error.code === 'branch_address_missing'
         ? 'Cabang ini belum punya alamat yang disetujui. Isi alamat secara manual.' : addToCartMessage(error)} />}
       <div className="ui-actions">
-        <Button type="submit" variant="primary" disabled={busy || locked}>{busy ? 'Menyimpan…' : unknown ? 'Coba lagi' : 'Simpan pengiriman'}</Button>
+        <Button type="submit" variant="primary" busy={busy} disabled={busy || locked}>{busy ? 'Menyimpan…' : unknown ? 'Coba lagi' : 'Simpan pengiriman'}</Button>
         {delivery && <Button disabled={busy} onClick={() => { setEditing(false); setErrors({}); setError(null); }}>Batal</Button>}
       </div>
     </form>
