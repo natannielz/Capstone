@@ -210,6 +210,7 @@ Two columns ≥640 px (`minmax(0,1fr)` each, gap 16 px 24 px), one below. `dt` 1
 
 - Size: height exactly `--control-h` 44 px (`height`, not `min-height` + padding: the legacy `.primary` renders 48 px because of 10 px padding + 1.6 line-height, `access.module.css:21`); compact 36 px in tables/toolbars; icon-only 44×44 (36×36 compact) with `aria-label`. Large 48 px only for the mobile sticky checkout bar.
 - Padding 0 16px (compact 0 12px), gap 8 px to a 16–18 px icon, 14/600 text, `--radius-control` 8 px, no text wrapping (`white-space: nowrap`; long labels get shortened copy).
+- Exception, signed off by the orchestrator: a `ui-button--wrap` button may wrap its label when the label cannot be shortened under the keep-copy rule (two catalogue cards per phone row); it stays 44 px or taller.
 - Disabled: `--muted` fill, `--muted-foreground` text, no border for primary; secondary keeps its border at `--border`. No `opacity` dimming (today `.page button:disabled{opacity:.55}`, `access.module.css:11`). Busy: spinner 16 px replaces the icon, label stays, `aria-busy`.
 - Group: 8 px gap; order primary → secondary → tertiary in forms (left-aligned) and secondary → primary in headers/dialog footers (right-aligned, primary outermost right).
 - One shared implementation: extend `frontend/src/components/ui/button.tsx` (cva) with these variants and sizes; retire `.primary/.secondary/.danger` in `access.module.css:21–27`, `.review-confirm/.review-cancel`, `.outcome-action`, `.list-table-open`, `.stateAction`, `.signIn` and module-local button styles.

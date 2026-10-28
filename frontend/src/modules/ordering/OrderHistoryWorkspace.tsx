@@ -131,7 +131,7 @@ function OrderHistoryDesk({ account, onFailure }: { account: Account; onFailure:
           catch (failure) { const notice = requestedOrderNotice(failure); if (notice === null) throw failure; if (active) setNotice(notice); }
         }
       }
-      catch (failure) { if (active) { setError(failure); onFailure(failure); } } finally { if (active) setBusy(false); }
+      catch (failure) { if (active) { setError(failure); onFailure(failure); } } finally { if (active) { setBusy(false); setActing(null); } }
     }); return () => { active = false; controller.abort(); };
   }, [views, gateway, account.actorId, filter, cursor, reload, onFailure]);
   useEffect(() => { if (selected && repeat === null) detail.current?.focus(); }, [selected, repeat]);
@@ -185,7 +185,7 @@ function OrderHistoryDesk({ account, onFailure }: { account: Account; onFailure:
     </div>}
     {error !== null && <StateView kind="error" title={message(error)} />}
     <Section title="Pesanan yang diajukan" label="Daftar pesanan saya" busy={busy}
-      actions={<><Button disabled={locked} onClick={() => { setCursor(null); setReload(value => value + 1); }}>{filter?.sort === 'oldest' ? 'Muat pesanan pertama' : 'Muat pesanan terbaru'}</Button>
+      actions={<><Button disabled={locked} onClick={() => { setActing('refresh'); setCursor(null); setReload(value => value + 1); }} busy={acting === 'refresh'}>{filter?.sort === 'oldest' ? 'Muat pesanan pertama' : 'Muat pesanan terbaru'}</Button>
         {canOrder && !locked && <Link href="/ordering/drafts" className={buttonClassName({ variant: 'tertiary' })}>Draf pesanan</Link>}</>}>
       <Toolbar label="Filter pesanan" filters={<details className={styles.filterPanel}><summary className={buttonClassName({ variant: 'secondary' })}><SlidersHorizontal aria-hidden="true" />Filter dan urutan</summary>
         <OrderSavedViewPanel actorId={account.actorId} active={filter} locked={busy || save.locked || repeat !== null} isCurrent={current}
@@ -222,7 +222,7 @@ function OrderHistoryDesk({ account, onFailure }: { account: Account; onFailure:
       {(selected.progress.cancelled || selected.progress.spendingState === 'Rejected' || selected.progress.rejectedSuborders.length > 0) && <p>Angka di atas menyimpan biaya pengajuan awal. Penolakan atau pembatalan bukan bukti pembayaran maupun pengembalian dana.</p>}
       <OrderTimelinePanel key={selected.submission.orderId} actorId={account.actorId} orderId={selected.submission.orderId}
         actions={account.actions} isCurrent={current} onFailure={onFailure} />
-      <div className="ui-actions"><Button disabled={locked} onClick={() => void select(selected.submission.orderId)}>Perbarui perkembangan</Button>
+      <div className="ui-actions"><Button disabled={locked} onClick={() => void select(selected.submission.orderId)} busy={acting === 'open:' + selected.submission.orderId}>Perbarui perkembangan</Button>
         {canOrder && <><Button variant="primary" disabled={locked} busy={acting === 'again:' + selected.submission.orderId} onClick={() => void orderAgain(selected)}>Pesan lagi</Button>
           <Button disabled={locked} busy={acting === 'repeat:' + selected.submission.orderId} onClick={() => void beginRepeat(selected.submission.orderId)}>Pesan ulang sebagai draf</Button></>}
       </div>
