@@ -202,7 +202,7 @@ function BookDesk({ account, fresh, onDenied, header }: { account: Account; fres
           {proposalReview && <section className={styles.preview} aria-label="Rincian pengajuan buku"><h3 ref={heading} tabIndex={-1}>Rincian yang akan diajukan</h3>
             <BookDetails value={{ ...proposalReview.preview.input, organization: proposalReview.preview.organization, shop: proposalReview.preview.shop, channel: proposalReview.preview.channel }} /><p className={styles.preserve}>{proposalReview.command.body.reason}</p>
             <label className={styles.checkbox}><input type="checkbox" checked={confirmed} disabled={commandLocked} onChange={event => setConfirmed(event.target.checked)} />Saya telah memeriksa buku, periode pertama dan seluruh pemetaan akun.</label>
-            <div className={styles.actions}><Button variant="primary" type="button" disabled={commandLocked || !confirmed} onClick={() => void submitProposal()}>Kirim pengajuan buku</Button>
+            <div className={styles.actions}><Button variant="primary" type="button" disabled={commandLocked || !confirmed} onClick={() => void submitProposal()} busy={busy}>Kirim pengajuan buku</Button>
               <Button variant="secondary" type="button" disabled={commandLocked} onClick={() => { setProposalReview(null); setConfirmed(false); }}>Ubah rincian</Button></div></section>}
         </form>}
         {proposal && <div className="ui-form"><h2>{states[proposal.state]}</h2><BookDetails value={proposal} /><p className={styles.help}>Pengajuan {proposal.id} · {when(proposal.proposedAt)}</p>

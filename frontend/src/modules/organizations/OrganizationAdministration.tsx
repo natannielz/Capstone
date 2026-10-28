@@ -219,7 +219,7 @@ function OrganizationDesk({ current, revision, refreshing, refresh, header }: {
           </fieldset>
           {review && <div className={styles.preview}><h3>Rincian yang akan diajukan</h3><p><strong>{review.request.code} · {review.request.name}</strong><br />{organizationKinds[review.request.kind]}</p>
             <p>Induk: {review.parent ? organizationLabel(review.parent) : "Tanpa induk"}</p><p className={styles.preserve}>{review.reason}</p>
-            <Button variant="primary" type="button" disabled={locked} onClick={submitProposal}>Kirim untuk pemeriksaan</Button></div>}
+            <Button variant="primary" type="button" disabled={locked} onClick={submitProposal} busy={busy}>Kirim untuk pemeriksaan</Button></div>}
         </form> : selection?.kind === "unit" ? <div className="ui-form"><h2>{organizationLabel(selection.value)}</h2>
           <Facts items={[{ term: "Jenis", value: organizationKinds[selection.value.kind] }, { term: "Status", value: statusLabel(selection.value.status) },
             { term: "Referensi unit", value: selection.value.id }, { term: "Induk", value: selection.value.parentId ?? "Tanpa induk" },

@@ -213,7 +213,7 @@ function Desk({account, refreshSession, header, alert}: {account: Account; refre
             <ul>{review.request.permissions.map(permission => <li key={permission}>{permissionLabel(permission)}</li>)}</ul></> : <p>Delegasi {review.id} · revisi {review.revision}</p>}
           <p className={styles.preserve}>{review.reason}</p><p>Catatan ini tidak memindahkan tugas operasional atau menggantikan persetujuan orang yang berbeda.</p>
           <label className={styles.checkbox}><input type="checkbox" checked={accepted} disabled={locked} onChange={event => setAccepted(event.target.checked)} />Saya sudah memeriksa penerima, izin, waktu, dan alasan.</label>
-          <div className="ui-actions"><Button variant="primary" type="button" disabled={locked || !accepted} onClick={() => void send()}>Konfirmasi {names[review.action].toLocaleLowerCase('id-ID')}</Button>
+          <div className="ui-actions"><Button variant="primary" type="button" disabled={locked || !accepted} onClick={() => void send()} busy={busy}>Konfirmasi {names[review.action].toLocaleLowerCase('id-ID')}</Button>
             <Button variant="secondary" type="button" disabled={busy} onClick={clearReview}>Batalkan tinjauan</Button></div>
         </section>}
       </div>

@@ -63,7 +63,7 @@ export function AccessHistory() {
           <Field id="history-subject" label="Referensi subjek" optional><input inputMode="numeric" autoComplete="off" maxLength={19} value={subjectId} disabled={busy}
             onChange={event => { setSubjectId(event.target.value); setPage(null); }} placeholder="Referensi akun atau unit terkait" /></Field>
         </div>
-        <Button variant="primary" type="submit" disabled={busy || !!subjectId && !validReference(subjectId)}>Tampilkan riwayat</Button>
+        <Button variant="primary" type="submit" disabled={busy || !!subjectId && !validReference(subjectId)} busy={busy}>Tampilkan riwayat</Button>
         </form>
       </Section>
       {busy && <StateView kind="loading" title="Memuat riwayat yang diizinkan…" />}

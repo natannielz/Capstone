@@ -159,8 +159,8 @@ function PersonReviewBody({ current, session, observedAt, onFailure, onRefresh }
     <Section title="Sesi peninjauan" id="person-session-title" description={<>Anda masuk sebagai <strong>{session.account?.displayName ?? session.account?.verifiedEmail}</strong>.</>}
       actions={<Button variant="secondary" type="button" disabled={locked} onClick={() => void onRefresh()}>Muat ulang sesi dan akses</Button>}>
       <p className={styles.help}>{timing.fresh ? "Verifikasi dua langkah masih baru. Setiap tindakan tetap diperiksa terhadap izin dan penugasan terbaru." : "Verifikasi dua langkah terbaru diperlukan sebelum mengirim keputusan."}</p>
-      <Tabs label="Tampilan peninjauan" disabled={locked} current={mode} onSelect={value => { resetSelection(); setMode(value as "queue" | "propose"); }}
-        items={[{ label: "Daftar pengajuan", value: "queue" }, ...(current.allowedActions.includes("person.review.propose") ? [{ label: "Ajukan penangguhan baru", value: "propose" }] : [])]} />
+      {current.allowedActions.includes("person.review.propose") && <Tabs label="Tampilan peninjauan" disabled={locked} current={mode} onSelect={value => { resetSelection(); setMode(value as "queue" | "propose"); }}
+                items={[{ label: "Daftar pengajuan", value: "queue" }, ...(current.allowedActions.includes("person.review.propose") ? [{ label: "Ajukan penangguhan baru", value: "propose" }] : [])]} />}
       {factors.length > 0 && !retry && <div className={styles.preview}><Field id="person-review-factor" label="Tindakan untuk verifikasi"><select value={factorOperation} disabled={busy || recoveryBusy} onChange={event => setFactorOperation(event.target.value)}>
         {factors.map(operation => <option key={operation} value={operation}>{operation === "person.review.propose" ? "Pengajuan atau penarikan" : "Persetujuan atau penolakan"}</option>)}</select></Field>
         <ProtectedNavigationForm action="/auth/step-up" fields={fields ?? {}} disabled={busy || recoveryBusy || !fields} label="Verifikasi dua langkah" secondary />

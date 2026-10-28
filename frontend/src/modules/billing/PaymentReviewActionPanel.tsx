@@ -73,7 +73,7 @@ export function PaymentReviewActionPanel({ actorId, owner, allowed, fresh, locke
           <Button variant="primary" type="button" disabled={!canAct} onClick={() => void work(async () => {
             if (journal.list(actorId).length) throw new AccessFailure(400, 'resolve_previous_attempt');
             await submitTrackedRequest(ledger, journal, actorId, 'billing.payment.review.manage', 'billing.payment.review.manage', confirm, key => gateway.save(confirm, key, active)); await load();
-          })}>Simpan tindak lanjut</Button><Button variant="secondary" type="button" disabled={disabled} onClick={() => { setConfirm(null); formHeading.current?.focus(); }}>Kembali ke tindakan</Button>
+          })} busy={busy}>Simpan tindak lanjut</Button><Button variant="secondary" type="button" disabled={disabled} onClick={() => { setConfirm(null); formHeading.current?.focus(); }}>Kembali ke tindakan</Button>
         </section>}
       </form>}
     </>}

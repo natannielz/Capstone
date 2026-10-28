@@ -171,7 +171,7 @@ function ReceivingDesk({ account, fresh, onDenied }: { account: Account; fresh: 
       {pendingView && (own && allowed('propose') || !own && allowed('approve')) && <section className="ui-form" aria-label="Keputusan usulan"><h3>Keputusan</h3>
         <Field id="decision-reason" label="Alasan keputusan"><textarea maxLength={1000} value={decisionReason} disabled={commandLocked || !!confirmation} onChange={event => setDecisionReason(event.target.value)} /></Field>
         {own ? <Button variant="secondary" disabled={commandLocked || !!confirmation || !decisionReason.trim()} onClick={() => preview(() => prepareReceivingDecision(account.actorId, view, 'withdraw', decisionReason.trim()))}>Tarik usulan</Button> : <div className="ui-actions">
-          <Button variant="primary" disabled={commandLocked || !fresh || !!confirmation || !same || !!stale || !decisionReason.trim()} onClick={() => preview(() => prepareReceivingDecision(account.actorId, view, 'approve', decisionReason.trim()))}>Setujui rekening</Button>
+          <Button variant="primary" disabled={commandLocked || !fresh || !!confirmation || !same || !!stale || !decisionReason.trim()} onClick={() => preview(() => prepareReceivingDecision(account.actorId, view, 'approve', decisionReason.trim()))} busy={busy}>Setujui rekening</Button>
           <Button variant="secondary" disabled={commandLocked || !fresh || !!confirmation || !decisionReason.trim()} onClick={() => preview(() => prepareReceivingDecision(account.actorId, view, 'reject', decisionReason.trim()))}>Tolak usulan</Button></div>}
       </section>}
     </section>}
@@ -183,7 +183,7 @@ function ReceivingDesk({ account, fresh, onDenied }: { account: Account; fresh: 
         const ledger = new MutationLedger(() => 'ra.' + command.action + '.' + command.owner + '.' + crypto.randomUUID());
         const result = await submitTrackedRequest(ledger, recovery.journal, account.actorId, operation, operation, command, key => gateway.send(command, key, current));
         if (current()) { await open(result.proposalId); setNotice('Tindakan tersimpan. Periksa riwayat rekening terbaru.'); }
-      })}>Konfirmasi dan simpan</Button><Button variant="secondary" disabled={locked} onClick={() => setConfirmation(null)}>Kembali ke isian</Button></div>
+      })} busy={busy}>Konfirmasi dan simpan</Button><Button variant="secondary" disabled={locked} onClick={() => setConfirmation(null)}>Kembali ke isian</Button></div>
     </section>}
   </>;
 }

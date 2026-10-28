@@ -160,7 +160,7 @@ function StatementDesk({ account, fresh, onDenied }: { account: Account; fresh: 
         const ledger = new MutationLedger(() => 'bs.stage.0.' + crypto.randomUUID());
         const result = await submitTrackedRequest(ledger, recovery.journal, account.actorId, operation, operation, command, key => gateway.send(command, key, current));
         if (current()) { clearDraft(); setNotice('Impor ' + result.importId + ' tersimpan untuk rekonsiliasi. Muat daftar terbaru untuk membukanya.'); }
-      })}>Simpan impor</Button><Button variant="secondary" disabled={locked} onClick={() => setConfirmation(null)}>Kembali memeriksa</Button></div>
+      })} busy={busy}>Simpan impor</Button><Button variant="secondary" disabled={locked} onClick={() => setConfirmation(null)}>Kembali memeriksa</Button></div>
     </section>}
     {view && <section className="ui-section" aria-label="Rincian impor"><h2 ref={title} tabIndex={-1}>Impor {view.importId}: {view.filename}</h2><p>Disiapkan untuk rekonsiliasi · {at(view.recordedAt)} · Akun {view.actorId}</p>
       <p>{view.profile.name} · {view.account.details.bankCode} · {view.account.details.accountNumber} · {view.account.details.holderName} · Versi {view.account.version}</p><p>Sumber: {view.sourceReference}</p><p>Catatan: {view.reason}</p><Parsed key={view.importId} value={view.preview} />

@@ -89,7 +89,7 @@ export function PaymentAllocationCorrectionPanel({ actorId, owner, verified, all
             const ledger = new MutationLedger(() => 'pc.' + confirm.verificationId + '.' + confirm.receiptId + '.' + confirm.originalAllocationId + '.' + crypto.randomUUID());
             const result = await submitTrackedRequest(ledger, journal, actorId, 'billing.payment.allocation.correct', 'billing.payment.allocation.correct', confirm, key => gateway.correct(confirm, key, active));
             if (active()) { setSaved(result); onCorrected(); } await candidates();
-          })}>Simpan koreksi alokasi</Button><Button variant="secondary" type="button" disabled={disabled} onClick={() => { setConfirm(null); setShown(null); heading.current?.focus(); }}>Kembali ke nominal koreksi</Button>
+          })} busy={busy}>Simpan koreksi alokasi</Button><Button variant="secondary" type="button" disabled={disabled} onClick={() => { setConfirm(null); setShown(null); heading.current?.focus(); }}>Kembali ke nominal koreksi</Button>
         </section>}</>}
       </form></>}
     {!allowed && <p>Koreksi memerlukan kewenangan alokasi dan koreksi jurnal tersendiri, serta petugas yang independen.</p>}

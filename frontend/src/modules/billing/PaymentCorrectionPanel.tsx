@@ -95,7 +95,7 @@ export function PaymentCorrectionPanel({ actorId, owner, ocr, allowed, fresh, lo
             const command = confirm.command;
             await submitTrackedRequest(ledger, journal, actorId, 'billing.payment.review.correct', 'billing.payment.review.correct', command, key => gateway.save(command, key, active));
             await load(); if (active()) {onObservationsSaved?.(); setNotice('Koreksi tersimpan. Pembayaran tetap menunggu verifikasi.');}
-          })}>Simpan koreksi</Button><Button variant="secondary" type="button" disabled={disabled} onClick={() => setConfirm(null)}>Kembali ke isian</Button>
+          })} busy={busy}>Simpan koreksi</Button><Button variant="secondary" type="button" disabled={disabled} onClick={() => setConfirm(null)}>Kembali ke isian</Button>
         </section>}</>}
       <h4>Riwayat pemeriksaan</h4>{view.recent.length === 0 ? <p>Belum ada koreksi petugas.</p> : <><p>Menampilkan {view.recent.length} versi terbaru; seluruh versi tetap tersimpan.</p><ul>{view.recent.map(row => <li key={row.id}>
         <strong>Versi {row.revision} · Akun {row.actorId}</strong><p>{dateTimeFormatter.format(new Date(row.recordedAt))} · {row.reason}</p>
