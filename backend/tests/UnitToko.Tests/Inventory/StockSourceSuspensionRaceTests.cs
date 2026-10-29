@@ -19,8 +19,9 @@ public sealed partial class StockSourceSuspensionTests
     public async Task Final_authority_change_rolls_back_pool_stop_event_audit_and_receipt(string fault)
     {
         await using var data = await StoreTestData.CreateAsync(fixture); var (_, _, actor, pool) = await Setup(data, true); var service = Service(data);
-        await Rows(data, "inventoryPools").UpdateOneAsync(new BsonDocument("_id", pool), Builders<BsonDocument>.Update.Set("active", true));
+        await Activate(data, pool, linked: true);
         var expected = Expected(await service.PreviewSuspensionAsync(actor, pool)); var before = await Pool(data, pool);
+        var audits = await Count(data, "auditEvents"); var receipts = await Count(data, "idempotencyRecords");
         var captured = 0; var changed = 0;
         var settings = fixture.Client.Settings.Clone(); settings.ApplicationName = "SuspendFinal-" + Guid.NewGuid().ToString("N");
         settings.ClusterConfigurator = builder =>
@@ -42,15 +43,16 @@ public sealed partial class StockSourceSuspensionTests
         await Assert.ThrowsAsync<AuthorizationDeniedException>(() => new StockSourceSetupService(db, new(client), new(db), data.Clock).SuspendAsync(actor, pool, expected, Meta("rollback")));
         Assert.Equal(1, changed); Assert.Equal(before, await Pool(data, pool));
         Assert.Equal(0L, await Count(data, StockSourceSuspensionSchemas.Collection));
-        Assert.Equal(4L, await Count(data, "auditEvents")); Assert.Equal(4L, await Count(data, "idempotencyRecords"));
+        Assert.Equal(audits, await Count(data, "auditEvents")); Assert.Equal(receipts, await Count(data, "idempotencyRecords"));
     }
 
     [Fact]
     public async Task Concurrent_suspensions_from_one_review_record_exactly_one_stop()
     {
         await using var data = await StoreTestData.CreateAsync(fixture); var (_, _, actor, pool) = await Setup(data); var service = Service(data);
-        await Rows(data, "inventoryPools").UpdateOneAsync(new BsonDocument("_id", pool), Builders<BsonDocument>.Update.Set("active", true));
+        await Activate(data, pool);
         var expected = Expected(await service.PreviewSuspensionAsync(actor, pool));
+        var activated = await Pool(data, pool); var audits = await Count(data, "auditEvents"); var receipts = await Count(data, "idempotencyRecords");
         using var barrier = new Barrier(2); var arrivals = 0;
         StockSourceSetupService Racing()
         {
@@ -79,9 +81,9 @@ public sealed partial class StockSourceSuspensionTests
         }
         var result = await Task.WhenAll(Task.Run(() => Attempt(Racing(), "stop-a")), Task.Run(() => Attempt(Racing(), "stop-b")));
         Assert.Equal(2, arrivals); Assert.Single(result, value => value);
-        Assert.False((await Pool(data, pool))["active"].AsBoolean); Assert.Equal(1L, (await Pool(data, pool))["fence"].AsInt64);
+        Assert.False((await Pool(data, pool))["active"].AsBoolean); Assert.Equal(activated["fence"].AsInt64 + 1, (await Pool(data, pool))["fence"].AsInt64);
         Assert.Equal(1L, await Count(data, StockSourceSuspensionSchemas.Collection));
-        Assert.Equal(3L, await Count(data, "auditEvents")); Assert.Equal(3L, await Count(data, "idempotencyRecords"));
+        Assert.Equal(audits + 1, await Count(data, "auditEvents")); Assert.Equal(receipts + 1, await Count(data, "idempotencyRecords"));
     }
 
     [Theory]
@@ -89,7 +91,7 @@ public sealed partial class StockSourceSuspensionTests
     public async Task Suspension_and_real_canonical_stock_writes_share_the_same_transaction_fence(bool suspensionWins)
     {
         await using var data = await StoreTestData.CreateAsync(fixture); var (_, _, actor, pool) = await Setup(data); var service = Service(data);
-        await Rows(data, "inventoryPools").UpdateOneAsync(new BsonDocument("_id", pool), Builders<BsonDocument>.Update.Set("active", true));
+        await Activate(data, pool);
         await InventoryGraphTests.InstallBalances(data); await Rows(data, "lots").InsertOneAsync(InventoryGraphTests.Lot());
         var balance = InventoryGraphTests.Balance() with { PhysicalPoolId = pool };
         await Rows(data, "stockBalances").InsertOneAsync(InventoryBson.Balance(balance));
