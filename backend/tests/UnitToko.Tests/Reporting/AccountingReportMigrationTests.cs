@@ -58,10 +58,10 @@ public sealed class AccountingReportMigrationTests(MongoFixture fixture)
             { "index", new BsonDocument { { "name", index.Name }, { "hidden", false } } } }); }
     }
 
-    [Fact(Skip = Retired.HistoricalUpgrade)]
+    [Fact]
     public async Task Unsupported_preinstallation_read_and_inconsistent_persisted_chart_are_preserved_and_never_adopted()
     {
-        await using var data = await AccountingReportTestData.CreateAsync(fixture); await RestoreV83Async(data.Database);
+        await using var data = await AccountingReportTestData.CreateAsync(fixture, UnitToko.Tests.Procurement.SupplierDocumentPdfMatchMigrationRehearsal.Version); await RestoreV83Async(data.Database);
         var unowned = EmptyReadEvent(data.Clock.UtcNow);
         await data.Rows(AccountingReportRecords.Events).InsertOneAsync(unowned);
         try { await RefusesAsync(data.Database, data.Clock); }

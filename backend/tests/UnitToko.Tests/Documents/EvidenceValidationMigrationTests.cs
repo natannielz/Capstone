@@ -34,7 +34,10 @@ public sealed class EvidenceValidationMigrationTests(MongoFixture fixture)
         var definitions = await Definitions(db);
         Assert.Equal(stronger, definitions.Single(row => row["name"] == "evidenceValidationResults")["options"]["validator"]);
         Assert.True(InventorySchemas.Contains(definitions.Single(row => row["name"] == "outboxEvents")["options"]["validator"].AsBsonDocument, prior.AsBsonDocument));
+        // The rest of the registry must neither drop the operator's stronger rule nor rewrite the applied history.
         await new CollectionMigrations(db, Clock).ApplyAsync(); Assert.Equal(CollectionMigrations.CurrentVersion, (await History(db)).Count);
+        Assert.Equal(before, new BsonArray((await History(db)).Take(31)));
+        Assert.Equal(stronger, (await Definitions(db)).Single(row => row["name"] == "evidenceValidationResults")["options"]["validator"]);
     });
     [Theory]
     [InlineData("preexisting")] [InlineData("ttl")] [InlineData("counter")] [InlineData("outbox_orphan")] [InlineData("outbox_validator")]

@@ -31,8 +31,9 @@ internal sealed class AccountingBookSetupTestData(OrganizationAddressTestData or
         [new("inventory", "ASTOCK"), new("payable", "LAP"), new("supplier_debt", "LAP")]);
     internal static AuthorizationCommandMetadata Meta(string key) => new(key, "Synthetic independently reviewed initial accounting configuration", "accounting-book-test");
     internal IMongoCollection<BsonDocument> Rows(string table) => Database.GetCollection<BsonDocument>(table);
-    internal static async Task<AccountingBookSetupTestData> CreateAsync(MongoFixture fixture) {
-        var source = await StoreTestData.CreateAsync(fixture);
+    internal static async Task<AccountingBookSetupTestData> CreateAsync(MongoFixture fixture, int? migrationTarget = null) {
+        // A migration rehearsal builds the genuine registered prefix it replays from; every other caller gets the current schema.
+        var source = migrationTarget is { } target ? await StoreTestData.CreateWithMigrationTargetAsync(fixture, target) : await StoreTestData.CreateAsync(fixture);
         try {
             source.Clock.UtcNow = DateTimeOffset.FromUnixTimeMilliseconds(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
             var data = new AccountingBookSetupTestData(await OrganizationAddressTestData.PrepareAsync(source, fixture.Client));

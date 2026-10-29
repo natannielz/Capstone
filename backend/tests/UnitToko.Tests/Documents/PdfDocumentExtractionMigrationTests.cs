@@ -218,7 +218,8 @@ public sealed class PdfDocumentExtractionMigrationTests(MongoFixture fixture)
             return copy;
         }
         var restored = Undo(current);
-        if (restored.Equals(current)) return;
+        // Nothing to undo is only acceptable when the M83 extension is already a direct term; an unrecognised shape fails here.
+        if (restored.Equals(current)) { Assert.True(InventorySchemas.Contains(current, predecessor), "The outbox validator is neither the M86 extension nor the M83 extension"); return; }
         Assert.True(InventorySchemas.Contains(restored, predecessor));
         Assert.False(await db.GetCollection<BsonDocument>("outboxEvents").Find(new BsonDocument("$nor", new BsonArray { restored })).AnyAsync());
         await ChangeAsync(db, "outboxEvents", restored);
