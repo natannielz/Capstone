@@ -346,3 +346,11 @@ test("fix round 1 minors: pickers expose aria-pressed, meta wraps, no empty text
   has(read("src/modules/identity/WorkSummary.tsx"), /variant="plain" focusable/, "work summary heading takes focus");
   has(read("src/components/workspace-kit/section.tsx"), /tabIndex=\{focusable \? -1 : undefined\}/, "Section: focusable heading");
 });
+
+test("rehearsal fix: queue and picker rows keep their old separate elements, so exact-text locators still find each part", () => {
+  for (const name of ["ProcurementRequestWorkspace", "SupplierWorkspace"])
+    assert.ok(procurement(name).includes("<small>{packageMatchExplanation("), `${name}: the package explanation is its own element ("Kode SKU sama persis..." is waited for by exact text)`);
+  assert.ok(procurement("ProcurementReceivingWorkspace").includes("<small>{when(item.recordedAt)} · Pemberitahuan {item.id}</small>"), "receiving: the notice date and number stay one element");
+  assert.ok(procurement("ProcurementInspectionWorkspace").includes("<span>{value.draft.notice.order.supplier.displayName}</span>"), "inspection: the supplier name is its own element");
+  assert.ok(read("src/app/foundation.css").includes(".data-list-meta small{font-size:inherit}"), "foundation: a small inside the meta line keeps the meta size");
+});
