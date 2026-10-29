@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ComponentType, ReactNode } from "react";
 import { CircleAlert, CircleCheck, CircleHelp, Inbox, Lock, WifiOff } from "lucide-react";
 
 export type StateKind = "loading" | "empty" | "error" | "denied" | "unknown" | "success" | "offline";
@@ -21,17 +21,22 @@ const icons = { empty: Inbox, error: CircleAlert, denied: Lock, unknown: CircleH
  * error / unknown (full-width tone panel, role="alert"), denied (neutral card, h2), success and offline (role="status").
  * `action` is usually a secondary <Button> ("Coba lagi", "Periksa hasil"); `detail` carries a trace code.
  */
-export function StateView({ kind, title, message, detail, action, secondaryAction, rows = 3 }: {
+export function StateView({ kind, title, message, detail, action, secondaryAction, rows = 3, align, icon }: {
   kind: StateKind; title: string; message?: ReactNode; detail?: ReactNode; action?: ReactNode; secondaryAction?: ReactNode; rows?: number;
+  /** "center": the storefront's full-page state (empty cart, nothing found) — centred, 48 px block padding, 40 px icon; its title is
+   *  the page's h2 (it stands for the whole page body, not for a block inside a section). */
+  align?: "center";
+  /** Replaces the kind's icon (e.g. a cart for an empty cart). */
+  icon?: ComponentType<{ className?: string; "aria-hidden"?: boolean | "true" | "false" }>;
 }) {
   if (kind === "loading") return <div className="state-view" data-kind="loading" role="status" aria-busy="true" data-kit="">
     <span className="list-table-sr">{title}</span>
     {Array.from({ length: rows }, (_, index) => <span key={index} className="outcome-skeleton" />)}
   </div>;
-  const Icon = icons[kind];
+  const Icon = icon ?? icons[kind];
   const role = kind === "error" || kind === "unknown" ? "alert" : kind === "success" || kind === "offline" ? "status" : undefined;
-  const Title = kind === "denied" ? "h2" : kind === "empty" ? "h3" : "strong";
-  return <div className="state-view" data-kind={kind} role={role} data-kit="">
+  const Title = kind === "denied" || align === "center" && kind === "empty" ? "h2" : kind === "empty" ? "h3" : "strong";
+  return <div className="state-view" data-kind={kind} data-align={align} role={role} data-kit="">
     <div className="state-view-head"><Icon className="state-view-icon" aria-hidden="true" /><Title className="state-view-title">{title}</Title></div>
     {message && <p>{message}</p>}
     {detail && <p className="state-view-detail">{detail}</p>}

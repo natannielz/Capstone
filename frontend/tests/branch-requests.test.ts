@@ -5,7 +5,7 @@ import { AccessFailure, MutationLedger } from '../src/modules/administration/wor
 import { OperationJournal, reconcileOperationRecovery, submitTrackedRequest } from '../src/modules/administration/operation-journal';
 import { recoveryPage } from '../src/modules/administration/operation-recovery-navigation';
 import { SourceMemoryStorage } from './stock-source-fixtures';
-import { branchRequestInput, requestPackages, requestResult, requestStateLabel } from '../src/modules/ordering/branch-request-state';
+import { branchRequestInput, branchRequestNumber, requestPackages, requestResult, requestStateLabel } from '../src/modules/ordering/branch-request-state';
 import { createBranchRequestGateway, parseBranchRequest, parseBranchRequestDecision, parseBranchRequestPage, parseBranchRequestPreview } from '../src/modules/ordering/branch-request-client';
 
 // Wire-only fixtures. Native Mongo/browser tests own the real producer graph.
@@ -35,6 +35,11 @@ test('physical preview binds exact selection, one owner and named context withou
   malformed(() => parseBranchRequestPreview({ ...preview, lines: [{ ...lines[0], owner: { ...owner, channelId: '104' } }] }));
   malformed(() => parseBranchRequestPreview({ ...preview, labels: { ...labels, division: 'Unexpected division' } }));
   malformed(() => parseBranchRequestPreview(preview, { ...input, lines: [{ ...input.lines[0], packages: 4 }] }));
+});
+test('F-026: a branch request is shown as PB- with six digits; the server PT- reference stays an internal key', () => {
+  assert.equal(branchRequestNumber(requestResult(submitted).requestId), 'PB-000088');
+  assert.equal(branchRequestNumber(parseBranchRequest(view).id), 'PB-000088');
+  assert.throws(() => branchRequestNumber('0'));
 });
 test('human request number and immutable decision history must agree', () => {
   assert.equal(requestResult(submitted).number, 'PT-00000088'); assert.equal(requestResult(accepted).decisionId, '89');

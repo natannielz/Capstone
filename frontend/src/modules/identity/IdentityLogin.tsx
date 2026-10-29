@@ -8,6 +8,9 @@ import { createIdentityGateway } from "./identity-client";
 import { HOME_PATH, IdentityFailure, identityMessage, loginContinuation, loginFields, signedInContinuation, type IdentitySession } from "./identity-workflow";
 import { createAccessGateway } from "../administration/access-client";
 import { ProtectedNavigationForm } from "./ProtectedNavigationForm";
+import { Button, buttonClassName } from "@/components/workspace-kit/button";
+import { Field } from "@/components/workspace-kit/field";
+import { PageHeader } from "@/components/workspace-kit/page-header";
 import styles from "./identity-login.module.css";
 import { isPilotRelease } from '../../lib/release-scope';
 
@@ -59,21 +62,23 @@ export function IdentityLogin() {
     <a className={styles.skip} href="#identity-content">Langsung ke formulir masuk</a>
     <header className={styles.top}>
       <Brand context="Kebutuhan kerja & harian" />
-      <Link className={styles.home} href="/">Beranda</Link>
+      <Link className={buttonClassName({ variant: "secondary" })} href="/">Beranda</Link>
     </header>
     <main className={styles.formSide} id="identity-content" tabIndex={-1}>
-      <section className={styles.sheet} aria-labelledby="login-heading" aria-busy={loading}>
+      {/* The site-wide skip link ("Lewati ke konten utama") lands on the form too, so no page content sits outside a valid skip target. */}
+      <div id="konten-utama" tabIndex={-1} className={styles.target}>
+      <section className={styles.sheet} aria-label="Masuk ke Unit Toko" aria-busy={loading}>
         <p className={styles.sheetBar}>Akun organisasi</p>
         <div className={styles.sheetBody}>
-          <h1 id="login-heading">Masuk ke Unit Toko</h1>
+          <PageHeader title="Masuk ke Unit Toko" />
           {loggedOut && session && !session.authenticated && <p className={styles.success} role="status">Tidak ada sesi Unit Toko aktif di peramban ini.</p>}
           {loading && <p className={styles.loading} role="status"><span aria-hidden="true" />Memeriksa layanan akun…</p>}
           {error !== null && <div className={styles.alert} role="alert"><p>{identityMessage(error)}</p>
             {error instanceof IdentityFailure && error.traceId && <small>Referensi bantuan: {error.traceId}</small>}
-            <button type="button" className={styles.secondary} onClick={() => { setLoading(true); setError(null); setAttempt(value => value + 1); }}>Periksa kembali</button>
+            <div className="ui-actions"><Button onClick={() => { setLoading(true); setError(null); setAttempt(value => value + 1); }}>Periksa kembali</Button></div>
           </div>}
           {!loading && session?.authenticated && <><p>Anda sudah masuk sebagai <strong>{session.account?.displayName ?? session.account?.verifiedEmail}</strong>.</p>
-            <Link href={returnPath} className={styles.primary}>Lanjutkan</Link>
+            <Link href={returnPath} className={buttonClassName({ variant: "primary", className: styles.wide })}>Lanjutkan</Link>
             <p className={styles.help}>Untuk menggunakan akun lain, keluar terlebih dahulu melalui halaman akun.</p></>}
           {!loading && session && !session.authenticated && <>
             <ol className={styles.next} aria-label="Yang terjadi setelah Anda melanjutkan">
@@ -86,8 +91,8 @@ export function IdentityLogin() {
             }} />Saya menerima undangan akun baru</label>}
             {invited && <div className={styles.invitationFields}>
               <p className={styles.help} id="invite-help">Masukkan nomor dan kode dari undangan yang disetujui pengelola. Setelah itu, masuk dengan email penerima undangan.</p>
-              <label htmlFor="invitation-id">Nomor undangan<input id="invitation-id" value={invitationId} onChange={event => setInvitationId(event.target.value)} inputMode="numeric" maxLength={19} autoComplete="off" aria-describedby="invite-help" /></label>
-              <label htmlFor="invitation-secret">Kode undangan<input id="invitation-secret" type="password" value={invitationSecret} onChange={event => setInvitationSecret(event.target.value)} maxLength={64} autoComplete="off" spellCheck={false} aria-describedby="invite-secret-help" /></label>
+              <Field id="invitation-id" label="Nomor undangan"><input value={invitationId} onChange={event => setInvitationId(event.target.value)} inputMode="numeric" maxLength={19} autoComplete="off" aria-describedby="invite-help" /></Field>
+              <Field id="invitation-secret" label="Kode undangan"><input type="password" value={invitationSecret} onChange={event => setInvitationSecret(event.target.value)} maxLength={64} autoComplete="off" spellCheck={false} aria-describedby="invite-secret-help" /></Field>
               <p className={styles.help} id="invite-secret-help">Kode bersifat pribadi dan hanya digunakan untuk mengaktifkan undangan ini.</p>
               {(!fields && (invitationId || invitationSecret)) && <p className={styles.help}>Lengkapi nomor undangan dan kode 64 karakter yang Anda terima.</p>}
             </div>}
@@ -96,7 +101,7 @@ export function IdentityLogin() {
           <noscript><p className={styles.alert}>Aktifkan JavaScript untuk menyiapkan perlindungan formulir masuk.</p></noscript>
         </div>
         <div className={styles.support}><h2>Perlu bantuan masuk?</h2><p>Hubungi pengelola cabang atau organisasi untuk memeriksa akses dan undangan, atau ikuti proses pemulihan akun resmi. Jangan bagikan kata sandi atau kode verifikasi Anda.</p></div>
-      </section>
+      </section></div>
     </main>
     <aside className={styles.context} aria-labelledby="login-context">
       <p id="login-context" className={styles.statement}>Satu akun organisasi untuk katalog, permintaan cabang, dan tugas toko.</p>

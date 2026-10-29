@@ -225,10 +225,9 @@ test("U-015/U-016: one left edge and one canvas in both frames", () => {
   const store = read("src/components/store/store-frame.module.css");
   assert.match(rule(store, ".inner"), /width:\s*min\(var\(--content-wide\), 100% - 2 \* var\(--gutter\)\)/);
   assert.match(rule(store, ".inner"), /padding:\s*0;?/);
-  for (const file of ["src/modules/catalog/buyer-catalog.module.css", "src/modules/ordering/order-checkout.module.css"]) {
-    const css = read(file);
-    assert.match(css, /:global\(\[data-store-frame\]\) \.page\.page\s*\{[^}]*padding-inline:\s*0;[^}]*background:\s*var\(--background\)/, file);
-  }
+  // UI-PAGES-A: the guest and signed-in catalogue share one container (storefront-catalog.module.css); checkout keeps the frame's.
+  assert.match(rule(read("src/modules/catalog/storefront-catalog.module.css"), ".page"), /width:\s*min\(var\(--content-wide\), 100% - 2 \* var\(--gutter\)\);[^}]*margin-inline:\s*auto/);
+  assert.match(read("src/modules/ordering/order-checkout.module.css"), /:global\(\[data-store-frame\]\) \.page\s*\{[^}]*width:\s*min\(var\(--content-wide\), 100% - 2 \* var\(--gutter\)\);[^}]*background:\s*var\(--background\)/);
 });
 
 test("U-019: workspace navigation items are 44 px touch targets", () => {
@@ -254,11 +253,11 @@ test("U-022: every description list looks like Facts (13 px muted term, 15/600 v
 
 // Remaining hex values live in page stylesheets owned by the page agents (U-024 … U-040); this ceiling only falls.
 const hexCeiling: Record<string, number> = {
-  "src/modules/catalog/buyer-catalog.module.css": 82, "src/components/pilot-site-chrome.module.css": 27, "src/modules/identity/identity-login.module.css": 17,
-  "src/modules/inventory/stock-source.module.css": 17, "src/modules/ordering/branch-request.module.css": 17, "src/modules/inventory/stock-source-alias.module.css": 16,
+  "src/components/pilot-site-chrome.module.css": 27,
+  "src/modules/inventory/stock-source.module.css": 17, "src/modules/inventory/stock-source-alias.module.css": 16,
   "src/modules/inventory/stock-source-policy.module.css": 16, "src/modules/inventory/stock-source-revision.module.css": 16, "src/modules/inventory/stock-source-suspension.module.css": 16,
   "src/modules/catalog/catalog-editor.module.css": 15, "src/components/landing/landing.module.css": 13, "src/modules/billing/invoice.module.css": 11,
-  "src/modules/inventory/stock-count.module.css": 11, "src/modules/billing/bank-statement.module.css": 10, "src/modules/ordering/order-draft.module.css": 7,
+  "src/modules/inventory/stock-count.module.css": 11, "src/modules/billing/bank-statement.module.css": 10,
   "src/modules/organizations/organizations.module.css": 7, "src/modules/ordering/order-quote.module.css": 5, "src/modules/inventory/replenishment.module.css": 3,
 };
 test("U-023: no hex colour in the shared stylesheets, and page stylesheets never gain one", () => {
