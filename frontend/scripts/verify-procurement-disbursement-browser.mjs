@@ -1,6 +1,7 @@
 // Actual production Next/HTTPS/Kestrel/Mongo and native private-file scanner/decoder. All business inputs are synthetic.
 import assert from 'node:assert/strict';
 import { resolve } from 'node:path';
+import { displayDate } from './workspace-rehearsal.mjs';
 
 export async function verifyProcurementDisbursementBrowser({ config, maker, user, origin, directory, disbursementWrites, disbursementRecoveries, disbursementUploads, dropNext, dropped, validateEvidence }) {
   const { page, context } = maker, path = '/procurement/disbursements', api = '/api/v1/procurement/disbursements', purpose = 'disbursement-review';
@@ -55,7 +56,7 @@ export async function verifyProcurementDisbursementBrowser({ config, maker, user
     assert.equal(await region.getByRole('heading', { name: heading, exact: true }).evaluate(element => element === document.activeElement), true);
     assert.equal(await region.getByRole('textbox').count(), 0); assert.equal(await region.getByRole('button', { name: button, exact: true }).isDisabled(), true);
     const text = await region.innerText();
-    for (const fact of [config.supplierName, config.transferDate, config.transferReference, 'SYNTHETIC-DISBURSEMENT-POLICY-APPROVAL', '********5678', '*********6789']) assert.ok(text.includes(fact), fact);
+    for (const fact of [config.supplierName, displayDate(config.transferDate), config.transferReference, 'SYNTHETIC-DISBURSEMENT-POLICY-APPROVAL', '********5678', '*********6789']) assert.ok(text.includes(fact), fact);
     for (const secret of [config.supplierAccount, config.payingAccount]) assert.ok(!text.includes(secret));
     await region.getByRole('checkbox').check();
   }

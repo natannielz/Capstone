@@ -1,6 +1,7 @@
 // Actual production Next/HTTPS/Kestrel/Mongo and genuine approved PO history; all policy and identity inputs are synthetic local evidence.
 import assert from 'node:assert/strict';
 import { resolve } from 'node:path';
+import { displayDate } from './workspace-rehearsal.mjs';
 
 export async function verifyProcurementFundingBrowser({ config, maker, user, origin, directory, fundingWrites, fundingRecoveries, dropNext, dropped }) {
   const { page, context } = maker, path = '/procurement/funding', api = '/api/v1/procurement/funding';
@@ -39,7 +40,7 @@ export async function verifyProcurementFundingBrowser({ config, maker, user, ori
     const text = await region.innerText();
     for (const value of [config.organizationName, config.shopName, config.warehouseName, config.channelName, config.supplierName, config.supplierSubject,
       config.skuCode, config.familyName, config.packageLabel, config.specification, '12 piece per kemasan', '6 kemasan', '72 piece', '000001', '000012', 'SYNTHETIC-QUOTE-0001',
-      'Rp10.000,00', 'Rp60.000,00', 'Rp3.300,00', 'Rp700,00', 'Rp64.000,00', 'Rp20.000,00', 'Explicit synthetic deposit; balance on receipt', config.neededBy,
+      'Rp10.000,00', 'Rp60.000,00', 'Rp3.300,00', 'Rp700,00', 'Rp64.000,00', 'Rp20.000,00', 'Explicit synthetic deposit; balance on receipt', displayDate(config.neededBy),
       'SYNTHETIC-LOCAL-ADVANCE-PROCEDURE', 'SYNTHETIC-LOCAL-POLICY-APPROVAL', 'SYNTHETIC-LOCAL-FINANCE-OWNER', 'Otorisasi yang belum dicairkan tetap mengurangi sisa batas.',
       'Transfer, ketersediaan kas, penerimaan barang dan jurnal pembayaran belum dicatat']) assert.ok(text.includes(value), value);
   }
