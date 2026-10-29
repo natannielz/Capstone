@@ -114,13 +114,13 @@ export function IdentityAccount({ variant = "account" }: { variant?: "account" |
         <SessionAccessState error={null} kind="expired" returnPath={home ? HOME_PATH : "/identity/account"} onRetry={reload} />}
       {!loading && session?.account && !timing.expired && <>
         {home && elsewhere && <p role="status" className={styles.help}>Membuka toko untuk akun Anda…</p>}
-        {home && !elsewhere && <>
+        {home && !elsewhere && <div className="ui-stack">
           {!isPilotRelease && navigationError === null && <WorkSummary key={"work:" + session.account.userId} actorId={session.account.userId} actions={actions} heading="Menunggu tindakan Anda" />}
           {door && navigationError === null && <section className={styles.card} aria-labelledby="store-door-heading"><h2 id="store-door-heading">{door.label}</h2><p>{door.description}</p>
             <Link href={door.href} className={buttonClassName({ variant: "primary" })}>{door.label}</Link></section>}
           <WorkspaceDirectory actions={actions} accessState={navigationError} />
           <p className={styles.help}>Profil, verifikasi dua langkah untuk persetujuan, kontak dan keluar ada di <Link href="/identity/account#profile-heading">Akun saya</Link>.</p>
-        </>}
+        </div>}
         {!home && <>
         <div className={styles.accountGrid}>
           <section className={styles.card} aria-labelledby="profile-heading"><span className={styles.status}>Akun terverifikasi</span>

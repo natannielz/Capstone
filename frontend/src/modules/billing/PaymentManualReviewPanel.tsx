@@ -10,6 +10,7 @@ import type { PaymentDraft, PaymentOcrView } from './payment-client';
 import styles from '../administration/access.module.css';
 import invoice from './invoice.module.css';
 import { dateTimeFormatter } from '@/lib/format';
+import { Button } from '@/components/workspace-kit/button';
 
 const labels: Record<string, string> = { amount: 'Nominal (IDR)', currency: 'Mata uang', transfer_date: 'Tanggal transfer (YYYY-MM-DD)', transfer_time: 'Waktu transfer (HH:mm:ss)', recipient: 'Nama penerima', account: 'Rekening tujuan pada bukti', bank: 'Bank tujuan pada bukti', reference: 'Nomor referensi' };
 function message(error: unknown) {
@@ -43,7 +44,7 @@ export function PaymentManualReviewPanel({ actorId, owner, ocr, allowed, fresh, 
   return <section className={invoice.correctionPanel} aria-label="Pengecualian gangguan OCR"><h3>Pengecualian gangguan OCR</h3>
     <p>Buka bukti asli dan ikuti prosedur Finance yang disetujui. Kolom kosong berarti belum diketahui. Pemeriksaan manual tetap menunggu verifikasi bank independen.</p>
     {!fresh && <p className={styles.alert}>Verifikasi terbaru diperlukan. <Link href="/identity/account?operation=payment.review.manual&returnPath=%2Fbilling%2Fpayment-reviews">Verifikasi dua langkah untuk pengecualian</Link></p>}
-    <button className={styles.secondary} disabled={!canSave} onClick={() => void work(load)}>Muat pengecualian terbaru</button>
+    <Button variant="secondary" disabled={!canSave} onClick={() => void work(load)}>Muat pengecualian terbaru</Button>
     {error !== null && <p role="alert" className={styles.alert}>{message(error)}</p>}{notice && <p role="status">{notice}</p>}{busy && <p role="status">Memproses pemeriksaan manual…</p>}
     {view && <form onSubmit={event => { event.preventDefault(); if (!canSave) return; try { prepareManualReview(actorId, view, values, imageReviewed, reason.trim()); setConfirm(true); requestAnimationFrame(() => heading.current?.focus()); } catch (failure) { setError(failure); } }}>
       <p>Versi pemeriksaan manual {view.reviewRevision} · Gangguan {view.failureId}: {view.failureCode}</p><p>Prosedur: {view.procedureReference}</p>
@@ -54,15 +55,15 @@ export function PaymentManualReviewPanel({ actorId, owner, ocr, allowed, fresh, 
       </div>)}</div>
       <label className={styles.checkbox}><input type="checkbox" checked={imageReviewed} disabled={disabled || confirm || !fresh} onChange={event => setImageReviewed(event.target.checked)} /> Saya telah memeriksa bukti asli yang diajukan; isian yang tidak terbaca tetap kosong.</label>
       <label htmlFor="manual-reason">Alasan pengecualian dan hasil pemeriksaan</label><textarea id="manual-reason" value={reason} required maxLength={1000} disabled={disabled || confirm || !fresh} onChange={event => setReason(event.target.value)} />
-      {!confirm && <button className={styles.primary} disabled={!canSave || !imageReviewed || !reason.trim()}>Periksa pengecualian</button>}
+      {!confirm && <Button variant="primary" type="submit" disabled={!canSave || !imageReviewed || !reason.trim()}>Periksa pengecualian</Button>}
       {confirm && <section className={styles.state} aria-label="Konfirmasi pengecualian OCR"><h4 ref={heading} tabIndex={-1}>Periksa catatan manual sebelum menyimpan</h4>
         <ul>{values.map(field => <li key={field.field}>{labels[field.field]}: {field.value ?? 'Belum diketahui'}</li>)}</ul><p>Alasan: {reason}</p><p>Catatan ini tidak menyatakan OCR berhasil atau membuktikan dana masuk.</p>
-        <button type="button" className={styles.primary} disabled={!canSave} onClick={() => void work(async () => {
+        <Button variant="primary" type="button" disabled={!canSave} onClick={() => void work(async () => {
           if (journal.list(actorId).length) throw new AccessFailure(400, 'resolve_previous_attempt');
           const command = prepareManualReview(actorId, view, values, imageReviewed, reason.trim());
           await submitTrackedRequest(ledger, journal, actorId, 'billing.payment.review.manual', 'billing.payment.review.manual', command, key => gateway.save(command, key, active));
           await load(); if (active()) setNotice('Pemeriksaan manual tersimpan. Pembayaran tetap menunggu verifikasi bank.');
-        })}>Simpan pemeriksaan manual</button><button type="button" className={styles.secondary} disabled={disabled} onClick={() => setConfirm(false)}>Kembali ke isian manual</button>
+        })} busy={busy}>Simpan pemeriksaan manual</Button><Button variant="secondary" type="button" disabled={disabled} onClick={() => setConfirm(false)}>Kembali ke isian manual</Button>
       </section>}
     </form>}
   </section>;
