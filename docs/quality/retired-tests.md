@@ -257,6 +257,34 @@ Same reason as `Retired.HistoricalUpgrade`. These tests need a populated databas
 | `ShipmentCourierPredecessorTests.Genuine_stopped117_open_visit_pending_QR_and_received_shipment_survive118_with_exact_historical_bindings` | InvalidOperationException: exact accepted predecessor product and producer hashes are not pinned; no populated 119 database exists to upgrade | Retired: `HistoricalUpgrade` |
 | `InvoiceReleaseMigrationTests.Real_118_invoice_classification_preserves_original_receipt_journal_document_and_financial_bytes` | DomainValidationException: order services refuse below the current schema, so no populated 118 invoice can be produced to upgrade | Retired: `HistoricalUpgrade` |
 
+### Migration rehearsal chain M80..M88 (fixture rebuilt, five data-survival replays retired, 29 October 2026)
+
+The rehearsal helpers `RestoreV88Async`, `RestoreV87Async` ... `RestoreV81Async` rewind a fully migrated fixture one proven-empty marker at a time, and the first of them pinned `history.Count == 89`. Every migration added after M89 broke the pin (`Expected: 89, Actual: 121`, then `123`), and no later migration can be rewound that way. The rehearsals are now written against a genuine prefix: `SupplierDocumentPdfMatchMigrationRehearsal.CreateAsync` builds the database with the actual registered steps 1..89 (`StoreTestData.CreateWithMigrationTargetAsync`), and every replay inside a rehearsal is bounded to the same prefix (`ApplyAsync`, `IsCompleteAsync`). No registry version, refusal or integrity assertion changed, and adding a migration no longer touches these tests.
+
+Two rehearsal-chain defects sat behind the version pin and are fixed in the helpers, not in any migration: `RestoreV85Async` deliberately keeps marker 86's outbox validator extension, so a rehearsal of M84 or M83 found the M83 extension only under an `$or` and refused (`PdfDocumentExtractionMigrationTests.UndoM86OutboxExtensionAsync`, called from `RestoreV83Async`, undoes it through the reviewed successor and predecessor templates, checks every row and keeps the collection UUID).
+
+Six tests build real private data through the order, payment, accounting and supplier services and the OCR runtimes. Those runtimes return `schema_unavailable` unless the database is at the current registry version (`PdfDocumentOcrRuntime`, `PaymentOcrRuntime`, `SupplierDocumentOcrRuntime` call `IsCurrentAsync`), so the data cannot be produced on the M89 prefix and cannot be rewound from the current schema. Same reason and coverage as `Retired.HistoricalUpgrade`.
+
+| Test | Root cause (run log) | Outcome |
+| --- | --- | --- |
+| `PaymentSupplementMigrationTests.Actual_complete_supplier_pages_and_receipt_survive_but_corrupt_result_or_orphan_read_refuses_adoption` | Assert.Equal() Failure: Expected 89, Actual 123 (`RestoreV88Async`); the supplier OCR result it keeps can only be produced at the current schema | Retired: `HistoricalUpgrade` |
+| `PaymentSupplementCorrectionMigrationTests.Actual_old_image_correction_survives_sole_stronger_extension_and_replay_while_malformed_orphan_annotated_and_history_faults_refuse_before_DDL` | Same; its fixture asserts `IsCurrentAsync` before running the image and PDF OCR workers | Retired: `HistoricalUpgrade` |
+| `PdfEvidenceAdmissionMigrationTests.Actual_supplier_image_submission_pin_and_private_video_history_remain_valid_without_pdf_reinterpretation` | Same; the supplier receipt, video inspection and image submission need the current order and procurement services | Retired: `HistoricalUpgrade` |
+| `PdfDocumentExtractionMigrationTests.Actual_M85_original_PDF_page_proof_private_history_and_UUIDs_survive_but_corrupt_page_proof_cannot_be_adopted` | Same; the PDF page proof comes from the whole-PDF OCR worker | Retired: `HistoricalUpgrade` |
+| `PdfDocumentExtractionMigrationTests.Actual_payment_image_result_pin_source_and_receipt_survive_and_corrupt_retained_result_is_refused_without_repair` | Same; the image result comes from the payment OCR worker | Retired: `HistoricalUpgrade` |
+| `AccountingReportMigrationTests.Unsupported_preinstallation_read_and_inconsistent_persisted_chart_are_preserved_and_never_adopted` | Same (`RestoreV88Async` via `RestoreV83Async`); its fixture books an accounting period and reads a real report, which needs the current accounting book services | Retired: `HistoricalUpgrade` |
+
+### Migration tests rebound to the step they claim (29 October 2026)
+
+| Test | Root cause (run log) | Outcome |
+| --- | --- | --- |
+| `EvidenceValidationMigrationTests.Upgrade_retains_history_prior_rules_and_stronger_partial_installation` | `Assert.True(InventorySchemas.Contains(outbox validator, M31 validator))` failed after the full upgrade. Stepping the registry one version at a time shows it holds through M68 and breaks at M69 (`ProcurementInspectionEvidenceSchemas` widens the outbox validator to an `$or` of the previous rules and a translated branch, which the structural `Contains` cannot see through). | **Rewritten:** the retention assertions now run at M32, the upgrade the test names; the registry is then completed. Nothing was loosened: the later widening is covered by its own migration tests. |
+| `ProviderLifecycleMigrationTests.Interrupted_v5_preserves_stronger_rules_resumes_only_v5_and_all_ddl_is_majority` | The DDL allow-list names the collections of registry versions 1..19 (its own comment says "through operating-policy definitions"), but the resume replayed the whole registry, so `packConversions` and every later collection tripped it. | **Rewritten:** the interrupted run and the resume are bounded to version 19. The allow-list and the majority write-concern assertion are unchanged. |
+
+### Stock source suspension: activation provenance (29 October 2026)
+
+Product behaviour is correct and unchanged: `RequireActivationPoolProvenanceAsync` refuses a pool whose `active` flag has no activation history ("An active Boolean alone is never accepted source authority"). Eight `StockSourceSuspensionTests` cases set `active = true` directly on the pool document ("deliberately not handoff/activation evidence"), which the activation migration made unreachable. They now activate the empty pool through the real operating-policy and activation commands (independently reviewed), and count audits, receipts and the pool fence relative to the activated state. **Fixed**, not retired.
+
 ## Open test debt: transaction latency (pending, not retired)
 
 These U05 timeline scenarios are correct, but a command inside them (invoice release propose or decide on two orders, the second stock release, or procurement inbound-binding history replay) still exceeds MongoDB's 60 s transaction bound, even with provenance seals configured as in production. The 60 s bound is never weakened. The fix is the latency workstream (next-wave plan E): memoised immutable proofs and narrower reads. The tests return when their commands fit.

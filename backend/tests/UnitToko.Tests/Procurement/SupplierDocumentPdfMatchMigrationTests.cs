@@ -108,10 +108,24 @@ public sealed class SupplierDocumentPdfMatchMigrationTests(MongoFixture fixture)
 // test class; this helper never opens an original, invokes a decoder or runs OCR.
 internal static class SupplierDocumentPdfMatchMigrationRehearsal
 {
+    /// <summary>The registry version this rehearsal chain was written against (M89 is the last marker it rewinds).
+    /// The chain deletes one proven-empty marker per step, so it cannot start from a database that later migrations
+    /// have changed. Fixtures therefore build a genuine prefix (the actual registered steps 1..89 and their deployment
+    /// leases) instead of rewinding the current schema, and every replay is bounded to the same prefix. Adding a
+    /// migration to the registry never changes this number.</summary>
+    internal const int Version = 89;
+    internal static Task<UnitToko.Tests.Authorization.StoreTestData> CreateAsync(MongoFixture fixture) =>
+        UnitToko.Tests.Authorization.StoreTestData.CreateWithMigrationTargetAsync(fixture, Version);
+    /// <summary>Applies the registered steps of the rehearsal prefix that are not yet recorded (a rewound marker, an interrupted lease).</summary>
+    internal static Task ApplyAsync(IMongoDatabase db, IClock clock, CancellationToken ct = default) =>
+        UnitToko.Tests.Authorization.StoreTestData.ApplyRegisteredThroughAsync(db, clock, Version, ct);
+    internal static Task<bool> IsCompleteAsync(IMongoDatabase db, IClock clock) => new MigrationGate(db, clock, Version).IsCurrentAsync(default);
+
     internal static async Task RestoreV88Async(IMongoDatabase db) {
         var history = new BsonArray(await db.GetCollection<BsonDocument>("schemaMigrations").Find(new BsonDocument())
             .Sort(new BsonDocument("_id", 1)).ToListAsync());
         if (history.Count <= 88) return;
+        Assert.True(history.Count == Version, $"The rehearsal chain needs the {Version}-step prefix fixture (SupplierDocumentPdfMatchMigrationRehearsal.CreateAsync), not a database at {history.Count} steps.");
         Assert.Equal(89, history.Count); Assert.True(MigrationHistory.IsValid(history.Select(row => row.AsBsonDocument).ToArray(), 89));
         Assert.All(history, row => Assert.Equal("applied", row["state"]));
         await SupplierDocumentPdfMatchStorage.RequireAsync(db, SupplierDocumentBson.Matches, default, requireAnnotated: true);
