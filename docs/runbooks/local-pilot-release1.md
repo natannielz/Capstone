@@ -191,3 +191,5 @@ FIX-RULES owns template changes. Until then, the drops keep each checker persona
 - Release1 has no guest samples.
 
 Full-release note (F-030): a keranjang whose draft already became an order before database version 123 still shows that draft once. The buyer discards it once from **Draf** (Buang draf); every later keranjang starts a fresh draft.
+
+Closed drafts (F-030): a draft that became an order stays stored with its link row in orderDraftSubmissions, readable by id for the checkout that placed it. OrderDraftPurge removes only discarded drafts, so it does not touch closed ones; a link row left behind if a draft is ever purged is harmless (it only points at a draft that no longer exists). What was not ordered from a draft continues in a new successor draft of the same buyer, branch and delivery.

@@ -8,6 +8,7 @@ using MongoDB.Bson;
 using MongoDB.Driver;
 using UnitToko.Api.Identity;
 using UnitToko.Modules.Identity;
+using UnitToko.Modules.Ordering;
 using UnitToko.Platform;
 using UnitToko.Platform.Authorization;
 using UnitToko.Platform.Identity;
@@ -24,6 +25,11 @@ namespace UnitToko.Tests.Ordering;
 public sealed class OrderDraftSubmissionTests(MongoFixture fixture)
 {
     private static AuthorizationCommandMetadata Meta(string key) => CatalogPriceTestData.Meta(key);
+    /// <summary>Records holding an ImmutableArray compare it by reference, so compare the draft's content field by field.</summary>
+    private static void SameInput(OrderDraftInput expected, OrderDraftInput actual) {
+        Assert.Equal(expected.Context, actual.Context); Assert.Equal(expected.Delivery, actual.Delivery);
+        Assert.Equal(expected.PurchaseReference, actual.PurchaseReference); Assert.Equal(expected.Selections.AsEnumerable(), actual.Selections.AsEnumerable());
+    }
 
     [Fact]
     public async Task A_draft_that_became_an_order_leaves_the_keranjang_and_the_next_keranjang_is_a_new_order()
@@ -65,7 +71,7 @@ public sealed class OrderDraftSubmissionTests(MongoFixture fixture)
     }
 
     [Fact]
-    public async Task A_draft_ordered_in_part_stays_the_keranjang_until_every_package_is_ordered()
+    public async Task A_draft_ordered_in_part_is_closed_and_its_unordered_packages_continue_in_a_successor_keranjang()
     {
         // Two channel groups of one keranjang are checked out one after the other (OrderCheckoutWorkspace).
         await using var data = await OrderSubmissionTestData.CreateAsync(fixture, secondFulfillmentStock: 10);
@@ -73,19 +79,66 @@ public sealed class OrderDraftSubmissionTests(MongoFixture fixture)
         var draftId = (await drafts.SaveAsync(data.Buyer, null, 0, data.Input, Meta("cart-two")))["draftId"].AsInt64;
         var groupA = data.Input with { Selections = [data.Input.Selections[0]] }; var groupB = data.Input with { Selections = [data.Input.Selections[1]] };
         var reviewA = await data.Service.PreviewAsync(data.Buyer, groupA);
-        await data.Service.SubmitAsync(data.Buyer, groupA, reviewA.Review, Meta("checkout-a"), draftId);
-        // The packages not yet ordered are still the buyer's keranjang; they are not lost when the first group is ordered.
-        Assert.Equal(draftId, Assert.Single((await drafts.ListAsync(data.Buyer, data.Input.Context)).Items).Id.Value);
-        // The ordered group can never be ordered a second time from that draft, with a new key either.
-        Assert.Equal("order_draft_submitted", (await Assert.ThrowsAsync<PersistenceConflictException>(() =>
-            data.Service.SubmitAsync(data.Buyer, groupA, reviewA.Review, Meta("checkout-a-again"), draftId))).Code);
-        var reviewB = await data.Service.PreviewAsync(data.Buyer, groupB);
-        await data.Service.SubmitAsync(data.Buyer, groupB, reviewB.Review, Meta("checkout-b"), draftId);
-        // The last group closes it.
-        Assert.Empty((await drafts.ListAsync(data.Buyer, data.Input.Context)).Items);
+        var orderA = await data.Service.SubmitAsync(data.Buyer, groupA, reviewA.Review, Meta("checkout-a"), draftId);
+        // The source draft is closed whatever is left in it: it is not listed and cannot be edited.
         Assert.Equal("order_draft_submitted", (await Assert.ThrowsAsync<PersistenceConflictException>(() =>
             drafts.SaveAsync(data.Buyer, draftId, 1, data.Input, Meta("cart-edit-closed")))).Code);
+        // What was not ordered continues as a new draft of the same owner, branch, delivery and reference, and is the keranjang.
+        var successor = Assert.Single((await drafts.ListAsync(data.Buyer, data.Input.Context)).Items);
+        Assert.NotEqual(draftId, successor.Id.Value); Assert.Equal(1, successor.Revision);
+        SameInput(groupB, successor.Input);
+        // Its receipt is an ordinary draft-save receipt: recovered by its key, and the same save again returns the same result.
+        var successorKey = "order-successor:" + orderA["orderId"].AsInt64;
+        var receipt = await drafts.RecoverAsync(data.Buyer, successorKey);
+        Assert.Equal(successor.Id.Value, receipt!["draftId"].AsInt64);
+        Assert.Equal(receipt, await drafts.SaveAsync(data.Buyer, null, 0, groupB,
+            new(successorKey, "Sisa keranjang dilanjutkan setelah pesanan diajukan", "successor-replay")));
+        Assert.Single((await drafts.ListAsync(data.Buyer, data.Input.Context)).Items);
+        // The ordered group is not part of it, so it cannot be ordered a second time from the old draft (a new key does not help)...
+        Assert.Equal("order_draft_changed", (await Assert.ThrowsAsync<PersistenceConflictException>(() =>
+            data.Service.SubmitAsync(data.Buyer, groupA, reviewA.Review, Meta("checkout-a-again"), draftId))).Code);
+        // ...while replaying the same checkout still returns the same order.
+        Assert.Equal(orderA, await data.Service.SubmitAsync(data.Buyer, groupA, reviewA.Review, Meta("checkout-a"), draftId));
+        Assert.Equal(orderA, await data.Service.RecoverAsync(data.Buyer, "checkout-a"));
+        // Editing the successor works (a new revision) and it stays the one keranjang.
+        var edited = groupB with { Selections = [groupB.Selections[0] with { Packages = groupB.Selections[0].Packages + 1 }] };
+        await drafts.SaveAsync(data.Buyer, successor.Id.Value, 1, edited, Meta("cart-edit-successor"));
+        var current = Assert.Single((await drafts.ListAsync(data.Buyer, data.Input.Context)).Items);
+        Assert.Equal((successor.Id, 2L), (current.Id, current.Revision)); SameInput(edited, current.Input);
+        // The rest of the checkout that began on the old draft is ordered from the successor, which then closes too.
+        var reviewB = await data.Service.PreviewAsync(data.Buyer, edited);
+        await data.Service.SubmitAsync(data.Buyer, edited, reviewB.Review, Meta("checkout-b"), draftId);
+        Assert.Empty((await drafts.ListAsync(data.Buyer, data.Input.Context)).Items);
+        Assert.Equal("order_draft_submitted", (await Assert.ThrowsAsync<PersistenceConflictException>(() =>
+            drafts.SaveAsync(data.Buyer, successor.Id.Value, 2, edited, Meta("cart-edit-successor-closed")))).Code);
+        Assert.Equal("order_draft_submitted", (await Assert.ThrowsAsync<PersistenceConflictException>(() =>
+            data.Service.SubmitAsync(data.Buyer, edited, reviewB.Review, Meta("checkout-b-again"), draftId))).Code);
         Assert.Equal(2, await data.Rows("orders").CountDocumentsAsync(new BsonDocument()));
+        var links = await data.Rows("orderDraftSubmissions").Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync();
+        Assert.Equal(new[] { draftId, successor.Id.Value }, links.Select(row => row["draftId"].AsInt64));
+        Assert.Equal(successor.Id.Value, links[0]["successorId"].AsInt64); Assert.True(links[1]["successorId"].IsBsonNull);
+    }
+
+    [Fact]
+    public async Task Two_checkouts_of_one_draft_with_different_keys_place_one_order()
+    {
+        await using var data = await OrderSubmissionTestData.CreateAsync(fixture);
+        var drafts = new OrderDraftService(data.Database, new(fixture.Client), new(data.Database), data.Prices.Catalog.Clock);
+        var draftId = (await drafts.SaveAsync(data.Buyer, null, 0, data.Input, Meta("cart-race")))["draftId"].AsInt64;
+        var review = await data.Service.PreviewAsync(data.Buyer, data.Input);
+        async Task<object> Try(string key) {
+            try { return await data.Service.SubmitAsync(data.Buyer, data.Input, review.Review, Meta(key), draftId); }
+            catch (PersistenceConflictException conflict) { return conflict.Code; }
+        }
+        var outcomes = await Task.WhenAll(Task.Run(() => Try("race-one")), Task.Run(() => Try("race-two")));
+        Assert.Equal(1, outcomes.Count(outcome => outcome is BsonDocument));
+        Assert.Contains(outcomes.OfType<string>(), code => code is "order_draft_submitted" or "order_draft_changed");
+        Assert.Equal(1, await data.Rows("orders").CountDocumentsAsync(new BsonDocument()));
+        Assert.Equal(1, await data.Rows("orderDraftSubmissions").CountDocumentsAsync(new BsonDocument()));
+        // The database itself refuses a second link for one draft.
+        var link = await data.Rows("orderDraftSubmissions").Find(new BsonDocument()).SingleAsync();
+        var duplicate = link.DeepClone().AsBsonDocument; duplicate["_id"] = 9_000_001L;
+        await Assert.ThrowsAsync<MongoWriteException>(() => data.Rows("orderDraftSubmissions").InsertOneAsync(duplicate));
     }
 
     [Fact]
@@ -104,9 +157,15 @@ public sealed class OrderDraftSubmissionTests(MongoFixture fixture)
         Assert.Single((await drafts.ListAsync(data.Buyer, data.Input.Context)).Items);
         // Another buyer's draft can never be named as the source.
         var stranger = await data.Prices.Catalog.ActorAsync(6001, CatalogAuthoringTestData.Audience, Permissions.CatalogRead, Permissions.OrderSubmit);
-        await Assert.ThrowsAsync<AuthorizationDeniedException>(() =>
+        // The other buyer holds the same branch grants, yet cannot close it, and the refusal is the same as for a draft that does not exist.
+        var denied = await Assert.ThrowsAsync<AuthorizationDeniedException>(() =>
             data.Service.SubmitAsync(stranger, data.Input, review.Review, Meta("checkout-stranger"), draftId));
+        var missing = await Assert.ThrowsAsync<AuthorizationDeniedException>(() =>
+            data.Service.SubmitAsync(stranger, data.Input, review.Review, Meta("checkout-nothing"), draftId + 900));
+        Assert.Equal("order_draft_unavailable", denied.Code); Assert.Equal(denied.Code, missing.Code); Assert.Equal(denied.Message, missing.Message);
         Assert.Equal(0, await data.Rows("orders").CountDocumentsAsync(new BsonDocument()));
+        Assert.Equal(0, await data.Rows("orderDraftSubmissions").CountDocumentsAsync(new BsonDocument()));
+        Assert.Single((await drafts.ListAsync(data.Buyer, data.Input.Context)).Items);
     }
 
     [Fact]
@@ -163,17 +222,18 @@ public sealed class OrderDraftSubmissionTests(MongoFixture fixture)
             Assert.Equal(0, await rows.CountDocumentsAsync(new BsonDocument()));
             var at = DateTime.SpecifyKind(new DateTime(2026, 10, 22, 3, 0, 0), DateTimeKind.Utc);
             BsonDocument Row(long orderId) => new() { { "_id", orderId }, { "schemaVersion", 1 }, { "kind", "ordering.draft.submission" }, { "draftId", 7L },
-                { "draftRevision", 2L }, { "closesDraft", true }, { "createdBy", 41L }, { "skuIds", new BsonArray { 301L } }, { "recordedAt", at } };
+                { "draftRevision", 2L }, { "successorId", BsonNull.Value }, { "createdBy", 41L }, { "skuIds", new BsonArray { 301L } }, { "recordedAt", at } };
             await rows.InsertOneAsync(Row(1));
             // An unknown field, a missing draft, no packages or a repeated package is refused.
             var extra = Row(2); extra["note"] = "x";
             var missing = Row(3); missing.Remove("draftId");
             var empty = Row(4); empty["skuIds"] = new BsonArray();
             var repeated = Row(5); repeated["skuIds"] = new BsonArray { 301L, 301L };
-            foreach (var row in new[] { extra, missing, empty, repeated })
+            var sameDraft = Row(6); // a draft is consumed by one order only
+            foreach (var row in new[] { extra, missing, empty, repeated, sameDraft })
                 await Assert.ThrowsAsync<MongoWriteException>(() => rows.InsertOneAsync(row));
             var indexes = await (await rows.Indexes.ListAsync()).ToListAsync();
-            Assert.Contains(indexes, index => index["key"].AsBsonDocument == new BsonDocument("draftId", 1));
+            Assert.Contains(indexes, index => index["key"].AsBsonDocument == new BsonDocument("draftId", 1) && index.GetValue("unique", false).AsBoolean);
             await migrations.ApplyAsync();
             Assert.Equal(1, await rows.CountDocumentsAsync(new BsonDocument()));
         } finally { await fixture.Client.DropDatabaseAsync(database.DatabaseNamespace.DatabaseName); }

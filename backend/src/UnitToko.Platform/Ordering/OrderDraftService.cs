@@ -82,21 +82,7 @@ public sealed partial class OrderDraftService
             if (previous is not null && previous["revision"].AsInt64 != expectedRevision) throw Changed();
             var now = DateTimeOffset.FromUnixTimeMilliseconds(clock.UtcNow.ToUnixTimeMilliseconds());
             if (now == default || previous is not null && now < B.Time(previous["updatedAt"])) throw B.Invalid();
-            var version = new BsonDocument { { "_id", versionId }, { "schemaVersion", 1 }, { "kind", "ordering.draft.version" },
-                { "draftId", selectedId }, { "revision", expectedRevision + 1 }, { "createdBy", actor.UserId }, { "recordedAt", now.UtcDateTime },
-                { "input", B.Input(input) }, { "actorGrantVersion", actor.GrantVersion }, { "requestKey", metadata.IdempotencyKey },
-                { "bodyHash", hash }, { "reason", metadata.Reason }, { "correlationId", metadata.CorrelationId }, { "auditId", auditId } };
-            await Rows(B.Versions).InsertOneAsync(tx, version, cancellationToken: token);
-            var head = new BsonDocument { { "_id", selectedId }, { "schemaVersion", 1 }, { "kind", "ordering.draft" },
-                { "versionId", versionId }, { "revision", expectedRevision + 1 }, { "createdBy", actor.UserId }, { "context", B.Context(input.Context) },
-                { "createdAt", previous is null ? new BsonDateTime(now.UtcDateTime) : previous["createdAt"] }, { "updatedAt", now.UtcDateTime }, { "fence", 0L } };
-            if (previous is null) await Rows(B.Heads).InsertOneAsync(tx, head, cancellationToken: token);
-            else if ((await Rows(B.Heads).ReplaceOneAsync(tx, previous, head, cancellationToken: token)).ModifiedCount != 1) throw Changed();
-            await Rows("auditEvents").InsertOneAsync(tx, B.Audit(version), cancellationToken: token);
-            // Private IDs only; no delivery address or contact details are sent to a notification processor.
-            await Rows("outboxEvents").InsertOneAsync(tx, new BsonDocument { { "_id", ObjectId.GenerateNewId() }, { "schemaVersion", 1 },
-                { "sourceKey", "ordering.draft.saved:" + versionId }, { "kind", "ordering.draft.saved" }, { "payload", B.Result(version) },
-                { "createdAt", now.UtcDateTime }, { "dueAt", now.UtcDateTime }, { "status", "pending" }, { "attempts", 0 } }, cancellationToken: token);
+            var version = await WriteVersionAsync(tx, actor, selectedId, versionId, auditId, expectedRevision + 1, input, metadata, hash, previous, now, token);
             wrote = true; return B.Result(version);
         }, ct, async (snapshot, tx, token) => {
             var receipt = await ReceiptAsync(actor, metadata.IdempotencyKey, tx, token) ?? throw B.Invalid();
@@ -113,6 +99,29 @@ public sealed partial class OrderDraftService
                 authority.Require(actor, snapshot, input.Context);
             } else await authority.FenceAsync(actor, snapshot, tx, [input.Context], token);
         });
+    }
+    /// <summary>The writes of one saved draft version: version, head (new or replacing `previous`), audit and outbox rows. Save runs it
+    /// inside its own command transaction; an order that leaves packages unordered runs it for the successor draft inside the
+    /// order's transaction (F-030).</summary>
+    private async Task<BsonDocument> WriteVersionAsync(IClientSessionHandle tx, ActorContext actor, long draftId, long versionId, long auditId, long revision,
+        OrderDraftInput input, AuthorizationCommandMetadata metadata, string hash, BsonDocument? previous, DateTimeOffset now, CancellationToken token)
+    {
+        var version = new BsonDocument { { "_id", versionId }, { "schemaVersion", 1 }, { "kind", "ordering.draft.version" },
+            { "draftId", draftId }, { "revision", revision }, { "createdBy", actor.UserId }, { "recordedAt", now.UtcDateTime },
+            { "input", B.Input(input) }, { "actorGrantVersion", actor.GrantVersion }, { "requestKey", metadata.IdempotencyKey },
+            { "bodyHash", hash }, { "reason", metadata.Reason }, { "correlationId", metadata.CorrelationId }, { "auditId", auditId } };
+        await Rows(B.Versions).InsertOneAsync(tx, version, cancellationToken: token);
+        var head = new BsonDocument { { "_id", draftId }, { "schemaVersion", 1 }, { "kind", "ordering.draft" },
+            { "versionId", versionId }, { "revision", revision }, { "createdBy", actor.UserId }, { "context", B.Context(input.Context) },
+            { "createdAt", previous is null ? new BsonDateTime(now.UtcDateTime) : previous["createdAt"] }, { "updatedAt", now.UtcDateTime }, { "fence", 0L } };
+        if (previous is null) await Rows(B.Heads).InsertOneAsync(tx, head, cancellationToken: token);
+        else if ((await Rows(B.Heads).ReplaceOneAsync(tx, previous, head, cancellationToken: token)).ModifiedCount != 1) throw Changed();
+        await Rows("auditEvents").InsertOneAsync(tx, B.Audit(version), cancellationToken: token);
+        // Private IDs only; no delivery address or contact details are sent to a notification processor.
+        await Rows("outboxEvents").InsertOneAsync(tx, new BsonDocument { { "_id", ObjectId.GenerateNewId() }, { "schemaVersion", 1 },
+            { "sourceKey", "ordering.draft.saved:" + versionId }, { "kind", "ordering.draft.saved" }, { "payload", B.Result(version) },
+            { "createdAt", now.UtcDateTime }, { "dueAt", now.UtcDateTime }, { "status", "pending" }, { "attempts", 0 } }, cancellationToken: token);
+        return version;
     }
     public async Task<OrderDraftView> ReadAsync(ActorContext actor, long draftId, CancellationToken ct = default) {
         if (draftId <= 0) throw B.Invalid(); await StorageAsync(ct);
@@ -131,15 +140,15 @@ public sealed partial class OrderDraftService
             var filter = F.Eq("createdBy", actor.UserId) & F.Eq("context.organizationId", context.OrganizationId.Value) &
                 F.Eq("context.branchId", context.BranchId.Value) & F.Eq<BsonValue>("context.divisionId", context.DivisionId is { } division ? new BsonInt64(division.Value) : BsonNull.Value);
             if (beforeId.HasValue) filter &= F.Lt("_id", beforeId.Value);
-            // Discarded drafts are hidden here and listed by ListDiscardedAsync; drafts whose packages have all become orders (F-030)
-            // are never listed again, so the keranjang moves on to a fresh draft. Both are excluded before the page limit so pages stay full.
+            // Discarded drafts are hidden here and listed by ListDiscardedAsync; drafts that have become an order (F-030) are never
+            // listed again; what was not ordered continues in a successor draft, which is then the keranjang. Both are excluded before the page limit so pages stay full.
             var rows = await Rows(B.Heads).Aggregate(tx).Match(filter).Sort(new BsonDocument("_id", -1))
                 .AppendStage<BsonDocument>(new BsonDocument("$lookup", new BsonDocument { { "from", OrderDraftDiscardSchemas.Collection },
                     { "localField", "_id" }, { "foreignField", "_id" }, { "as", "discard" } }))
                 .Match(F.Size("discard", 0))
                 .AppendStage<BsonDocument>(new BsonDocument("$lookup", new BsonDocument { { "from", OrderDraftSubmissionSchemas.Collection },
                     { "localField", "_id" }, { "foreignField", "draftId" }, { "as", "submitted" } }))
-                .Match(F.Ne("submitted.closesDraft", true)).Limit(limit + 1).ToListAsync(token);
+                .Match(F.Size("submitted", 0)).Limit(limit + 1).ToListAsync(token);
             var result = ImmutableArray.CreateBuilder<OrderDraftView>();
             foreach (var candidate in rows.Take(limit)) {
                 var head = await HeadAsync(actor, snapshot, tx, candidate["_id"].AsInt64, token);

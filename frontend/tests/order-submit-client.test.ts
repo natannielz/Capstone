@@ -141,7 +141,7 @@ test('F-030: a checkout key belongs to one saved draft revision, so a new keranj
   // A keranjang changed since, or a fresh draft, is a new checkout with its own key.
   assert.notEqual(first, await checkoutGroupRequestKey(actorId, '7', '3', a));
   assert.notEqual(first, await checkoutGroupRequestKey(actorId, '8', '1', a));
-  assert.match(first, new RegExp(`^ordering\.order\.submit:${actorId}:[a-f0-9]{64}$`));
+  assert.match(first, new RegExp(`^ordering\\.order\\.submit:${actorId}:[a-f0-9]{64}$`));
   await assert.rejects(() => checkoutGroupRequestKey(actorId, '7', '0', a)); await assert.rejects(() => checkoutGroupRequestKey(actorId, '7', 'x', a));
   const storage = new Map<string, string>(), journal = new OperationJournal(() => ({ get length() { return storage.size; }, key: index => [...storage.keys()][index] ?? null,
     getItem: key => storage.get(key) ?? null, setItem: (key, value) => { storage.set(key, value); }, removeItem: key => { storage.delete(key); } }));
