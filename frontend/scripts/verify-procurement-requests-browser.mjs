@@ -1,6 +1,7 @@
 // Actual shared HTTPS/Next/API/Mongo host. People and business inputs are explicitly synthetic.
 import assert from 'node:assert/strict';
 import { resolve } from 'node:path';
+import { displayDate } from './workspace-rehearsal.mjs';
 const recordNo = (prefix, id) => prefix + '-' + String(id).padStart(6, '0');
 
 export async function verifyProcurementRequestsBrowser({ config, maker, user, origin, directory, procurementWrites, procurementRecoveries, dropNext, dropped }) {
@@ -33,7 +34,7 @@ export async function verifyProcurementRequestsBrowser({ config, maker, user, or
   async function facts(region) {
     const text = await region.innerText();
     for (const value of [config.organizationCode, config.organizationName, config.shopCode, config.shopName, config.warehouseCode, config.warehouseName,
-      config.channelCode, config.channelName, config.businessDate, 'DDO', 'Permintaan pembelian', config.skuCode, config.familyName, config.packageLabel,
+      config.channelCode, config.channelName, displayDate(config.businessDate), 'DDO', 'Permintaan pembelian', config.skuCode, config.familyName, config.packageLabel,
       config.packageUnits + ' piece per kemasan', '2 kemasan · Total 24 piece', reason, specification]) assert.ok(text.includes(value), value);
     assert.ok(text.includes('Pemasok dan harga belum ditetapkan; pembayaran dan penerimaan barang belum dicatat.'));
   }

@@ -1,6 +1,7 @@
 // Genuine Next/HTTPS/API/Mongo/private originals; business inputs and scanner protocol are explicitly synthetic.
 import assert from 'node:assert/strict';
 import { resolve } from 'node:path';
+import { displayDate } from './workspace-rehearsal.mjs';
 
 export async function verifyProcurementInspectionBrowser({ config, maker, user, origin, directory, inspectionWrites, inspectionRecoveries, inspectionUploads, dropNext, dropped, validateEvidence }) {
   const { page, context } = maker, path = '/procurement/inspections', api = '/api/v1/procurement/inspections', purpose = 'inspection-review', input = config.inspectionInput;
@@ -43,7 +44,7 @@ export async function verifyProcurementInspectionBrowser({ config, maker, user, 
     });
     assert.equal(actual.clipped, false, 'Every observed field must flow on the page without a capped nested scroller'); assert.equal(actual.rows.length, input.lines.length);
     for (const [index, line] of input.lines.entries()) {
-      assert.deepEqual(actual.rows[index].facts, { 'Kemasan menurut dokumen': String(line.declaredPackages), 'Kemasan diterima': String(line.receivedPackages), 'Kemasan rusak': String(line.damagedPackages), 'Kemasan kedaluwarsa': String(line.expiredPackages), 'Kemasan terbuka': String(line.openedPackages), Lot: line.lotCode ?? 'Belum dicatat', 'Tanggal kedaluwarsa': line.expiryDate ?? 'Belum diketahui', 'Referensi lokasi karantina': line.putawayReference ?? 'Belum dicatat' });
+      assert.deepEqual(actual.rows[index].facts, { 'Kemasan menurut dokumen': String(line.declaredPackages), 'Kemasan diterima': String(line.receivedPackages), 'Kemasan rusak': String(line.damagedPackages), 'Kemasan kedaluwarsa': String(line.expiredPackages), 'Kemasan terbuka': String(line.openedPackages), Lot: line.lotCode ?? 'Belum dicatat', 'Tanggal kedaluwarsa': line.expiryDate === null ? 'Belum diketahui' : displayDate(line.expiryDate), 'Referensi lokasi karantina': line.putawayReference ?? 'Belum dicatat' });
       if (line.discrepancy !== null) assert.ok(actual.rows[index].text.includes(line.discrepancy));
     }
   }
