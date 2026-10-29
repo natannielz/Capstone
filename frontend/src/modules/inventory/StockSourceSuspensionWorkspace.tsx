@@ -19,6 +19,12 @@ import type { SourceSuspensionCommand, SuspensionPreview } from "./stock-source-
 import common from "../administration/access.module.css";
 import styles from "./stock-source-suspension.module.css";
 import { formatDateTime, formatNumber } from "@/lib/format";
+import { Button } from '@/components/workspace-kit/button';
+import { PageHeader } from '@/components/workspace-kit/page-header';
+import { Section } from '@/components/workspace-kit/section';
+import { StateView } from '@/components/workspace-kit/state-view';
+import { DataList } from '@/components/workspace-kit/data-list';
+import { Facts } from '@/components/workspace-kit/facts';
 
 const path = "/inventory/sources/suspensions";
 const factorHref = "/identity/account?operation=stock.source.suspend&returnPath=" + encodeURIComponent(path);
@@ -70,11 +76,9 @@ export function StockSourceSuspensionWorkspace() {
   }, [refresh]);
   return <main className={common.page}>
     <a className={styles.skip} href="#suspension-workspace">Langsung ke penghentian sumber</a>
-    <header className={common.header}><div><Link className={common.brand} href="/identity/account">Unit Toko</Link>
-      <p className={styles.eyebrow}>Pengelolaan persediaan</p><h1>Penghentian sumber stok</h1>
-      <p>Tinjau alokasi dan seluruh kanal yang terdampak sebelum menghentikan penggunaannya.</p></div></header>
-    <div id="suspension-workspace">{loaded ? <SuspensionDesk key={loaded.actorId + ":" + loaded.generation} loaded={loaded} onRefresh={refresh} /> :
-      (loading ? <section className={common.state} aria-busy="true"><h2>Memeriksa sesi dan akses</h2></section>
+    <PageHeader title="Penghentian sumber stok" description="Tinjau alokasi dan seluruh kanal yang terdampak sebelum menghentikan penggunaannya." />
+    <div id="suspension-workspace" className="ui-stack">{loaded ? <SuspensionDesk key={loaded.actorId + ":" + loaded.generation} loaded={loaded} onRefresh={refresh} /> :
+      (loading ? <StateView kind="loading" title="Memeriksa sesi dan akses" />
         : <SessionAccessState error={error} returnPath={path} onRetry={() => void refresh()} detail={error !== null ? message(error) : undefined} />)}</div>
   </main>;
 }
@@ -103,26 +107,23 @@ function SuspensionDesk({ loaded, onRefresh }: { loaded: Loaded; onRefresh: () =
   if (state.expired || state.suspended) return <SessionAccessState error={state.error} kind={state.expired ? 'expired' : lostAccessKind(state.error)} returnPath={path} busy={busy} onRetry={() => void onRefresh()} detail={state.error !== null ? message(state.error) : undefined} />;
   return <>
     <AdministrationNavigation current="source-suspensions" actions={loaded.actions} locked={locked} />
-    <section className={common.accountSection} aria-labelledby="suspension-account-heading">
-      <div className={styles.heading}><div><h2 id="suspension-account-heading">Periksa sumber yang ditugaskan</h2>
-        <p>Petugas: <strong>{loaded.session.account?.displayName ?? loaded.session.account?.verifiedEmail}</strong></p></div>
-        <button type="button" className={common.secondary} disabled={busy || state.review !== null} onClick={() => void onRefresh()}>Muat ulang sesi dan akses</button></div>
+    <Section title="Periksa sumber yang ditugaskan" id="suspension-account-heading" description={<>Petugas: <strong>{loaded.session.account?.displayName ?? loaded.session.account?.verifiedEmail}</strong></>}
+      actions={<Button variant="secondary" disabled={busy || state.review !== null} onClick={() => void onRefresh()}>Muat ulang sesi dan akses</Button>}>
       {editor.canSuspend && <p className={common.help}>{state.fresh ? "Verifikasi dua langkah masih baru. " : "Penghentian memerlukan verifikasi dua langkah terbaru. "}
         <Link href={factorHref} aria-disabled={busy} onClick={event => { if (busy) event.preventDefault(); }}>Verifikasi untuk penghentian</Link></p>}
-    </section>
+    </Section>
     <aside className={styles.notice}><strong>Penghentian berlaku untuk seluruh kanal pada alokasi ini.</strong>
       <p>Pesanan dan kewajiban yang sudah ada tetap perlu diselesaikan. Pengoperasian kembali memerlukan pemeriksaan dan persetujuan tersendiri.</p></aside>
     {state.sending && <p role="status">Menyimpan penghentian… Tunggu hasil sebelum melanjutkan.</p>}
-    {state.error !== null && <p role="alert" className={common.alert}>{message(state.error)}</p>}
-    {state.recoveryError !== null && <p role="alert" className={common.alert}>{message(state.recoveryError)}</p>}
-    {state.references.length > 0 && <section className={common.accountSection} aria-labelledby="suspension-recovery-context">
-      <h2 id="suspension-recovery-context">Periksa permintaan semula</h2>
+    {state.error !== null && <StateView kind="error" title={message(state.error)} />}
+    {state.recoveryError !== null && <StateView kind="error" title={message(state.recoveryError)} />}
+    {state.references.length > 0 && <Section title="Periksa permintaan semula" id="suspension-recovery-context">
       <p>Masukkan referensi alokasi yang digunakan saat mengirim penghentian. Pemeriksaan ini tidak mengirim penghentian baru.</p>
       <label><span id="suspension-recovery-label">Referensi alokasi semula</span><input aria-labelledby="suspension-recovery-label"
         inputMode="numeric" maxLength={19} value={state.recoveryPoolId} disabled={busy || state.review !== null}
         onChange={event => editor.setRecoveryPool(event.target.value)} /></label>
       {!editor.canSuspend && <p className={common.help}>Pemulihan penghentian memerlukan izin menghentikan sumber pada seluruh kanal terkait.</p>}
-    </section>}
+    </Section>}
     <OperationRecovery entries={state.references} journal={editor.journal}
       disabled={state.sending || state.review !== null || !editor.canSuspend || !state.fresh || !/^[1-9][0-9]{0,18}$/.test(state.recoveryPoolId)}
       recoveryAdapters={{ "stock.source.suspend": { lookup: editor.receipt } }} onResolved={editor.reconciled} onFailure={editor.recoveryFailed} onBusyChange={editor.setRecovering} />
@@ -132,47 +133,41 @@ function SuspensionDesk({ loaded, onRefresh }: { loaded: Loaded; onRefresh: () =
     {state.review && <div className={styles.review} ref={reviewFocus} tabIndex={-1}>
       <StopReview command={state.review} busy={busy} onSubmit={confirmed => void editor.submitReviewed(confirmed)} onCancel={() => editor.cancelReview()} />
     </div>}
-    <section className={common.accountSection} aria-labelledby="suspension-pool-heading" aria-busy={state.loadingPool}>
-      <h2 id="suspension-pool-heading">Pilih alokasi</h2><p>Gunakan referensi alokasi dari pengaturan sumber atau penugasan Anda.</p>
+    <Section title="Pilih alokasi" id="suspension-pool-heading" busy={state.loadingPool} description="Gunakan referensi alokasi dari pengaturan sumber atau penugasan Anda.">
       <form className={styles.selection} onSubmit={event => { event.preventDefault(); void editor.loadPool(); }}>
         <label><span id="suspension-pool-label">Referensi alokasi</span><input aria-labelledby="suspension-pool-label" inputMode="numeric"
           required maxLength={19} value={state.poolInput} disabled={locked} onChange={event => editor.changePool(event.target.value)} /></label>
-        <button className={common.secondary} disabled={locked || state.loadingPool || !state.poolInput || !editor.canRead && !state.fresh}>Muat alokasi</button>
+        <Button type="submit" variant="secondary" disabled={locked || state.loadingPool || !state.poolInput || !editor.canRead && !state.fresh}>Muat alokasi</Button>
       </form>
       {state.loadingPool && <p role="status">Memeriksa alokasi dan kanal…</p>}
       {state.preview && <div className={styles.preview}><PreviewFacts preview={state.preview} />
         {editor.canSuspend && <form className={styles.form} onSubmit={event => { event.preventDefault(); editor.reviewStop(); }}>
           <label><span id="suspension-reason-label">Alasan penghentian</span><textarea aria-labelledby="suspension-reason-label" required rows={3}
             maxLength={1000} value={state.reason} disabled={locked || !state.fresh} onChange={event => editor.changeReason(event.target.value)} /></label>
-          <button className={common.primary} disabled={locked || state.loadingPool || !state.fresh || !state.reason.trim()}>Tinjau penghentian</button>
+          <Button type="submit" variant="primary" disabled={locked || state.loadingPool || !state.fresh || !state.reason.trim()}>Tinjau penghentian</Button>
         </form>}
       </div>}
-    </section>
-    {editor.canRead && state.poolId && <section className={styles.history} aria-busy={state.loadingHistory}>
-      <header className={styles.heading}><div><h2>Riwayat penghentian</h2><p>{formatNumber(BigInt(state.history.total))} catatan pada alokasi {state.poolId}.</p></div>
-        <button type="button" className={common.secondary} disabled={locked || state.loadingPool || state.loadingHistory} onClick={() => void editor.loadHistory()}>Muat ulang riwayat</button></header>
-      <div className={styles.historyGrid}><section className={common.queue}>
-        {state.loadingHistory ? <p role="status" className={common.empty}>Memuat riwayat…</p> : <>
-          <ul className={common.queueList}>{state.history.items.map(item => <li key={item.id}><button type="button" disabled={locked}
-            className={state.selected?.id === item.id ? common.selectedRow : common.queueRow} aria-pressed={state.selected?.id === item.id}
-            onClick={() => void editor.chooseHistory(item.id)}><strong>{item.reason}</strong><span>Penghentian #{item.id} · versi {item.suspensionVersion}</span>
-            <span>{formatDateTime(item.suspendedAt)}</span></button></li>)}</ul>
-          {!state.history.items.length && <p className={common.empty}>Belum ada catatan pada halaman ini.</p>}
-          <div className={common.pagination} aria-label="Halaman riwayat">
-            <button type="button" className={common.secondary} aria-label="Halaman riwayat sebelumnya" disabled={locked || state.historyOffset === 0} onClick={() => void editor.loadHistory(state.historyOffset - 25)}>Sebelumnya</button>
-            <span>{Math.floor(state.historyOffset / 25) + 1}</span><button type="button" className={common.secondary} aria-label="Halaman riwayat berikutnya"
-              disabled={locked || state.historyOffset >= 10000 || BigInt(state.historyOffset + 25) >= BigInt(state.history.total)} onClick={() => void editor.loadHistory(state.historyOffset + 25)}>Berikutnya</button>
-          </div></>}
-      </section><section className={styles.detail} aria-busy={state.loadingDetail}>{state.loadingDetail ? <p role="status">Memeriksa catatan…</p> : state.selected ? <>
+    </Section>
+    {editor.canRead && state.poolId && <Section title="Riwayat penghentian" busy={state.loadingHistory} description={<>{formatNumber(BigInt(state.history.total))} catatan pada alokasi {state.poolId}.</>}
+      actions={<Button variant="secondary" disabled={locked || state.loadingPool || state.loadingHistory} onClick={() => void editor.loadHistory()}>Muat ulang riwayat</Button>}>
+      <div className={styles.historyGrid}><div>
+        <DataList label="Riwayat penghentian" items={state.loadingHistory ? [] : state.history.items} getKey={item => item.id} loading={state.loadingHistory}
+          empty={state.error === null ? { title: "Belum ada catatan pada halaman ini." } : undefined}
+          renderTitle={item => item.reason} renderMeta={item => <>Penghentian #{item.id} · versi {item.suspensionVersion} · {formatDateTime(item.suspendedAt)}</>}
+          onSelect={item => void editor.chooseHistory(item.id)} selectedKey={state.selected?.id ?? null} disabled={locked}
+          openLabel={item => item.reason + " Penghentian #" + item.id + " · versi " + item.suspensionVersion + " " + formatDateTime(item.suspendedAt)}
+          pagination={{ label: "Halaman riwayat", start: state.historyOffset + 1, end: state.historyOffset + state.history.items.length, total: Number(state.history.total), disabled: locked,
+            hasPrevious: state.historyOffset > 0, hasNext: !(state.historyOffset >= 10000 || BigInt(state.historyOffset + 25) >= BigInt(state.history.total)),
+            onPrevious: () => void editor.loadHistory(state.historyOffset - 25), onNext: () => void editor.loadHistory(state.historyOffset + 25) }} />
+      </div><section className={styles.detail} aria-busy={state.loadingDetail}>{state.loadingDetail ? <StateView kind="loading" title="Memeriksa catatan…" /> : state.selected ? <>
         <h3>Penghentian #{state.selected.id}</h3><p className={common.preserve}>{state.selected.reason}</p>
-        <dl className={styles.facts}><div><dt>Alokasi</dt><dd>{state.selected.physicalKey} · {state.selected.physicalPoolId}</dd></div>
-          <div><dt>Versi pengaturan saat dihentikan</dt><dd>{state.selected.poolVersion}</dd></div>
-          <div><dt>Versi penghentian</dt><dd>{state.selected.suspensionVersion}</dd></div>
-          <div><dt>Keadaan sebelumnya</dt><dd>{state.selected.wasActive ? "Aktif" : "Tidak aktif"}</dd></div></dl>
+        <Facts columns={1} items={[{ term: "Alokasi", value: <>{state.selected.physicalKey} · {state.selected.physicalPoolId}</> },
+          { term: "Versi pengaturan saat dihentikan", value: state.selected.poolVersion }, { term: "Versi penghentian", value: state.selected.suspensionVersion },
+          { term: "Keadaan sebelumnya", value: state.selected.wasActive ? "Aktif" : "Tidak aktif" }]} />
         <h4>Kanal yang tercatat</h4><Locations locations={state.selected.affectedLocations} />
         <p className={common.help}>Catatan ini menunjukkan keadaan saat penghentian, bukan persetujuan pengoperasian kembali.</p>
       </> : <><h3>Pilih catatan</h3><p>Periksa alasan, versi, dan kanal yang tercatat saat sumber dihentikan.</p></>}</section></div>
-    </section>}
+    </Section>}
   </>;
 }
 function Locations({ locations }: { locations: readonly AccessScope[] }) {
@@ -182,9 +177,8 @@ function Locations({ locations }: { locations: readonly AccessScope[] }) {
 }
 function PreviewFacts({ preview }: { preview: SuspensionPreview }) {
   return <section><h3>Alokasi {preview.physicalPoolId}</h3>
-    <dl className={styles.facts}><div><dt>Keadaan saat diperiksa</dt><dd>{preview.active ? "Aktif" : "Tidak aktif"}</dd></div>
-      <div><dt>Versi pengaturan</dt><dd>{preview.poolVersion}</dd></div>
-      <div><dt>Versi penghentian terakhir</dt><dd>{preview.suspensionVersion === "0" ? "Belum tercatat" : preview.suspensionVersion}</dd></div></dl>
+    <Facts columns={1} items={[{ term: "Keadaan saat diperiksa", value: preview.active ? "Aktif" : "Tidak aktif" }, { term: "Versi pengaturan", value: preview.poolVersion },
+      { term: "Versi penghentian terakhir", value: preview.suspensionVersion === "0" ? "Belum tercatat" : preview.suspensionVersion }]} />
     <h4>Seluruh kanal yang terdampak</h4><Locations locations={preview.affectedLocations} />
   </section>;
 }
@@ -195,7 +189,7 @@ function StopReview({ command, busy, onSubmit, onCancel }: { command: SourceSusp
     <h3>Alasan</h3><p className={common.preserve}>{command.body.reason}</p>
     <label className={common.checkbox}><input type="checkbox" required checked={confirmed} disabled={busy} onChange={event => setConfirmed(event.target.checked)} />
       <span>Saya telah memeriksa alokasi dan seluruh kanal di atas. Saya memahami bahwa kewajiban yang sudah ada tetap perlu diselesaikan.</span></label>
-    <div className={common.actions}><button className={common.primary} disabled={busy || !confirmed}>Konfirmasi penghentian</button>
-      <button type="button" className={common.secondary} disabled={busy} onClick={onCancel}>Kembali</button></div>
+    <div className={common.actions}><Button type="submit" variant="primary" disabled={busy || !confirmed}>Konfirmasi penghentian</Button>
+      <Button variant="secondary" disabled={busy} onClick={onCancel}>Kembali</Button></div>
   </form>;
 }

@@ -45,7 +45,9 @@ internal sealed class CatalogPublicSampleMigration(IMongoDatabase database) : IM
         }
         var prefix = new BsonRegularExpression(@"^catalog\.public\.sample(?:[.:]|$)");
         foreach (var (table, field) in new[] { ("idempotencyRecords", "operation"), ("auditEvents", "kind"), ("outboxEvents", "kind"), ("outboxEvents", "sourceKey") })
-            if (await Rows(table).Find(new BsonDocument(field, prefix)).Limit(1).AnyAsync(ct)) throw Bad();
+            // The only record this migration writes itself is its own operator note (see ConvertAsync); a resumed run may meet it.
+            if (await Rows(table).Find(new BsonDocument("$and", new BsonArray { new BsonDocument(field, prefix),
+                    new BsonDocument("kind", new BsonDocument("$ne", NoteKind)) })).Limit(1).AnyAsync(ct)) throw Bad();
         foreach (var item in installs) {
             await lease.RenewAsync(ct);
             await database.RunCommandAsync<BsonDocument>(new BsonDocument { { item.Exists ? "collMod" : "create", item.Name },
@@ -56,12 +58,16 @@ internal sealed class CatalogPublicSampleMigration(IMongoDatabase database) : IM
                     Array.FindIndex(S.Keys(item.Name), expected => expected == key) }), cancellationToken: ct);
         }
         await lease.RenewAsync(ct);
-        await ConvertAsync(ct);
+        await ConvertAsync(S.Limit, ct);
     }
 
+    internal const string NoteKind = "catalog.public.sample.migration";
+
     /// <summary>Each assortment approved public (and still active) contributes the active products it currently publishes. A product
-    /// in several public assortments takes the lowest assortment as its source.</summary>
-    private async Task ConvertAsync(CancellationToken ct) {
+    /// in several public assortments takes the lowest assortment as its source. The guest catalog shows at most <paramref name="limit"/>
+    /// samples and refuses more, so when the conversion would exceed it nothing is converted: guests see the empty sample state, an
+    /// operator note records why, and staff choose samples on the staff page.</summary>
+    internal async Task ConvertAsync(int limit, CancellationToken ct) {
         var expected = new SortedDictionary<long, BsonDocument>();
         var heads = await Rows(P.Heads).Find(new BsonDocument("isPublic", true)).Sort(new BsonDocument("_id", 1)).ToListAsync(ct);
         foreach (var head in heads) {
@@ -89,6 +95,11 @@ internal sealed class CatalogPublicSampleMigration(IMongoDatabase database) : IM
             }
         }
         var samples = Rows(S.Samples);
+        if (expected.Count > limit) {
+            if (await samples.Find(new BsonDocument()).Limit(1).AnyAsync(ct)) throw Bad();
+            await NoteAsync(expected.Count, limit, ct);
+            return;
+        }
         var existing = await samples.Find(new BsonDocument()).ToListAsync(ct);
         // A resumed run may only find rows it would write itself.
         if (existing.Any(row => !expected.TryGetValue(row["_id"].AsInt64, out var wanted) || wanted != row)) throw Bad();
@@ -97,6 +108,21 @@ internal sealed class CatalogPublicSampleMigration(IMongoDatabase database) : IM
         if (expected.Count > 0)
             await Rows("idCounters").UpdateOneAsync(new BsonDocument("_id", S.SetCounter), Builders<BsonDocument>.Update.Max("value", 1L),
                 new UpdateOptions { IsUpsert = true }, ct);
+    }
+
+    /// <summary>One audit row (written once, also across a resumed run) and one log line telling operators that the approved-public
+    /// assortments held more products than guests may see, so no sample was converted and staff must choose them.</summary>
+    private async Task NoteAsync(int count, int limit, CancellationToken ct) {
+        var audits = Rows("auditEvents");
+        if (await audits.Find(new BsonDocument("kind", NoteKind)).Limit(1).AnyAsync(ct)) return;
+        var counter = await Rows("idCounters").FindOneAndUpdateAsync(new BsonDocument("_id", "auditEvents"), Builders<BsonDocument>.Update.Inc("value", 1L),
+            new FindOneAndUpdateOptions<BsonDocument> { IsUpsert = true, ReturnDocument = ReturnDocument.After }, ct);
+        var message = "Migration 122 converted no guest samples: the approved-public assortments publish " + count +
+            " products, more than the " + limit + " guests may see. Staff choose the guest samples on Contoh katalog untuk tamu.";
+        await audits.InsertOneAsync(new BsonDocument { { "_id", counter["value"].ToInt64() }, { "schemaVersion", 1 }, { "kind", NoteKind },
+            { "operation", NoteKind + ".skipped" }, { "actorId", BsonNull.Value }, { "createdAt", DateTime.UtcNow },
+            { "record", new BsonDocument { { "convertible", count }, { "limit", limit }, { "message", message } } } }, cancellationToken: ct);
+        Console.WriteLine(message);
     }
 
     private IMongoCollection<BsonDocument> Rows(string name) =>

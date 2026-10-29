@@ -56,7 +56,8 @@ export function WorkspaceFrame({ children }: { children: React.ReactNode }) {
         <HelpLink phone={process.env.NEXT_PUBLIC_UNIT_TOKO_HELP_WHATSAPP} />
       </div>
     </aside>
-    <div className="workspace-topbar">
+    {/* A banner landmark: on phones the page name and menu sit here, so nothing visible is outside a landmark (axe "region"). */}
+    <header className="workspace-topbar">
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetTrigger asChild><button type="button" className="workspace-menu-button" aria-label="Buka menu ruang kerja"><Menu aria-hidden="true" /><span>Menu</span></button></SheetTrigger>
         <SheetContent side="left" className="workspace-sheet">
@@ -68,7 +69,7 @@ export function WorkspaceFrame({ children }: { children: React.ReactNode }) {
       </Sheet>
       <span className="workspace-topbar-current">{currentLabel}</span>
       <PaletteButton locked={locked} onOpen={() => setPaletteOpen(true)} />
-    </div>
+    </header>
     <CommandPalette groups={groups} locked={locked} open={paletteOpen} onOpenChange={setPaletteOpen} />
     {/* The skip link lands here: past the header and every navigation link, at the start of the workspace content.
         An empty marker: text here would sit outside every landmark (axe "region", U-020); the page's <main> follows it. */}

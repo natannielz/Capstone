@@ -25,6 +25,9 @@ public sealed partial class PersonWithdrawalService
     private static readonly FilterDefinitionBuilder<BsonDocument> F = Builders<BsonDocument>.Filter;
     private static readonly UpdateDefinitionBuilder<BsonDocument> U = Builders<BsonDocument>.Update;
     private static readonly ResourceScope Administrative = new(IsAdministrative: true);
+    /// <summary>Whether person reviews can run at all. They need a configured governance or selection trust adapter; without one
+    /// every review read answers "not enabled", so the review tasks are not offered to anyone (G-039).</summary>
+    public bool ReviewAvailable => trust is not UnavailablePersonWithdrawalTrust || selectionTrust is not UnavailablePersonReviewSelectionTrust;
     public PersonWithdrawalService(IMongoDatabase database, MongoUnitOfWork unit, IdAllocator ids,
         IClock clock, MongoIdentitySessionStore sessions) : this(database, unit, ids, clock, sessions, new UnavailablePersonWithdrawalTrust()) { }
     internal PersonWithdrawalService(IMongoDatabase database, MongoUnitOfWork unit, IdAllocator ids,

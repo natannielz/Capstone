@@ -13,7 +13,8 @@ public sealed class PilotSessionsTests
         "petugas-gudang", "petugas-kirim", "kurir", "keuangan-tagihan", "pemeriksa-pembayaran", "pengadaan", "penyetuju-pengadaan", "admin-akses", "penyetuju-akses",
         "staf-pembeli"];
 
-    /// <summary>Every maker/checker pair in Permissions.cs: the proposing side, then the deciding side. No persona may hold both.</summary>
+    /// <summary>Every maker/checker pair: the proposing side, then the deciding side. No persona may hold both. Same list as
+    /// MakerCheckerPairs.All in UnitToko.Tests/Authorization/RoleTemplateJobTests.cs (a separate project, so it is kept in step by hand).</summary>
     private static readonly (string Maker, string Checker)[] MakerChecker = [
         (Permissions.OrderSubmit, Permissions.OrderSpendApprove), (Permissions.OrderSubmit, Permissions.OrderApprove),
         (Permissions.BranchOrderRequestSubmit, Permissions.BranchOrderRequestDecide), (Permissions.SubstitutionPropose, Permissions.SubstitutionAccept),
@@ -36,24 +37,26 @@ public sealed class PilotSessionsTests
         (Permissions.AccountingBookPropose, Permissions.AccountingBookApprove), (Permissions.AccessPropose, Permissions.AccessApprove),
         (Permissions.MembershipPropose, Permissions.MembershipApprove), (Permissions.PersonReviewPropose, Permissions.PersonReviewApprove),
         (Permissions.TechnicalConfigure, Permissions.OrganizationApprove),
+        // Independence the services and ApprovalPolicy enforce from recorded history (RequestedBy / RecordedBy / ApprovedBy / SubmittedBy ...):
+        (Permissions.BankStatementStage, Permissions.BankReceiptConfirm),          // BankReceiptService.PeopleAsync: the statement importer
+        (Permissions.BankStatementStage, Permissions.DisbursementVerify),          // ProcurementSettlementService, RefundPayoutService.Settlement: the importer
+        (Permissions.FundingApprove, Permissions.DisbursementRecord),              // ProcurementDisbursementService, ApprovalPolicy: the funding approver
+        (Permissions.RefundApprove, Permissions.DisbursementRecord),               // RefundPayoutService, ApprovalPolicy: the refund approver
+        (Permissions.ProcurementSupplierDocumentMatch, Permissions.ProcurementStockValuationDecide), // ProcurementStockValuationService: the matcher
+        (Permissions.CaseRequest, Permissions.CaseManage),                         // ApprovalPolicy (AfterSalesCaseService): the case requester
+        (Permissions.CaseRequest, Permissions.CreditRequest), (Permissions.CaseRequest, Permissions.RefundRequest), // ReturnEntitlementService: the case requester
+        (Permissions.CaseRequest, Permissions.CreditApprove), (Permissions.CaseRequest, Permissions.RefundApprove), // ReturnFinancialApprovalService: every maker so far
+        (Permissions.PaymentEvidence, Permissions.PaymentVerify),                  // PaymentVerificationService: the payment submitter
+        (Permissions.PaymentEvidence, Permissions.PaymentAllocate),                // PaymentAllocationService (RecordedBy): the payment submitter
+        (Permissions.PaymentEvidence, Permissions.PaymentReviewManual),            // manual payment review: the payment submitter
+        (Permissions.PaymentEvidence, Permissions.PaymentReviewManage),            // payment review actions (RecordedBy): the payment submitter
+        (Permissions.PaymentEvidence, Permissions.CreditApprove), (Permissions.PaymentEvidence, Permissions.RefundApprove), // ReturnFinancialApprovalService
+        (Permissions.PaymentAllocate, Permissions.CreditApprove), (Permissions.PaymentAllocate, Permissions.RefundApprove), // ReturnFinancialApprovalService
+        (Permissions.PaymentVerify, Permissions.CreditApprove), (Permissions.PaymentVerify, Permissions.RefundApprove),     // ReturnFinancialApprovalService
+        (Permissions.StockCount, Permissions.StockAdjustApprove),                  // ApprovalPolicy: the counter (CountedBy)
+        (Permissions.PeriodSubmit, Permissions.PeriodClose), (Permissions.PeriodApprove, Permissions.PeriodClose), // ApprovalPolicy: submitter and approver
+        (Permissions.PeriodClose, Permissions.PeriodReopenApprove),                // ApprovalPolicy: ClosedBy
     ];
-
-    /// <summary>MakerCheckerPairs.All from backend/tests/UnitToko.Tests/Authorization/RoleTemplateJobTests.cs, read from the source (a separate test
-    /// project, so it cannot be referenced). Empty when this checkout does not have the class yet.</summary>
-    private static (string Maker, string Checker)[] CanonicalPairs()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
-        {
-            var file = Path.Combine(directory.FullName, "backend", "tests", "UnitToko.Tests", "Authorization", "RoleTemplateJobTests.cs");
-            if (!File.Exists(file)) continue;
-            var text = File.ReadAllText(file); var start = text.IndexOf("class MakerCheckerPairs", StringComparison.Ordinal);
-            if (start < 0) return [];
-            var body = text[start..text.IndexOf("];", start, StringComparison.Ordinal)];
-            string Value(string name) => (string)typeof(Permissions).GetField(name)!.GetRawConstantValue()!;
-            return [.. System.Text.RegularExpressions.Regex.Matches(body, @"\(Permissions\.(\w+),\s*Permissions\.(\w+)\)").Select(match => (Value(match.Groups[1].Value), Value(match.Groups[2].Value)))];
-        }
-        return [];
-    }
 
     [Fact]
     public async Task Review_profile_refuses_non_loopback_and_mints_one_session_per_persona()
@@ -117,17 +120,12 @@ public sealed class PilotSessionsTests
         Assert.Contains(Permissions.ProcurementSupplierDocumentRecord, Held("pengadaan"));
         Assert.Contains(Permissions.ProcurementQualityAcceptanceDecide, Held("penyetuju-pengadaan"));
         // Maker/checker stays split across people: no persona holds both sides of any reviewed change. No exceptions.
-        // The list above, plus MakerCheckerPairs.All read from the backend tests' source when this checkout has it (FIX-RULES owns that list).
-        foreach (var (maker, checker) in MakerChecker.Concat(CanonicalPairs()).Distinct())
+        foreach (var (maker, checker) in MakerChecker)
         {
             Assert.NotNull(Permissions.Find(maker)); Assert.NotNull(Permissions.Find(checker));
             Assert.All(PilotPersonas.All, persona => Assert.False(Held(persona.Name).Contains(maker) && Held(persona.Name).Contains(checker),
                 persona.Name + " holds both " + maker + " and " + checker));
         }
-        // The bank statement importer is the maker of receipt confirmation and disbursement verification: only keuangan-tagihan stages (checked here
-        // too, so it holds even where the canonical list is not in this checkout).
-        foreach (var checker in new[] { Permissions.BankReceiptConfirm, Permissions.DisbursementVerify })
-            Assert.All(PilotPersonas.All, persona => Assert.False(Held(persona.Name).Contains(Permissions.BankStatementStage) && Held(persona.Name).Contains(checker), persona.Name));
         Assert.DoesNotContain(Permissions.OrderSubmit, Held("penyetuju-cabang"));
         Assert.DoesNotContain(Permissions.SupplierClaim, Held("penyetuju-pengadaan"));
         // G-035: the payment checker reads the bank pages, which also require receiving-account details.
