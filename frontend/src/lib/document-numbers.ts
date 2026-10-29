@@ -6,11 +6,15 @@
  *
  * Each record type has its own prefix so a return never reads like an order. A supplier order is
  * "SP" (surat pesanan), because buyers already write their own "PO" in the purchase reference.
+ * A branch request is "PB" (permintaan barang). The server keeps its own "PT-00000001" reference as an
+ * internal key; people see PB-, and a search still accepts the PT- form.
  */
 const recordId = /^[1-9][0-9]{0,18}$/;
 
-const prefixes = { order: 'PSN', case: 'KLH', return: 'RTR', purchaseRequest: 'PP', purchaseOrder: 'SP' } as const;
+const prefixes = { order: 'PSN', case: 'KLH', return: 'RTR', purchaseRequest: 'PP', purchaseOrder: 'SP', branchRequest: 'PB' } as const;
 export type RecordKind = keyof typeof prefixes;
+/** Other prefixes a record of this kind may be typed with (the server's internal reference). */
+const searchAliases: Partial<Record<RecordKind, readonly string[]>> = { branchRequest: ['PT'] };
 
 export function recordNumber(kind: RecordKind, id: string): string {
   if (!recordId.test(id)) throw new RangeError('record id must be a positive decimal string');
@@ -22,7 +26,7 @@ export function recordNumber(kind: RecordKind, id: string): string {
 export function matchesRecordNumber(kind: RecordKind, typed: string): string | null {
   const compact = typed.trim().toUpperCase().replace(/[\s-]/g, '');
   const letters = /^[A-Z]*/.exec(compact)![0];
-  if (letters !== '' && letters !== prefixes[kind]) return null;
+  if (letters !== '' && letters !== prefixes[kind] && !searchAliases[kind]?.includes(letters)) return null;
   const digits = compact.slice(letters.length);
   if (!/^[0-9]{1,19}$/.test(digits)) return null;
   const id = digits.replace(/^0+/, '');

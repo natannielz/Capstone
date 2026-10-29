@@ -54,6 +54,11 @@ test('draft recovery has a dedicated lookup-only adapter and never closes or rec
   assert.equal(journal.list(actor).length, 0);
 });
 
+test('F-030: a draft that has become an order says so instead of a generic conflict', () => {
+  assert.match(draftMessage(new AccessFailure(409, 'order_draft_submitted')), /^Draf ini sudah diajukan menjadi pesanan\./);
+  assert.equal(draftAccessLost(new AccessFailure(409, 'order_draft_submitted')), false);
+});
+
 test('a package taken out of the branch catalog keeps the draft open; only lost access closes it', () => {
   assert.equal(draftAccessLost(new AccessFailure(403, 'order_package_unavailable')), false);
   assert.match(draftMessage(new AccessFailure(403, 'order_package_unavailable')), /^Sebagian kemasan di draf ini tidak lagi tersedia untuk cabang ini\./);

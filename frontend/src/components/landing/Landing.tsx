@@ -5,7 +5,7 @@ import { KemasanFilm } from "./KemasanFilm";
 import { KemasanJourney, type JourneyAct } from "./KemasanJourney";
 import styles from "./landing.module.css";
 
-const SUBMITTED: JourneyAct = { status: "Diajukan", time: "Sen 09.12", detail: "PT-00000142",
+const SUBMITTED: JourneyAct = { status: "Diajukan", time: "Sen 09.12", detail: "PB-000142",
   text: "PIC cabang memilih barang dari katalog dan jumlah kemasannya, lalu mengajukannya ke toko. Permintaan langsung bernomor dan tercatat di akun cabang." };
 const PILOT_ACTS: JourneyAct[] = [SUBMITTED,
   { status: "Ditinjau toko", time: "Sen 10.40", detail: "Diterima untuk diproses",
