@@ -12,6 +12,7 @@ namespace UnitToko.Tests.Documents;
 public sealed class EvidenceValidationMigrationTests(MongoFixture fixture)
 {
     private static readonly SystemClock Clock = new();
+    private const int EvidenceValidationVersion = 32;
     private async Task Run(Func<IMongoDatabase, Task> action) {
         var name = "ut_validation_upgrade_" + Guid.NewGuid().ToString("N"); var db = fixture.Client.GetDatabase(name);
         try { await LegacyOrderSubmissionTestSchema.ApplyV31Async(db, Clock); await action(db); }
@@ -25,7 +26,10 @@ public sealed class EvidenceValidationMigrationTests(MongoFixture fixture)
         var prior = (await Definitions(db)).Single(row => row["name"] == "outboxEvents")["options"]["validator"];
         var stronger = new BsonDocument("$and", new BsonArray { EvidenceValidationSchemas.Validator("evidenceValidationResults"), new BsonDocument("length", new BsonDocument("$lte", 100000L)) });
         await db.CreateCollectionAsync("evidenceValidationResults", new CreateCollectionOptions<BsonDocument> { Validator = stronger });
-        await new CollectionMigrations(db, Clock).ApplyAsync();
+        // The claim is about the upgrade under test (M32 on the M31 predecessor). Later migrations legitimately restructure the
+        // outbox validator (M69 widens it to an $or of the previous rules and a translated branch, which the structural
+        // InventorySchemas.Contains cannot see through), so the retention check stops at M32 and the registry then completes below.
+        await StoreTestData.ApplyRegisteredThroughAsync(db, Clock, EvidenceValidationVersion);
         Assert.Equal(before, new BsonArray((await History(db)).Take(31)));
         var definitions = await Definitions(db);
         Assert.Equal(stronger, definitions.Single(row => row["name"] == "evidenceValidationResults")["options"]["validator"]);
