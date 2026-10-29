@@ -2,18 +2,24 @@
 
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowRight, ArrowUpRight, ClipboardList, LayoutGrid, List, PackageOpen, ShieldCheck } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { ArrowRight, ArrowUpRight, ChevronRight, ClipboardList, LayoutGrid, List, PackageOpen, ShieldCheck } from 'lucide-react';
 import { Art } from '../../components/art';
+import { Button, buttonClassName } from '@/components/workspace-kit/button';
+import { Facts } from '@/components/workspace-kit/facts';
+import { Field } from '@/components/workspace-kit/field';
+import { PageHeader } from '@/components/workspace-kit/page-header';
+import { StateView } from '@/components/workspace-kit/state-view';
+import { Toolbar } from '@/components/workspace-kit/toolbar';
 import { createAccessGateway } from '../administration/access-client';
 import { AccessFailure } from '../administration/workflow';
 import { createIdentityGateway } from '../identity/identity-client';
 import { IdentityFailure, sessionTiming, type IdentitySession } from '../identity/identity-workflow';
 import { CatalogReadGate } from './catalog-editor-state';
-import { buyerCurrentCode, createBuyerCatalogGateway, type BuyerCategoryCount, type BuyerVariant } from './catalog-buyer-client';
+import { buyerCategoryLabel, buyerCurrentCode, createBuyerCatalogGateway, type BuyerCategoryCount, type BuyerVariant } from './catalog-buyer-client';
 import { CatalogBuyerPhoto } from './CatalogBuyerPhoto';
 import { catalogHistoryUrl, guestCatalogHref, memberCatalogPath, nonBuyerCatalogHref, readCatalogHistoryQuery, type CatalogHistoryQuery } from './catalog-history';
-import shared from '../administration/access.module.css';
+import catalog from './storefront-catalog.module.css';
 import styles from './buyer-catalog.module.css';
 import { BuyBox } from './BuyBox';
 import { formatDisplayMoney, formatNumber } from "@/lib/format";
@@ -34,41 +40,46 @@ function message(error: unknown) {
 }
 type Account = { actorId: string; name: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 function BuyerCodeLabel({ item }: { item: BuyerVariant }) {
-  return <><p className={styles.code}>{item.buyerIdentity ? 'Kode utama saat ini: ' : 'Referensi SKU: '}{buyerCurrentCode(item)}</p>
-    {item.buyerIdentity && item.code !== buyerCurrentCode(item) && <p className={shared.help}>Referensi SKU tetap pada catatan transaksi: {item.code}. Kode ini hanya dapat dipakai mencari jika aliasnya masih aktif.</p>}</>;
+  return <><p className={catalog.meta}>{item.buyerIdentity ? 'Kode utama saat ini: ' : 'Referensi SKU: '}{buyerCurrentCode(item)}</p>
+    {item.buyerIdentity && item.code !== buyerCurrentCode(item) && <p className={catalog.help}>Referensi SKU tetap pada catatan transaksi: {item.code}. Kode ini hanya dapat dipakai mencari jika aliasnya masih aktif.</p>}</>;
 }
-/** The product page in the order shoppers know: photo beside the name, price and buy box; specifications and description below. */
-function ProductPage({ item, account, isCurrent, category }: { item: BuyerVariant; account: Account; isCurrent: () => boolean; category: string }) {
-  return <article className={styles.productPage} aria-labelledby="buyer-package-title">
-    <div className={styles.productMedia}><CatalogBuyerPhoto actorId={account.actorId} item={item} isCurrent={isCurrent}/></div>
-    <div className={styles.productMain}>
-      <span className={styles.category}>{category}</span>
-      <h1 id="buyer-package-title" className={styles.productTitle}>{item.familyName}</h1>
-      <p className={styles.productVariant}>{item.definition.packageLabel} · isi {formatNumber(item.definition.baseUnitsPerPackage)} {item.definition.baseUnitCode}</p>
-      <BuyerCodeLabel item={item} />
-      <p className={styles.productPrice}>{price(item.currentPrice)}<span> per {item.definition.packageLabel}</span></p>
-      <BuyBox item={item} actorId={account.actorId} actions={account.actions} isCurrent={isCurrent} />
-    </div>
-    <section className={styles.productSpecs} aria-labelledby="spesifikasi-produk"><h2 id="spesifikasi-produk">Spesifikasi</h2>
-      <dl className={shared.facts}><div><dt>Kemasan</dt><dd>{item.definition.packageLabel}, {{ sealed: 'tersegel', loose: 'satuan lepas', other: 'kemasan lain' }[item.definition.packageKind]}</dd></div>
-        <div><dt>Isi per kemasan</dt><dd>{formatNumber(item.definition.baseUnitsPerPackage)} {item.definition.baseUnitCode}</dd></div>
-        <div><dt>Minimum pembelian</dt><dd>{item.definition.minimumOrderPackages} kemasan</dd></div><div><dt>Kelipatan jumlah</dt><dd>{item.definition.orderIncrementPackages} kemasan</dd></div>
-        {item.definition.attributes.map(attribute => <div key={attribute.key}><dt>{attribute.key}</dt><dd>{attribute.value}</dd></div>)}</dl></section>
-    {item.description && <section className={styles.productDescription} aria-labelledby="deskripsi-produk"><h2 id="deskripsi-produk">Deskripsi</h2><p>{item.description}</p></section>}
-  </article>;
+const packageKind: Record<string, string> = { sealed: 'tersegel', loose: 'satuan lepas', other: 'kemasan lain' };
+/** The product page in the order shoppers know (U-025): the name on the page's left edge, then photo 5 / category, price and
+ *  buy box 7; specifications and description below. The one bordered box is none: the buy box is an inset panel. */
+function ProductPage({ item, account, isCurrent, category, breadcrumb }: { item: BuyerVariant; account: Account; isCurrent: () => boolean; category: string; breadcrumb: ReactNode }) {
+  return <>
+    <PageHeader breadcrumb={breadcrumb} title={<span id="buyer-package-title">{item.familyName}</span>}
+      description={`${item.definition.packageLabel} · isi ${formatNumber(item.definition.baseUnitsPerPackage)} ${item.definition.baseUnitCode}`} />
+    <article className={catalog.product} aria-labelledby="buyer-package-title">
+      <div className={`${catalog.productMedia} ${styles.productPhoto}`}><CatalogBuyerPhoto actorId={account.actorId} item={item} isCurrent={isCurrent}/></div>
+      <div className={catalog.productInfo}>
+        <span className={catalog.category}>{category}</span>
+        <BuyerCodeLabel item={item} />
+        <p className={catalog.productPrice}>{price(item.currentPrice)}<span> per {item.definition.packageLabel}</span></p>
+        <BuyBox item={item} actorId={account.actorId} actions={account.actions} isCurrent={isCurrent} />
+      </div>
+      <section className={catalog.productWide} aria-labelledby="spesifikasi-produk"><h2 id="spesifikasi-produk">Spesifikasi</h2>
+        <Facts items={[{ term: 'Kemasan', value: `${item.definition.packageLabel}, ${packageKind[item.definition.packageKind]}` },
+          { term: 'Isi per kemasan', value: `${formatNumber(item.definition.baseUnitsPerPackage)} ${item.definition.baseUnitCode}` },
+          { term: 'Minimum pembelian', value: `${item.definition.minimumOrderPackages} kemasan` }, { term: 'Kelipatan jumlah', value: `${item.definition.orderIncrementPackages} kemasan` },
+          ...item.definition.attributes.map(attribute => ({ term: attribute.key, value: attribute.value, key: 'attribute:' + attribute.key }))]} /></section>
+      {item.description && <section className={catalog.productWide} aria-labelledby="deskripsi-produk"><h2 id="deskripsi-produk">Deskripsi</h2><p>{item.description}</p></section>}
+    </article>
+  </>;
 }
-function PackageReview({ item, account, isCurrent, requestOnly }: { item: BuyerVariant; account: Account; isCurrent: () => boolean; requestOnly: boolean }) {
+function PackageReview({ item, account, isCurrent, requestOnly, category }: { item: BuyerVariant; account: Account; isCurrent: () => boolean; requestOnly: boolean; category: string }) {
   return <div className={styles.packageLayout}><div className={styles.packageFacts}>
     <CatalogBuyerPhoto actorId={account.actorId} item={item} isCurrent={isCurrent}/>
-    <span className={styles.category}>{item.categoryCode}</span><h2 id="buyer-package-title" className={styles.packageTitle}>{item.familyName} — {item.definition.packageLabel}</h2>
+    <span className={catalog.category}>{category}</span><h2 id="buyer-package-title">{item.familyName} — {item.definition.packageLabel}</h2>
     <BuyerCodeLabel item={item} />{item.description && <p className={styles.description}>{item.description}</p>}
     <p className={styles.contents}>{formatNumber(item.definition.baseUnitsPerPackage)} <span>{item.definition.baseUnitCode} per kemasan</span></p>
-    {!requestOnly && <p className={styles.price}>{price(item.currentPrice)}<span> per {item.definition.packageLabel}</span></p>}
-    <dl className={shared.facts}><div><dt>Jenis kemasan</dt><dd>{{ sealed: 'Kemasan tersegel', loose: 'Satuan lepas', other: 'Kemasan lain' }[item.definition.packageKind]}</dd></div>
-      <div><dt>{requestOnly ? 'Minimum permintaan' : 'Minimum pembelian'}</dt><dd>{item.definition.minimumOrderPackages} kemasan</dd></div><div><dt>Kelipatan jumlah</dt><dd>{item.definition.orderIncrementPackages} kemasan</dd></div>
-      {item.definition.attributes.map(attribute => <div key={attribute.key}><dt>{attribute.key}</dt><dd>{attribute.value}</dd></div>)}</dl>
-    <p className={shared.help}>{requestOnly ? 'Pilih kemasan ini untuk menyusun permintaan kebutuhan cabang. Petugas toko akan meninjau permintaan Anda.' : 'Harga dan ketersediaan akan diperiksa kembali saat pesanan disiapkan.'}</p>
-  </div>{requestOnly ? <div className={styles.quoteArea}><h3>Siapkan permintaan cabang</h3>{account.actions.includes('order.request.submit') ? <><p>Pilih cabang dan jumlah kemasan, lalu tinjau permintaan sebelum mengirim.</p><Link className={shared.primary} href={'/ordering/requests?package=' + item.publicId}>Pilih untuk permintaan</Link></> : <p>Akun Anda dapat melihat katalog. Hubungi pengelola jika Anda memerlukan akses untuk mengajukan kebutuhan cabang.</p>}</div> : item.currentPrice && <div className={styles.quoteArea}><BuyBox item={item} actorId={account.actorId} actions={account.actions} isCurrent={isCurrent} /></div>}</div>;
+    {!requestOnly && <p className={catalog.productPrice}>{price(item.currentPrice)}<span> per {item.definition.packageLabel}</span></p>}
+    <Facts items={[{ term: 'Jenis kemasan', value: { sealed: 'Kemasan tersegel', loose: 'Satuan lepas', other: 'Kemasan lain' }[item.definition.packageKind] },
+      { term: requestOnly ? 'Minimum permintaan' : 'Minimum pembelian', value: `${item.definition.minimumOrderPackages} kemasan` },
+      { term: 'Kelipatan jumlah', value: `${item.definition.orderIncrementPackages} kemasan` },
+      ...item.definition.attributes.map(attribute => ({ term: attribute.key, value: attribute.value, key: 'attribute:' + attribute.key }))]} />
+    <p className={catalog.help}>{requestOnly ? 'Pilih kemasan ini untuk menyusun permintaan kebutuhan cabang. Petugas toko akan meninjau permintaan Anda.' : 'Harga dan ketersediaan akan diperiksa kembali saat pesanan disiapkan.'}</p>
+  </div>{requestOnly ? <div className={styles.quoteArea}><h3>Siapkan permintaan cabang</h3>{account.actions.includes('order.request.submit') ? <><p>Pilih cabang dan jumlah kemasan, lalu tinjau permintaan sebelum mengirim.</p><Link className={buttonClassName({ variant: 'primary' })} href={'/ordering/requests?package=' + item.publicId}>Pilih untuk permintaan</Link></> : <p>Akun Anda dapat melihat katalog. Hubungi pengelola jika Anda memerlukan akses untuk mengajukan kebutuhan cabang.</p>}</div> : item.currentPrice && <div className={styles.quoteArea}><BuyBox item={item} actorId={account.actorId} actions={account.actions} isCurrent={isCurrent} /></div>}</div>;
 }
 export function BuyerCatalog({ publicId, returnPath = '/shop', requestOnly = false }: { publicId?: string; returnPath?: '/shop'; requestOnly?: boolean } = {}) {
   const [identity] = useState(() => createIdentityGateway()), [access] = useState(() => createAccessGateway());
@@ -166,7 +177,7 @@ export function BuyerCatalog({ publicId, returnPath = '/shop', requestOnly = fal
     if (merged.sort) next.sort = merged.sort;
     return next;
   }
-  const categoryName = (code: string) => categories.find(item => item.code === code)?.name ?? code;
+  const categoryName = (code: string) => buyerCategoryLabel(code, categories);
   const everything = categories.reduce((sum, item) => sum + item.count, 0), filtered = query !== '' || category !== undefined;
   const needsSignIn = error instanceof IdentityFailure && error.status === 401;
   // Someone who has not signed in browses the public catalog (no prices) instead of meeting a sign-in wall, in every release (G-030).
@@ -177,57 +188,64 @@ export function BuyerCatalog({ publicId, returnPath = '/shop', requestOnly = fal
   }, [needsSignIn, publicId, router]);
   useEffect(() => { if (notBuyer) router.replace(notBuyer); }, [notBuyer, router]);
   const signInPath = memberCatalogPath(publicId);
-  return <div className={styles.storefront}>
-    <main id="catalog-main" tabIndex={-1} className={`${shared.page} ${styles.page}`}>
+  const signInLink = <Link className={buttonClassName({ variant: 'primary' })} href={'/identity/login?returnPath=' + encodeURIComponent(signInPath)}>Masuk atau periksa akun <ArrowRight aria-hidden="true" /></Link>;
+  const crumbs = <span className={catalog.crumbs}><Link href="/">Beranda</Link><ChevronRight size={14} aria-hidden="true" />
+    {publicId === undefined ? <span>Katalog</span> : <><Link href={returnPath}>Katalog</Link><ChevronRight size={14} aria-hidden="true" /><span>{selected?.familyName ?? 'Produk'}</span></>}</span>;
+  return <main id="catalog-main" tabIndex={-1} className={catalog.page}>
     {requestOnly ? <>
-      <nav className={styles.breadcrumb} aria-label="Jejak halaman"><Link href="/">Beranda</Link><span aria-hidden="true">/</span><span>{publicId === undefined ? 'Katalog' : 'Rincian kemasan'}</span></nav>
+      <nav className={`${catalog.crumbs} ${styles.pilotCrumbs}`} aria-label="Jejak halaman"><Link href="/">Beranda</Link><ChevronRight size={14} aria-hidden="true" /><span>{publicId === undefined ? 'Katalog' : 'Rincian kemasan'}</span></nav>
       {publicId === undefined ? <section className={styles.editorial} aria-labelledby="catalog-title">
         <div className={styles.editorialCopy}><p className={styles.eyebrow}>Kebutuhan cabang dan organisasi</p><h1 id="catalog-title">Pilihan tepat.<br /><em>Hari lebih siap.</em></h1><p>Temukan kebutuhan tim, periksa isi kemasannya, lalu ajukan dalam satu permintaan yang tercatat.</p><a className={styles.editorialLink} href="#catalog-list">Jelajahi katalog <ArrowRight size={18} aria-hidden="true" /></a></div>
         <figure className={styles.editorialPhoto}><Art src="/images/editorial/hero-still-life-v3.png" alt="Ilustrasi kebutuhan kerja: tas, tumbler, kopi, dan camilan" loading="eager" fetchPriority="high" sizes="(max-width: 720px) 100vw, 50vw" /><figcaption>Ilustrasi kebutuhan · pilihan tersedia mengikuti katalog akun Anda</figcaption></figure>
-      </section> : <header className={styles.detailHeading}><p className={styles.eyebrow}>Kenali pilihan Anda</p><h1>Rincian kemasan</h1><p>Periksa isi dan satuan sebelum mengajukan kebutuhan cabang.</p></header>}
+      </section> : <PageHeader title="Rincian kemasan" description="Periksa isi dan satuan sebelum mengajukan kebutuhan cabang." />}
       <div className={styles.assurances}><p><PackageOpen size={20} aria-hidden="true" /><span>Isi & satuan kemasan jelas</span></p><p><ShieldCheck size={20} aria-hidden="true" /><span>Akses sesuai akun organisasi</span></p><p><ClipboardList size={20} aria-hidden="true" /><span>Permintaan dapat ditelusuri</span></p></div>
       <div className={styles.sectionHeading} id="catalog-list"><div><p className={styles.eyebrow}>Katalog Unit Toko</p><h2>{publicId === undefined ? 'Katalog kemasan' : 'Informasi kemasan'}</h2></div><Link href="/ordering/requests">Permintaan saya <ArrowUpRight size={18} aria-hidden="true" /></Link></div>
       <p className={styles.availability}>Harga, stok, dan pemenuhan dikonfirmasi petugas. Permintaan yang diterima belum menjadi pemesanan dengan harga mengikat, reservasi stok, pembayaran, atau invoice.</p>
-    </> : <header className={styles.storeHeading}><nav className={styles.breadcrumb} aria-label="Jejak halaman"><Link href="/">Beranda</Link><span aria-hidden="true">/</span>
-      {publicId === undefined ? <span>Katalog</span> : <><Link href={returnPath}>Katalog</Link><span aria-hidden="true">/</span><span>{selected?.familyName ?? 'Produk'}</span></>}</nav>
-      {publicId === undefined && <h1>{query ? `Hasil untuk “${query}”` : category ? categoryName(category) : 'Katalog'}</h1>}</header>}
-    {publicId === undefined ? <section className={styles.toolbar} aria-label="Pencarian katalog">{query ? <p className={styles.searchTerm}>Pencarian: <strong>{query}</strong><button type="button" disabled={busy || detailBusy !== null} onClick={() => navigateCatalog(at({ search: '' }), true)}>Hapus pencarian</button></p> : <span />}
-      <div className={styles.browseControls}><label className={styles.order}>Urutkan<select value={sort ?? 'added'} disabled={busy || detailBusy !== null || !account}
-        onChange={event => navigateCatalog(at({ sort: event.target.value === 'name' ? 'name' : undefined }))}><option value="added">Terbaru ditambahkan</option><option value="name">Nama A–Z</option></select></label>
-        <div className={styles.layoutToggle} role="group" aria-label="Tampilan daftar">{([['grid', 'Kisi', LayoutGrid], ['list', 'Daftar', List]] as const).map(([value, label, Icon]) =>
-          <button key={value} type="button" aria-pressed={layout === value} onClick={() => setLayout(value)}><Icon size={16} aria-hidden="true" />{label}</button>)}</div>
-</div></section> : (requestOnly || error !== null) && <div className={styles.detailToolbar}><Link href={returnPath}>Kembali ke katalog</Link><button className={shared.secondary} disabled={busy} onClick={refresh}>Muat kembali kemasan</button></div>}
-    {error !== null && <div role={needsSignIn ? 'status' : 'alert'} className={styles.accessState}><div className={styles.stateIcon}><ShieldCheck size={27} strokeWidth={1.5} aria-hidden="true" /></div><div><h2>{needsSignIn ? 'Katalog khusus untuk akun Anda.' : 'Katalog belum dapat ditampilkan.'}</h2><p>{needsSignIn ? 'Masuk dengan akun yang telah disetujui untuk melihat pilihan kemasan dan mengajukan kebutuhan cabang Anda.' : message(error)}</p>{!needsSignIn && <p className={styles.stateHint}>Daftar barang akan tampil setelah layanan tersedia dan akses akun Anda terverifikasi.</p>}<Link className={styles.stateAction} href={'/identity/login?returnPath=' + encodeURIComponent(signInPath)}>Masuk atau periksa akun <ArrowRight size={17} aria-hidden="true" /></Link></div></div>}
-    {expired && <p role="alert" className={shared.alert}>Sesi Anda perlu diperbarui. Masuk kembali untuk membuka katalog.</p>}
-    {(expired || !account && !busy && error === null) && <Link className={styles.stateAction} href={'/identity/login?returnPath=' + encodeURIComponent(signInPath)}>Masuk atau periksa akun <ArrowRight size={17} aria-hidden="true" /></Link>}
-    {notice && <p role="status">{notice}</p>}
-    {publicId !== undefined ? <section className={styles.packagePage} aria-busy={busy} aria-label="Rincian kemasan">{busy ? <p role="status">Memuat kemasan untuk akun Anda…</p> : account && !expired && selected && (requestOnly ? <PackageReview item={selected} account={account} isCurrent={current} requestOnly={requestOnly} />
-      : <ProductPage item={selected} account={account} isCurrent={current} category={categoryName(selected.categoryCode)} />)}</section>
-      : <section aria-busy={busy} aria-label="Kemasan yang tersedia">{busy ? <div className={styles.loading}><p role="status">Memuat katalog untuk akun Anda…</p><div className={styles.skeletonGrid} aria-hidden="true"><span /><span /><span /></div></div> : account && !expired && <>
-      {categories.length > 0 && <div className={styles.chips} role="group" aria-label="Kategori">
-        <button type="button" aria-pressed={category === undefined} disabled={detailBusy !== null} onClick={() => navigateCatalog(at({ category: undefined }))}>Semua<span>{formatNumber(everything)}</span></button>
-        {categories.map(item => <button key={item.code} type="button" aria-pressed={category === item.code} disabled={detailBusy !== null}
-          onClick={() => navigateCatalog(at({ category: item.code }))}>{item.name}<span>{formatNumber(item.count)}</span></button>)}</div>}
-      <p className={shared.help} role="status">{account.name} · {formatNumber(BigInt(total))} kemasan{category ? ' di ' + categoryName(category) : ' dalam katalog'}{query ? ' untuk “' + query + '”' : ''}</p>
-      {items.length === 0 ? <div className={styles.empty}><PackageOpen size={36} strokeWidth={1.25} aria-hidden="true" />{filtered ? <><h3>Tidak ada kemasan yang cocok.</h3>
-        <p>{query ? 'Tidak ada hasil untuk “' + query + '”' : 'Kategori ini belum berisi kemasan'}{category ? ' di ' + categoryName(category) : ''}. Coba kata lain atau lihat semua kategori.</p>
-        <button type="button" className={shared.secondary} disabled={detailBusy !== null} onClick={() => navigateCatalog({ search: '', offset: 0 }, true)}>Hapus pencarian dan filter</button></>
-        : <><h3>Belum ada kemasan di katalog Anda.</h3><p>Kemasan akan tampil setelah toko menerbitkannya untuk akun Anda.</p></>}</div>
-        : <ul className={layout === 'list' ? `${styles.grid} ${styles.list}` : styles.grid}>{items.map(item => <li className={styles.card} key={item.skuId}>
-        <CatalogBuyerPhoto actorId={account.actorId} item={item} isCurrent={current}/>
-        <span className={styles.category}>{categoryName(item.categoryCode)}</span><h2>{item.familyName}</h2><BuyerCodeLabel item={item} /><h3>{item.definition.packageLabel}</h3>
-        <p className={styles.contents}>{formatNumber(item.definition.baseUnitsPerPackage)} <span>{item.definition.baseUnitCode} per kemasan</span></p>
-        {!requestOnly && <p className={styles.price}>{price(item.currentPrice)}<span> per {item.definition.packageLabel}</span></p>}
-        <p className={shared.help}>Minimum {item.definition.minimumOrderPackages}; kelipatan {item.definition.orderIncrementPackages} kemasan</p>
-        <div className={styles.cardActions}><button className={shared.primary} aria-label={'Rincian ' + buyerCurrentCode(item) + ' ' + item.definition.packageLabel} disabled={detailBusy !== null} onClick={event => void details(item, event.currentTarget)}>{detailBusy === item.skuId ? 'Memuat…' : 'Periksa kemasan'}</button>
-          <Link className={styles.packageLink} href={'/shop/' + item.publicId} aria-label={'Halaman ' + buyerCurrentCode(item) + ' ' + item.definition.packageLabel}>Buka halaman kemasan</Link></div>
-      </li>)}</ul>}
-      <nav className={styles.pagination} aria-label="Halaman katalog"><button className={shared.secondary} disabled={offset === 0 || detailBusy !== null} onClick={() => navigateCatalog(at({ offset: Math.max(0, offset - 25) }))}>Sebelumnya</button>
-        <span>Halaman {offset / 25 + 1}</span><button className={shared.secondary} disabled={offset >= 10000 || BigInt(offset + items.length) >= BigInt(total) || items.length === 0 || detailBusy !== null} onClick={() => navigateCatalog(at({ offset: offset + 25 }))}>Berikutnya</button></nav>
-    </>}</section>}
+    </> : publicId === undefined && <PageHeader breadcrumb={crumbs} title={query ? `Hasil untuk “${query}”` : category ? categoryName(category) : 'Katalog'} />}
+    {publicId !== undefined && (requestOnly || error !== null) && <div className={styles.detailToolbar}><Link className={buttonClassName({ variant: 'tertiary' })} href={returnPath}>Kembali ke katalog</Link><Button disabled={busy} onClick={refresh}>Muat kembali kemasan</Button></div>}
+    {error !== null && (needsSignIn
+      ? <StateView kind="denied" title="Katalog khusus untuk akun Anda." message="Masuk dengan akun yang telah disetujui untuk melihat pilihan kemasan dan mengajukan kebutuhan cabang Anda." action={signInLink} />
+      : <StateView kind="error" title="Katalog belum dapat ditampilkan." message={message(error)} detail="Daftar barang akan tampil setelah layanan tersedia dan akses akun Anda terverifikasi." action={signInLink} />)}
+    {expired && <StateView kind="error" title="Sesi Anda perlu diperbarui. Masuk kembali untuk membuka katalog." />}
+    {(expired || !account && !busy && error === null) && <div className={styles.signInRow}>{signInLink}</div>}
+    {notice && <p role="status" className={styles.notice}>{notice}</p>}
+    {publicId !== undefined ? <section className={styles.packagePage} aria-busy={busy} aria-label="Rincian kemasan">{busy ? <p role="status" className={catalog.help}>Memuat kemasan untuk akun Anda…</p> : account && !expired && selected && (requestOnly ? <PackageReview item={selected} account={account} isCurrent={current} requestOnly={requestOnly} category={categoryName(selected.categoryCode)} />
+      : <ProductPage item={selected} account={account} isCurrent={current} category={categoryName(selected.categoryCode)} breadcrumb={crumbs} />)}</section>
+      : <section aria-busy={busy} aria-label="Kemasan yang tersedia">
+        <Toolbar label="Pencarian katalog"
+          filters={<>{query && <p className={catalog.searchTerm}>Pencarian: <strong>{query}</strong><Button disabled={busy || detailBusy !== null} onClick={() => navigateCatalog(at({ search: '' }), true)}>Hapus pencarian</Button></p>}
+            {!busy && account && !expired && categories.length > 0 && <div className={catalog.chips} role="group" aria-label="Kategori">
+              <button type="button" aria-pressed={category === undefined} disabled={detailBusy !== null} onClick={() => navigateCatalog(at({ category: undefined }))}>Semua<span>{formatNumber(everything)}</span></button>
+              {categories.map(item => <button key={item.code} type="button" aria-pressed={category === item.code} disabled={detailBusy !== null}
+                onClick={() => navigateCatalog(at({ category: item.code }))}>{item.name}<span>{formatNumber(item.count)}</span></button>)}</div>}</>}
+          sort={<div className={catalog.sort}><Field id="katalog-urutan" label="Urutkan"><select value={sort ?? 'added'} disabled={busy || detailBusy !== null || !account}
+            onChange={event => navigateCatalog(at({ sort: event.target.value === 'name' ? 'name' : undefined }))}><option value="added">Terbaru ditambahkan</option><option value="name">Nama A–Z</option></select></Field></div>}
+          view={<div className={catalog.view} role="group" aria-label="Tampilan daftar">{([['grid', 'Kisi', LayoutGrid], ['list', 'Daftar', List]] as const).map(([value, label, Icon]) =>
+            <button key={value} type="button" aria-pressed={layout === value} onClick={() => setLayout(value)}><Icon aria-hidden="true" />{label}</button>)}</div>}
+          resultText={!busy && account && !expired ? <span role="status">{formatNumber(BigInt(total))} kemasan{category ? ' di ' + categoryName(category) : ' dalam katalog'}{query ? ' untuk “' + query + '”' : ''}</span> : undefined} />
+        {busy ? <div className={styles.loading}><p role="status" className={catalog.help}>Memuat katalog untuk akun Anda…</p><ul className={catalog.grid} aria-hidden="true">{Array.from({ length: 5 }, (_, index) => <li key={index} className={catalog.skeleton}><span /><span /><span /></li>)}</ul></div> : account && !expired && <>
+          {items.length === 0 ? filtered
+            ? <StateView kind="empty" align="center" icon={PackageOpen} title="Tidak ada kemasan yang cocok."
+              message={(query ? 'Tidak ada hasil untuk “' + query + '”' : 'Kategori ini belum berisi kemasan') + (category ? ' di ' + categoryName(category) : '') + '. Coba kata lain atau lihat semua kategori.'}
+              action={<Button disabled={detailBusy !== null} onClick={() => navigateCatalog({ search: '', offset: 0 }, true)}>Hapus pencarian dan filter</Button>} />
+            : <StateView kind="empty" align="center" icon={PackageOpen} title="Belum ada kemasan di katalog Anda." message="Kemasan akan tampil setelah toko menerbitkannya untuk akun Anda." />
+            : <ul className={layout === 'list' ? `${catalog.grid} ${styles.list}` : catalog.grid}>{items.map(item => <li className={`${catalog.card} ${styles.buyerCard}`} key={item.skuId}>
+            <CatalogBuyerPhoto actorId={account.actorId} item={item} isCurrent={current}/>
+            <div className={`${catalog.cardBody} ${styles.cardBody}`}>
+              <span className={catalog.category}>{categoryName(item.categoryCode)}</span><h2 className={catalog.name}>{item.familyName}</h2><BuyerCodeLabel item={item} /><h3 className={styles.packageLabel}>{item.definition.packageLabel}</h3>
+              <p className={catalog.meta}>{formatNumber(item.definition.baseUnitsPerPackage)} <span>{item.definition.baseUnitCode} per kemasan</span></p>
+              {!requestOnly && <p className={catalog.price}>{price(item.currentPrice)}<span> per {item.definition.packageLabel}</span></p>}
+              <p className={catalog.help}>Minimum {item.definition.minimumOrderPackages}; kelipatan {item.definition.orderIncrementPackages} kemasan</p>
+            </div>
+            <div className={`${catalog.cardActions} ${styles.cardActions}`}><Button className="ui-button--wrap" busy={detailBusy === item.skuId} aria-label={'Rincian ' + buyerCurrentCode(item) + ' ' + item.definition.packageLabel} disabled={detailBusy !== null} onClick={event => void details(item, event.currentTarget)}>{detailBusy === item.skuId ? 'Memuat…' : 'Periksa kemasan'}</Button>
+              <Link className={buttonClassName({ variant: 'tertiary', className: 'ui-button--wrap' })} href={'/shop/' + item.publicId} aria-label={'Halaman ' + buyerCurrentCode(item) + ' ' + item.definition.packageLabel}>Buka halaman kemasan</Link></div>
+          </li>)}</ul>}
+          {items.length > 0 && <nav className={catalog.pagination} aria-label="Halaman katalog"><Button disabled={offset === 0 || detailBusy !== null} onClick={() => navigateCatalog(at({ offset: Math.max(0, offset - 25) }))}>Sebelumnya</Button>
+            <span>Halaman {offset / 25 + 1}</span><Button disabled={offset >= 10000 || BigInt(offset + items.length) >= BigInt(total) || items.length === 0 || detailBusy !== null} onClick={() => navigateCatalog(at({ offset: offset + 25 }))}>Berikutnya</Button></nav>}
+        </>}</section>}
     {publicId === undefined && <dialog ref={dialog} className={styles.dialog} aria-labelledby="buyer-package-title" onCancel={event => { event.preventDefault(); close(); }}>
-      {selected && !expired && <><div className={styles.dialogHeader}><p className={styles.code}>{buyerCurrentCode(selected)}</p><button className={shared.secondary} onClick={close}>Tutup rincian</button></div>
-        {account && <PackageReview item={selected} account={account} isCurrent={current} requestOnly={requestOnly} />}</>}
+      {selected && !expired && <><div className={styles.dialogHeader}><p className={catalog.meta}>{buyerCurrentCode(selected)}</p><Button onClick={close}>Tutup rincian</Button></div>
+        {account && <PackageReview item={selected} account={account} isCurrent={current} requestOnly={requestOnly} category={categoryName(selected.categoryCode)} />}</>}
     </dialog>}
-  </main></div>;
+  </main>;
 }
