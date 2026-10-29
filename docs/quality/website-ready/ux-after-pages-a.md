@@ -39,3 +39,7 @@ Measured before → after (mocked, 1280 / 390):
 | `/ordering/orders`, `/ordering/requests`, history | axe `region` at 1280, `button-name` (critical) at 390 | clean |
 | `/identity/login` | h1 38/760 at x=703; button 52 px, radius 10 | h1 28/700; button 44 px, radius 8 |
 | `/identity/account` | axe `region`; `button-name` (critical) at 390 | clean |
+
+## Fix round 1 (after the review)
+
+Acceptance on the merged tree (main d2c85b93 merged in): **34/38** again (`tmp/website-ready/ux/pages-a/metrics-round1/`, captures in `screens/pages-a/round1/`); the four failures are the landing page. The Kisi / Daftar segmented control, the bordered quantity stepper input and the tighter order rows are in `round1/catalog@1280`, `round1/product@1280` and `round1/orders@1280`. The pilot release (`NEXT_PUBLIC_UNIT_TOKO_RELEASE=pilot`, mocked) is in `screens/pages-a/round1-pilot/` (`pilot-catalog`, `pilot-dialog`, `pilot-product`, each at 1280 and 390).
