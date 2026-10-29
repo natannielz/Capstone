@@ -9,14 +9,48 @@ param(
     # Without it the review catalog runs without product photos; the review stack never downloads signatures.
     [string]$ClamavSignatures,
     # Asks the running instance of this profile to stop (as Ctrl+C would) and waits for it to finish.
-    [switch]$Stop
+    [switch]$Stop,
+    # review only, while stopped: sets the review database (and its private photo store) aside under a timestamped name, so the next
+    # start seeds from empty. Nothing is deleted; accounts, keys and certificate stay. Never offered for release1 or full.
+    [switch]$ResetData
 )
 $ErrorActionPreference = 'Stop'
 $repository = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../..'))
+$state = Join-Path $repository "tmp/pilot/$Profile"
+$lock = Join-Path $state 'launcher.lock'
+function Test-Running { try { $stream = [IO.File]::Open($lock, 'OpenOrCreate', 'ReadWrite', 'None'); $stream.Dispose(); return $false } catch [IO.IOException] { return $true } }
+if ($ResetData) {
+    if ($Profile -ne 'review') { throw '-ResetData is only for the review profile; the release1 and full pilots keep their data.' }
+    if ((Test-Path -LiteralPath $state) -and (Test-Running)) { throw 'Stop the review stack first (start-local-pilot.ps1 -Profile review -Stop).' }
+    $stamp = (Get-Date).ToUniversalTime().ToString('yyyyMMddTHHmmssZ')
+    $data = Join-Path $state 'mongo-data'
+    $store = Join-Path $env:LOCALAPPDATA 'UnitToko.LocalPilot/review'
+    $dataAside = "$data.before-reset-$stamp"; $storeAside = "$store.before-reset-$stamp"
+    # Renames only, never a delete. The photo store (a per-user protected folder that antivirus or Explorer may hold open) goes first: if it
+    # cannot be renamed, nothing has moved. If the database rename then fails, the photo store is put back, or the exact step is printed.
+    $storeMoved = $false
+    if (Test-Path -LiteralPath $store) {
+        try { Rename-Item -LiteralPath $store -NewName (Split-Path $storeAside -Leaf) -ErrorAction Stop }
+        catch { throw "Nothing was renamed: the review photo store cannot be renamed ($($_.Exception.Message))." }
+        $storeMoved = $true; Write-Output "Review photo store set aside: $storeAside"
+    }
+    if (Test-Path -LiteralPath $data) {
+        try { Rename-Item -LiteralPath $data -NewName (Split-Path $dataAside -Leaf) -ErrorAction Stop }
+        catch {
+            $reason = $_.Exception.Message
+            if (-not $storeMoved) { $undo = 'Nothing is changed.' }
+            else {
+                try { Rename-Item -LiteralPath $storeAside -NewName 'review' -ErrorAction Stop; $undo = 'The photo store was put back; nothing is changed.' }
+                catch { $undo = "The photo store could not be put back. Rename it back by hand: Rename-Item -LiteralPath '$storeAside' -NewName 'review'" }
+            }
+            throw "The review database cannot be renamed ($reason). $undo"
+        }
+        Write-Output "Review database set aside: $dataAside"
+    }
+    Write-Output 'The next start of the review profile seeds from empty (run it under the heavy lock).'
+    exit 0
+}
 if ($Stop) {
-    $state = Join-Path $repository "tmp/pilot/$Profile"
-    $lock = Join-Path $state 'launcher.lock'
-    function Test-Running { try { $stream = [IO.File]::Open($lock, 'OpenOrCreate', 'ReadWrite', 'None'); $stream.Dispose(); return $false } catch [IO.IOException] { return $true } }
     if (-not (Test-Path -LiteralPath $state) -or -not (Test-Running)) { Write-Output "The $Profile pilot is not running."; exit 0 }
     Set-Content -LiteralPath (Join-Path $state 'stop-requested') -Value (Get-Date -Format o)
     $deadline = (Get-Date).AddSeconds(90)

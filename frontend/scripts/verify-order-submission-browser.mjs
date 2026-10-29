@@ -44,8 +44,21 @@ function forward(req, res, port, isApi) {
   });
   upstream.on('error', () => { if (!res.headersSent) res.writeHead(502); res.end(); }); req.on('aborted', () => upstream.destroy()); req.pipe(upstream);
 }
+// The API admits 240 requests a minute per address and this one browser drives six people from one address. The limiter stays as it is; the
+// rehearsal paces its own API calls instead: a bucket of 60 refilled at 2.5 a second never sends more than 210 in any minute.
+let paceTokens = 60, paceStamp = Date.now(), paceQueue = Promise.resolve();
+const pace = () => paceQueue = paceQueue.then(async () => {
+  for (;;) {
+    const now = Date.now(); paceTokens = Math.min(60, paceTokens + (now - paceStamp) * 0.0025); paceStamp = now;
+    if (paceTokens >= 1) { paceTokens -= 1; return; }
+    await new Promise(resolve => setTimeout(resolve, Math.ceil((1 - paceTokens) / 0.0025)));
+  }
+});
 async function user(token) {
-  const context = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 360, height: 800 }, locale: 'id-ID', timezoneId: 'Asia/Jakarta' });
+  const context = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 360, height: 800 }, locale: 'id-ID', timezoneId: 'Asia/Jakarta',
+    // The app honours prefers-reduced-motion (html scroll-behavior: auto). Smooth scrolling keeps a long page in motion, so Playwright never sees the row buttons settle.
+    reducedMotion: 'reduce' });
+  await context.route('**/api/v1/**', async route => { await pace(); await route.continue(); });
   await context.addCookies([{ name: '__Host-ut_session', value: token, domain: origin.hostname, path: '/', secure: true, httpOnly: true, sameSite: 'Lax' }]);
   const page = await context.newPage(); pages.push(page); page.setDefaultTimeout(15000); page.on('pageerror', error => errors.push(error.message));
   page.on('response', async response => { if (response.url().includes('/api/v1/') && response.status() >= 400) {
@@ -53,10 +66,18 @@ async function user(token) {
   } });
   return { context, page };
 }
+// The page-width check, unchanged in what it demands; a failure names the elements that stick out past the viewport.
+async function fits(page, name) {
+  const wide = await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth ? [] : [...document.querySelectorAll('body *')]
+    .filter(element => element.getBoundingClientRect().right > innerWidth + 0.5 && getComputedStyle(element).position !== 'fixed')
+    .slice(0, 12).map(element => element.tagName.toLowerCase() + '.' + String(element.className).slice(0, 60) + ' "' + (element.textContent ?? '').trim().slice(0, 50) + '" right=' + Math.round(element.getBoundingClientRect().right) + ' of ' + innerWidth));
+  assert.deepEqual(wide, [], name + ': elements wider than the viewport');
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, name + ' overflow');
+}
 async function captureCheckout(page, name) {
   const viewport = page.viewportSize(), scroll = await page.evaluate(() => ({ x: scrollX, y: scrollY }));
   const observeSkipLink = async phase => console.log('CHECKOUT_CAPTURE ' + JSON.stringify({ name, phase,
-    ...(await page.locator('a[href="#checkout-main"]').evaluate(element => {
+    ...(await page.locator('a[href="#konten-utama"]').first().evaluate(element => {
       const rect = element.getBoundingClientRect(), style = getComputedStyle(element);
       return { viewport: { width: innerWidth, height: innerHeight }, scrollY, focused: document.activeElement === element,
         position: style.position, transform: style.transform, visibility: style.visibility,
@@ -95,40 +116,52 @@ try {
   const buyer = await user(config.buyerToken), page = buyer.page;
   await page.goto(origin.origin + '/ordering/checkout?draft=' + config.draftId);
   await page.getByRole('button', { name: 'Tinjau pesanan dan biaya', exact: true }).click();
-  const review = page.getByRole('region', { name: 'Rincian pesanan', exact: true }); await review.waitFor();
+  // Checkout shows one region per fulfilment group ("Kelompok <kanal>") inside the focusable "Kelompok pesanan" panel (finite-stock ordering, 9e552a0c).
+  // The fixture has a single channel, so the one group region holds the review and, later, the recorded order.
+  const review = page.getByRole('region', { name: /^Kelompok /u }), reviewing = review.getByRole('heading', { name: 'Periksa sebelum mengajukan', exact: true }); await reviewing.waitFor();
   assert.match(await review.innerText(), /2 Dus · 24 piece/); assert.match(await review.innerText(), /Total pesanan: Rp25\.500,50/);
-  assert.equal(await review.evaluate(element => element === document.activeElement), true);
-  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  assert.equal(await page.locator('div[aria-label="Kelompok pesanan"]').evaluate(element => element === document.activeElement), true);
+  await fits(page, 'checkout review');
   await captureCheckout(page, 'checkout');
   await page.getByRole('button', { name: 'Batal pengajuan', exact: true }).click(); assert.equal(writes.length, 0);
-  await page.getByRole('button', { name: 'Tinjau pesanan dan biaya', exact: true }).click(); await review.waitFor();
+  await page.getByRole('button', { name: 'Tinjau pesanan dan biaya', exact: true }).click(); await reviewing.waitFor();
   dropNext = true; await page.getByRole('button', { name: /^Ajukan (pesanan|untuk persetujuan)$/ }).click();
   await page.getByRole('button', { name: 'Periksa hasil', exact: true }).waitFor();
   const entries = await page.evaluate(() => Object.keys(localStorage).filter(key => key.startsWith('unit-toko:pending:v1:')).map(key => JSON.parse(localStorage[key])));
   assert.equal(entries.length, 1); assert.equal(entries[0].operation, 'ordering.order.submit'); assert.equal(entries[0].key, writes[0].key);
   assert.deepEqual(Object.keys(entries[0]).sort(), ['actorId', 'createdAt', 'key', 'operation']);
-  assert.equal(await page.getByRole('button', { name: 'Tinjau pesanan dan biaya', exact: true }).isDisabled(), true);
+  // A group whose original submit has no known result offers neither a new review nor a new submit (the page withholds both, not merely disables them).
+  await review.getByText(/pengajuan ulang ditahan/).waitFor(); assert.equal(await page.getByRole('button', { name: 'Tinjau pesanan dan biaya', exact: true }).count(), 0);
+  assert.equal(await page.getByRole('button', { name: /^Ajukan (pesanan|untuk persetujuan)$/ }).count(), 0);
   await page.goto(origin.origin + '/ordering/checkout');
   await page.getByRole('button', { name: 'Periksa hasil', exact: true }).click();
-  const confirmed = page.getByRole('region', { name: 'Pesanan tercatat', exact: true }); await confirmed.waitFor();
+  // A fresh page has no group on screen, so the recovered original is announced and pointed at the order list; it is never submitted again.
+  await page.getByRole('heading', { name: /^Pesanan PSN-[0-9]+ tercatat$/ }).waitFor();
+  await page.getByText('Hasil permintaan semula telah terkonfirmasi. Buka riwayat untuk melihat isinya.', { exact: true }).waitFor();
+  assert.equal(await page.getByRole('link', { name: 'Buka pesanan saya', exact: true }).count(), 1);
+  assert.equal(writes.length, 1); assert.equal(dropped, 1);
+  // Reopening the draft reads the recorded order of that group instead of offering a new review.
+  await page.goto(origin.origin + '/ordering/checkout?draft=' + config.draftId);
+  await page.getByRole('button', { name: 'Tinjau pesanan dan biaya', exact: true }).click();
+  const confirmed = review; await confirmed.waitFor();
   await page.getByRole('heading', { name: 'Rincian pesanan tersimpan', exact: true }).waitFor();
   assert.match(await confirmed.innerText(), /Menunggu persetujuan belanja cabang/); assert.match(await confirmed.innerText(), /Stok pesanan telah dicadangkan/);
   assert.equal(writes.length, 1); assert.equal(dropped, 1);
   assert.equal(await page.getByRole('button', { name: /^Ajukan (pesanan|untuk persetujuan)$/ }).count(), 0);
   assert.equal(await page.getByRole('button', { name: /Selesaikan dan tutup/ }).count(), 0);
   await page.getByRole('button', { name: 'Muat kembali pesanan', exact: true }).click(); await page.getByRole('heading', { name: 'Rincian pesanan tersimpan', exact: true }).waitFor();
-  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  await fits(page, 'recorded order');
   await captureCheckout(page, 'submitted');
-  const orderId = (await confirmed.getByRole('heading').innerText()).match(/[0-9]+/)[0];
+  const orderId = (await confirmed.getByRole('heading', { name: /^Pesanan PSN-[0-9]+ tercatat$/ }).innerText()).match(/[0-9]+/)[0].replace(/^0+(?=[0-9])/, '');
   const denied = await user(config.deniedToken); await denied.page.goto(origin.origin + '/ordering/checkout?draft=' + config.draftId);
   await denied.page.getByRole('heading', { name: /^(Masuk untuk melanjutkan|Sesi Anda perlu diperbarui|Halaman ini di luar tugas akun Anda|Halaman belum dapat dibuka)$/ }).waitFor();
-  assert.equal(await denied.page.getByRole('region', { name: 'Rincian pesanan', exact: true }).count(), 0);
+  assert.equal(await denied.page.getByRole('region', { name: /^Kelompok /u }).count(), 0);
   const status = await denied.page.evaluate(async ({ orderId, actorId }) => {
     const csrf = await (await fetch('/api/v1/identity/csrf')).json();
     return (await fetch('/api/v1/ordering/orders/' + orderId + '/query', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf.requestToken, 'X-Expected-Actor-Id': actorId }, body: JSON.stringify({ purpose: 'order-preparation' }) })).status;
   }, { orderId, actorId: config.deniedId }); assert.equal(status, 403);
   const store = await user(config.storeToken); await store.page.goto(origin.origin + '/ordering/reviews');
-  await store.page.getByRole('button', { name: new RegExp('^Tinjau pesanan ' + orderId + ' / ') }).click();
+  await store.page.getByRole('button', { name: new RegExp('^Tinjau pesanan ' + orderNumber(orderId) + ' / ') }).click();
   const storeReview = store.page.getByRole('region', { name: 'Tinjauan keputusan', exact: true }); await storeReview.waitFor();
   assert.match(await storeReview.innerText(), /Menunggu persetujuan belanja cabang/);
   assert.equal(await storeReview.getByRole('button', { name: 'Terima pesanan toko', exact: true }).count(), 0);
@@ -142,7 +175,7 @@ try {
   await branchReview.getByRole('button', { name: 'Setujui belanja', exact: true }).click();
   await branchReview.getByRole('button', { name: 'Batal keputusan', exact: true }).click(); assert.equal(decisionWrites.length, 0);
   await branchReview.getByRole('button', { name: 'Setujui belanja', exact: true }).click();
-  assert.equal(await approver.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  await fits(approver.page, 'spending review');
   await approver.page.screenshot({ path: resolve(directory, 'spending-review-mobile.png'), fullPage: true });
   dropNextDecision = true; await branchReview.getByRole('button', { name: 'Konfirmasi persetujuan belanja', exact: true }).click();
   await approver.page.getByRole('button', { name: 'Periksa hasil', exact: true }).waitFor();
@@ -152,7 +185,7 @@ try {
   await approver.page.reload(); await approver.page.getByRole('button', { name: 'Periksa hasil', exact: true }).click();
   await approver.page.getByText('Persetujuan belanja ditemukan dan tercatat.', { exact: true }).waitFor();
   assert.equal(decisionWrites.length, 1); assert.equal(droppedDecisions, 1);
-  await store.page.reload(); await store.page.getByRole('button', { name: new RegExp('^Tinjau pesanan ' + orderId + ' / ') }).click();
+  await store.page.reload(); await store.page.getByRole('button', { name: new RegExp('^Tinjau pesanan ' + orderNumber(orderId) + ' / ') }).click();
   await storeReview.getByLabel('Catatan peninjauan').fill('Kesiapan pemenuhan toko fixture diperiksa');
   await storeReview.getByRole('button', { name: 'Terima pesanan toko', exact: true }).click();
   await storeReview.getByRole('button', { name: 'Konfirmasi penerimaan toko', exact: true }).click();
@@ -164,7 +197,7 @@ try {
   await confirmed.getByText('1 dari 1 kelompok pemenuhan telah diterima toko.', { exact: true }).waitFor();
   const picker = await user(config.pickerToken); await openDestination(picker.page, origin, 'Persiapan kiriman');
   const prepareQueue = picker.page.getByRole('region', { name: 'Pesanan siap disiapkan', exact: true });
-  await prepareQueue.getByRole('button', { name: new RegExp('^Siapkan pesanan ' + orderId + ' / ') }).click();
+  await prepareQueue.getByRole('button', { name: new RegExp('^Siapkan pesanan ' + orderNumber(orderId) + ' / ') }).click();
   const plan = picker.page.getByRole('region', { name: 'Rencana persiapan', exact: true }); await plan.waitFor();
   assert.equal(await plan.getByRole('checkbox').isChecked(), false);
   assert.equal(await plan.evaluate(element => element === document.activeElement), true);
@@ -188,7 +221,7 @@ try {
   await plan.getByRole('button', { name: 'Konfirmasi persiapan', exact: true }).click();
   await picker.page.getByText('Persiapan tersimpan. Kiriman belum diberangkatkan.', { exact: true }).waitFor();
   await plan.getByText('Persiapan versi 2 tersimpan.', { exact: true }).waitFor(); assert.equal(preparationWrites.length, 2);
-  assert.equal(await picker.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  await fits(picker.page, 'shipment preparation');
   await picker.page.screenshot({ path: resolve(directory, 'shipment-preparation-mobile.png'), fullPage: true });
   await denied.page.goto(origin.origin + '/fulfillment/preparations'); await denied.page.getByRole('heading', { name: /^(Masuk untuk melanjutkan|Sesi Anda perlu diperbarui|Halaman ini di luar tugas akun Anda|Halaman belum dapat dibuka)$/ }).waitFor();
   assert.equal(await denied.page.getByRole('region', { name: 'Rencana persiapan', exact: true }).count(), 0);
@@ -198,7 +231,7 @@ try {
   const cancellation = cancellationPage.getByRole('region', { name: 'Tinjauan keputusan', exact: true });
   await cancellation.getByLabel('Catatan peninjauan').fill('Sisa kebutuhan fixture dibatalkan sebelum dikirim');
   await cancellation.getByRole('button', { name: 'Batalkan sisa pesanan', exact: true }).click();
-  assert.equal(await cancellationPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  await fits(cancellationPage, 'cancellation review');
   await cancellationPage.screenshot({ path: resolve(directory, 'cancel-review-mobile.png'), fullPage: true });
   dropNextDecision = true; await cancellation.getByRole('button', { name: 'Konfirmasi pembatalan sisa', exact: true }).click();
   await cancellationPage.getByRole('button', { name: 'Periksa hasil', exact: true }).waitFor();
@@ -213,12 +246,13 @@ try {
   assert.equal(await plan.getByRole('button', { name: 'Tinjau persiapan', exact: true }).count(), 0); assert.equal(preparationWrites.length, 2);
   await picker.page.getByRole('button', { name: 'Muat pesanan terbaru', exact: true }).click();
   await prepareQueue.getByText('Belum ada sisa pesanan yang dapat disiapkan dalam penugasan ini.', { exact: true }).waitFor();
-  // A deliberate new order may now use the released stock. Reject it through the branch screen.
-  await page.goto(origin.origin + '/ordering/checkout?draft=' + config.draftId);
+  // A deliberate new order may now use the released stock. Its request key is stable per saved draft and channel, so the first draft would only show
+  // its recorded order again ("buat draf baru"); the replacement is a second saved draft. Reject it through the branch screen.
+  await page.goto(origin.origin + '/ordering/checkout?draft=' + config.secondDraftId);
   await page.getByRole('button', { name: 'Tinjau pesanan dan biaya', exact: true }).click();
   await page.getByRole('button', { name: /^Ajukan (pesanan|untuk persetujuan)$/ }).click();
   await confirmed.waitFor(); await page.getByRole('heading', { name: 'Rincian pesanan tersimpan', exact: true }).waitFor();
-  const rejectedOrderId = (await confirmed.getByRole('heading').innerText()).match(/[0-9]+/)[0]; assert.notEqual(rejectedOrderId, orderId);
+  const rejectedOrderId = (await confirmed.getByRole('heading', { name: /^Pesanan PSN-[0-9]+ tercatat$/ }).innerText()).match(/[0-9]+/)[0].replace(/^0+(?=[0-9])/, ''); assert.notEqual(rejectedOrderId, orderId);
   await approver.page.reload(); await approver.page.getByRole('button', { name: 'Tinjau pesanan ' + orderNumber(rejectedOrderId), exact: true }).click();
   await branchReview.getByLabel('Catatan peninjauan').fill('Kebutuhan kedua fixture ditolak cabang');
   await branchReview.getByRole('button', { name: 'Tolak belanja', exact: true }).click();
@@ -239,7 +273,7 @@ try {
   assert.equal(await details.evaluate(element => element === document.activeElement), true);
   await history.getByRole('button', { name: 'Lihat rincian pesanan ' + orderNumber(orderId), exact: true }).click();
   await details.getByText('Sisa pesanan dibatalkan', { exact: true }).waitFor();
-  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+  await fits(page, 'order history');
   await page.screenshot({ path: resolve(directory, 'order-history-mobile.png'), fullPage: true });
   await page.reload(); await history.getByRole('button', { name: 'Lihat rincian pesanan ' + orderNumber(orderId), exact: true }).waitFor();
   assert.deepEqual(errors, []); console.log('REAL_ORDER_BROWSER_PASS ' + JSON.stringify({ droppedCommittedResponses: dropped, submitAttempts: writes.length,

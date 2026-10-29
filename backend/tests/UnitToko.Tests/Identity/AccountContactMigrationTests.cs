@@ -16,7 +16,7 @@ public sealed class AccountContactMigrationTests(MongoFixture fixture)
     [Fact]
     public async Task Empty_interrupted_owner_preserves_stronger_validator_uuid_and_verified_profiles_without_seeding_contacts()
     {
-        await using var data = await StoreTestData.CreateAsync(fixture);
+        await using var data = await UnitToko.Tests.Procurement.SupplierDocumentPdfMatchMigrationRehearsal.CreateAsync(fixture);
         await RestoreV81Async(data.Database);
         var actor = await data.AddActorAsync(73, new(GrantScopeKind.BuyerOwned, OrganizationId: 10, BranchId: 11), Permissions.OrderRead);
         var profile = new BsonDocument { { "_id", actor.UserId }, { "schemaVersion", 1 }, { "displayName", "Provider Verified Name" },
@@ -51,7 +51,7 @@ public sealed class AccountContactMigrationTests(MongoFixture fixture)
     [Fact]
     public async Task Positive_or_malformed_counter_and_weakened_provider_predecessor_refuse_before_any_ddl()
     {
-        await using var data = await StoreTestData.CreateAsync(fixture);
+        await using var data = await UnitToko.Tests.Procurement.SupplierDocumentPdfMatchMigrationRehearsal.CreateAsync(fixture);
         await RestoreV81Async(data.Database);
         var counters = data.Database.GetCollection<BsonDocument>("idCounters");
         foreach (var value in new BsonValue[] { 1L, -1L, 0 })
@@ -81,7 +81,7 @@ public sealed class AccountContactMigrationTests(MongoFixture fixture)
     [Fact]
     public async Task Unsupported_preinstallation_row_and_hidden_retry_index_are_preserved_and_refused_without_relabelling_owner()
     {
-        await using var data = await StoreTestData.CreateAsync(fixture);
+        await using var data = await UnitToko.Tests.Procurement.SupplierDocumentPdfMatchMigrationRehearsal.CreateAsync(fixture);
         await AccountContactTestSchema.ApplyAsync(data.Database, data.Clock);
         await RestoreV81Async(data.Database);
         var rows = data.Database.GetCollection<BsonDocument>(AccountContactRecords.Heads);

@@ -26,7 +26,7 @@ public sealed class PdfDocumentExtractionMigrationTests(MongoFixture fixture)
     [Fact]
     public async Task Empty_interrupted_owners_keep_stronger_controls_UUIDs_indexes_predecessor_counters_and_history_without_approval_seeds()
     {
-        await using var data = await StoreTestData.CreateAsync(fixture); var db = data.Database; await RestoreV85Async(db);
+        await using var data = await UnitToko.Tests.Procurement.SupplierDocumentPdfMatchMigrationRehearsal.CreateAsync(fixture); var db = data.Database; await RestoreV85Async(db);
         await EnsureOwnersAsync(db);
         foreach (var name in Owners) {
             var definition = await DefinitionAsync(db, name);
@@ -59,7 +59,7 @@ public sealed class PdfDocumentExtractionMigrationTests(MongoFixture fixture)
     [Fact]
     public async Task Unowned_rows_consumed_or_malformed_allocators_and_unsafe_new_owner_controls_refuse_before_any_DDL()
     {
-        await using var data = await StoreTestData.CreateAsync(fixture); var db = data.Database; await RestoreV85Async(db); await EnsureOwnersAsync(db);
+        await using var data = await UnitToko.Tests.Procurement.SupplierDocumentPdfMatchMigrationRehearsal.CreateAsync(fixture); var db = data.Database; await RestoreV85Async(db); await EnsureOwnersAsync(db);
         foreach (var owner in Owners) {
             var rows = db.GetCollection<BsonDocument>(owner);
             await rows.InsertOneAsync(new BsonDocument("_id", 9001L), new InsertOneOptions { BypassDocumentValidation = true });
@@ -85,7 +85,7 @@ public sealed class PdfDocumentExtractionMigrationTests(MongoFixture fixture)
     [Fact]
     public async Task Weak_predecessors_malformed_counter_and_unexplained_document_jobs_are_preserved_and_never_relabelled()
     {
-        await using var data = await StoreTestData.CreateAsync(fixture); var db = data.Database; await RestoreV85Async(db); await EnsureOwnersAsync(db);
+        await using var data = await UnitToko.Tests.Procurement.SupplierDocumentPdfMatchMigrationRehearsal.CreateAsync(fixture); var db = data.Database; await RestoreV85Async(db); await EnsureOwnersAsync(db);
         foreach (var name in new[] { "evidenceLineages", PdfEvidenceValidationRecords.Policies, "documentProcessingPolicies",
                 "supplierDocumentProcessingPolicies", EvidenceImageRevalidationSchemas.Policies, AccountContactSchemas.Collections[0], "idCounters" }) {
             var definition = await DefinitionAsync(db, name); var validator = definition["options"]["validator"];
@@ -120,7 +120,7 @@ public sealed class PdfDocumentExtractionMigrationTests(MongoFixture fixture)
         await ApplyAsync(db, data.Clock);
     }
 
-    [WindowsStorageFact]
+    [WindowsStorageFact(Skip = Retired.HistoricalUpgrade)]
     [SupportedOSPlatform("windows")]
     public async Task Actual_payment_image_result_pin_source_and_receipt_survive_and_corrupt_retained_result_is_refused_without_repair()
     {
@@ -150,7 +150,7 @@ public sealed class PdfDocumentExtractionMigrationTests(MongoFixture fixture)
         Assert.Equal(imageJob, await data.Rows("outboxEvents").Find(new BsonDocument("_id", imageJob["_id"])).SingleAsync());
     }
 
-    [WindowsStorageFact]
+    [WindowsStorageFact(Skip = Retired.HistoricalUpgrade)]
     [SupportedOSPlatform("windows")]
     public async Task Actual_M85_original_PDF_page_proof_private_history_and_UUIDs_survive_but_corrupt_page_proof_cannot_be_adopted()
     {
@@ -198,6 +198,33 @@ public sealed class PdfDocumentExtractionMigrationTests(MongoFixture fixture)
             new BsonDocument("processingReceipt.pdfDocumentExtraction", new BsonDocument("$exists", true)) })).AnyAsync());
         await RestoreReviewedM86ValidatorsAsync(db);
         Assert.Equal(1L, (await db.GetCollection<BsonDocument>("schemaMigrations").DeleteOneAsync(new BsonDocument { { "_id", 86 }, { "state", "applied" } })).DeletedCount);
+    }
+
+    /// <summary>RestoreV85Async keeps marker 86's outbox extension on purpose: the M86 rehearsals treat it as a stronger retained
+    /// control. Rehearsals of anything below M86 (M84 and M83 preflight the outbox as the M83 extension, which must be a direct
+    /// $and term) first undo it, through the same reviewed successor and predecessor templates. Nothing changes when the
+    /// extension is absent, rows must still satisfy the restored validator, and the collection UUID is preserved.</summary>
+    internal static async Task UndoM86OutboxExtensionAsync(IMongoDatabase db)
+    {
+        var definition = await DefinitionAsync(db, "outboxEvents");
+        var current = definition["options"]["validator"].AsBsonDocument;
+        var successor = PdfDocumentExtractionSchemas.ExtendedOutboxValidator(); var predecessor = PdfDocumentExtractionSchemas.PreviousOutboxValidator();
+        BsonDocument Undo(BsonDocument value) {
+            if (CatalogSchemas.SemanticEquals(value, successor)) return predecessor.DeepClone().AsBsonDocument;
+            var copy = value.DeepClone().AsBsonDocument;
+            // An unrecognized disjunction is never inferred to be safe.
+            if (copy.TryGetValue("$and", out var terms) && terms.IsBsonArray)
+                copy["$and"] = new BsonArray(terms.AsBsonArray.Select(term => term.IsBsonDocument ? Undo(term.AsBsonDocument) : term.DeepClone()));
+            return copy;
+        }
+        var restored = Undo(current);
+        // Nothing to undo is only acceptable when the M83 extension is already a direct term; an unrecognised shape fails here.
+        if (restored.Equals(current)) { Assert.True(InventorySchemas.Contains(current, predecessor), "The outbox validator is neither the M86 extension nor the M83 extension"); return; }
+        Assert.True(InventorySchemas.Contains(restored, predecessor));
+        Assert.False(await db.GetCollection<BsonDocument>("outboxEvents").Find(new BsonDocument("$nor", new BsonArray { restored })).AnyAsync());
+        await ChangeAsync(db, "outboxEvents", restored);
+        var installed = await DefinitionAsync(db, "outboxEvents");
+        Assert.Equal(definition["info"]["uuid"], installed["info"]["uuid"]); Assert.Equal(restored, installed["options"]["validator"]);
     }
 
     private static async Task RestoreReviewedM86ValidatorsAsync(IMongoDatabase db)
