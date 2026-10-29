@@ -9,6 +9,9 @@
     "Uri": "REQUIRED_MONGODB_URI",
     "Database": "REQUIRED_DEDICATED_DATABASE"
   },
+  "Integrity": {
+    "SealsRequired": "true"
+  },
   "Identity": {
     "TrustedProxies": [
       "127.0.0.1"

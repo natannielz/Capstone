@@ -21,19 +21,27 @@ internal sealed class PilotApiFactory(string repository, PilotState state, Synth
     {
         // The private photo store and image rescan settings, when the pilot started its local scanner (full profile).
         if (evidence is not null) builder.ConfigureHostConfiguration(config => config.AddInMemoryCollection(evidence));
-        builder.ConfigureHostConfiguration(config => config.AddInMemoryCollection(new Dictionary<string, string?>
-        {
-            ["Mongo:Uri"] = PilotBoundary.MongoUri, ["Mongo:Database"] = PilotBoundary.DatabaseName,
-            ["Release:Profile"] = PilotBoundary.Release, ["Identity:Auth0:Enabled"] = "true", ["Identity:Auth0:Issuer"] = PilotBoundary.Issuer,
-            ["Identity:Auth0:PublicOrigin"] = PilotBoundary.Origin, ["Identity:Auth0:ClientId"] = SyntheticOidcProvider.ClientId,
-            ["Identity:Auth0:ClientSecret"] = state.Secrets.ClientSecret, ["Identity:Auth0:ConnectionId"] = SyntheticOidcProvider.ConnectionId,
-            ["Identity:Auth0:ConnectionName"] = SyntheticOidcProvider.ConnectionName, ["Identity:Auth0:ClaimsNamespace"] = SyntheticOidcProvider.ClaimsNamespace,
-            ["Identity:Keys:Directory"] = state.KeyDirectory, ["Identity:Keys:ApplicationName"] = PilotBoundary.Profile switch { "full" => "UnitToko.SYNTHETIC.LocalPilot.Full", "review" => "UnitToko.SYNTHETIC.LocalPilot.Review", _ => "UnitToko.SYNTHETIC.LocalPilot.Release1" },
-            ["Identity:Keys:CertificatePath"] = state.CertificatePath, ["Identity:Keys:CertificatePassword"] = state.Secrets.CertificatePassword,
-            ["Identity:TrustedProxies:0"] = "127.0.0.1", ["Logging:LogLevel:Default"] = "Warning"
-        }));
+        var settings = HostSettings(state);
+        // Like a production deployment, the pilot runs with provenance seals: the key ring is created once in its protected key
+        // directory, and the API refuses to start without it.
+        ProvisionSeals(settings);
+        builder.ConfigureHostConfiguration(config => config.AddInMemoryCollection(settings));
         return base.CreateHost(builder);
     }
+    internal static Dictionary<string, string?> HostSettings(PilotState state) => new()
+    {
+        ["Mongo:Uri"] = PilotBoundary.MongoUri, ["Mongo:Database"] = PilotBoundary.DatabaseName,
+        ["Release:Profile"] = PilotBoundary.Release, ["Identity:Auth0:Enabled"] = "true", ["Identity:Auth0:Issuer"] = PilotBoundary.Issuer,
+        ["Identity:Auth0:PublicOrigin"] = PilotBoundary.Origin, ["Identity:Auth0:ClientId"] = SyntheticOidcProvider.ClientId,
+        ["Identity:Auth0:ClientSecret"] = state.Secrets.ClientSecret, ["Identity:Auth0:ConnectionId"] = SyntheticOidcProvider.ConnectionId,
+        ["Identity:Auth0:ConnectionName"] = SyntheticOidcProvider.ConnectionName, ["Identity:Auth0:ClaimsNamespace"] = SyntheticOidcProvider.ClaimsNamespace,
+        ["Identity:Keys:Directory"] = state.KeyDirectory, ["Identity:Keys:ApplicationName"] = PilotBoundary.Profile switch { "full" => "UnitToko.SYNTHETIC.LocalPilot.Full", "review" => "UnitToko.SYNTHETIC.LocalPilot.Review", _ => "UnitToko.SYNTHETIC.LocalPilot.Release1" },
+        ["Identity:Keys:CertificatePath"] = state.CertificatePath, ["Identity:Keys:CertificatePassword"] = state.Secrets.CertificatePassword,
+        ["Identity:TrustedProxies:0"] = "127.0.0.1", ["Logging:LogLevel:Default"] = "Warning", ["Integrity:SealsRequired"] = "true"
+    };
+    /// <summary>Creates the pilot's provenance seal key ring if it does not exist yet (never rotates it); returns the key id.</summary>
+    internal static string ProvisionSeals(IReadOnlyDictionary<string, string?> settings) =>
+        IdentityKeyMaterial.ProvisionSealKeys(new ConfigurationBuilder().AddInMemoryCollection(settings).Build());
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Production").UseContentRoot(Path.Combine(repository, "backend", "src", "UnitToko.Api"));

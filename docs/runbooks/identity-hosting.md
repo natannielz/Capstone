@@ -32,9 +32,21 @@ Supply these through environment-specific secret/configuration storage, never a 
 | `Identity:Keys:CertificatePath`, `CertificatePassword` | Absolute encrypted PKCS#12 file and separately managed password; current valid private RSA certificate, at least 2048 bits |
 | `Identity:Keys:PreviousCertificates:{index}:CertificatePath`, `CertificatePassword` | Retained private decryption certificates during rotation |
 | `Identity:TrustedProxies:{index}` | Exact directly connected proxy IP; no wildcard network |
+| `Integrity:SealsRequired` | `true` for the `full` profile: the API refuses to start unless the provenance seal key ring exists in `Identity:Keys:Directory` (see below) |
 | `Mongo:Uri`, `Mongo:Database` | Authorized dedicated replica-set database; explicit migration before serving business traffic |
 
 Environment variable nesting uses double underscores, for example `Identity__Keys__CertificatePath`. Paths, mount ACLs, secrets, certificate rotation and key restore must be reviewed in the actual hosting environment. PFX passwords alone do not establish host isolation. Startup loads and retains certificates, constructs one persistent protected provider for sessions/OIDC/anti-forgery, checks key XML encryption and forces a protect/unprotect readiness probe. It never substitutes ephemeral keys. Existing stored key XML must already be encrypted.
+
+### Provenance seal keys (full profile)
+
+Stock, dispatch, invoice and order history is sealed as it is written, so a request verifies a seal instead of re-proving the whole history. Without the seal key ring every such read falls back to the full proof, which is correct but slow (an unsealed stock release took 216 s in the probe; sealed, invoice issuing takes about 2.4 s). The ring is a set of HMAC keys stored only in `Identity:Keys:Directory`, encrypted by the same certificate-protected provider as the session keys; key material never enters MongoDB or any output.
+
+1. Provision once per environment, before the first full-profile start, with the API's own configuration: `UnitToko.Api.exe provision-seal-keys` (same environment variables or `--Identity:Keys:...` arguments as the service). It creates the first key, prints only its id, and leaves an existing ring unchanged.
+2. Set `Integrity:SealsRequired=true` (the full deployment template does). The deployment check refuses a full configuration without it or without `seal-current.txt` in the key directory, and the API refuses to start without the ring.
+3. Back up the key directory with the session keys. Losing the ring makes existing seals unverifiable; reads then refuse sealed history instead of trusting it.
+4. History written before the ring existed stays unsealed and keeps the full-proof fallback until it is backfilled.
+
+The local pilot provisions its own ring in its protected key directory on start and runs with `SealsRequired=true`.
 
 ## Browser requests
 
