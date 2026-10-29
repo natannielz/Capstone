@@ -262,3 +262,87 @@ test("U-040 procurement: facts through Facts; only the two conditional fact list
   const remaining = readdirSync("src/modules/procurement").filter(name => name.endsWith(".tsx") && read("src/modules/procurement/" + name).includes("<dl className={styles.facts}>"));
   assert.deepEqual(remaining.sort(), ["procurement-supplier-payable-forms.tsx", "supplier-document-forms.tsx"]);
 });
+
+
+// Fix round 1 (review 3.8C I-1..I-4): the layout swap must not drop a button, a guard, a state or a FIX-FLOW D helper call.
+// Counts and labels below are taken from the procurement modules at e9a7f4ef (FIX-FLOW D) and hard-coded on purpose.
+const dCalls: Record<string, number[]> = {"ProcurementReceivingWorkspace.tsx":[2,2,2,1],"ProcurementRequestWorkspace.tsx":[3,2,2,1],"PurchaseOrderWorkspace.tsx":[2,2,2,1]}; // [refreshAfterConfirmedSave, restoreKeptLocation, takeKeptKey, keep.current]
+const oldProcurementLabels: Record<string, string[]> = {
+  "ProcurementAdvanceReturnWorkspace.tsx": ["Catat pengembalian uang muka","Kebijakan sebelumnya","Kebijakan terbaru","Kembali ke isian","Kembali ke riwayat","Kredit sebelumnya","Kredit terbaru","Muat ulang sumber","Riwayat sebelumnya","Riwayat terbaru","Tinjau pengajuan","Tinjau penolakan","Tinjau persetujuan","Uang muka sebelumnya","Uang muka terbaru"],
+  "ProcurementDisbursementWorkspace.tsx": ["Berikutnya","Buat draf bukti uang muka","Bukti uang muka lebih lama","Kembali ke pemeriksaan","Muat data terbaru","Muat draf terbaru","Muat status bukti uang muka","Otorisasi berikutnya","Otorisasi terbaru","Periksa draf bukti uang muka","Terbaru","Tutup gambar bukti uang muka","Unggah bukti uang muka asli"],
+  "ProcurementFundingWorkspace.tsx": ["Ajukan uang muka","Berikutnya","Kembali ke rincian","Muat data terbaru","Periksa permintaan uang muka","Pesanan berikutnya","Pesanan terbaru","Terbaru","Tinjau penolakan uang muka","Tinjau persetujuan uang muka"],
+  "ProcurementInspectionWorkspace.tsx": ["Berikutnya","Buat draf pemeriksaan","Kembali ke pemeriksaan","Muat data terbaru","Muat pemeriksaan terbaru","Muat status video","Penerimaan berikutnya","Penerimaan terbaru","Periksa draf pemeriksaan","Periksa izin unggah video","Tambah barang atau lot","Terbaru","Tutup video asli","Unggah video asli","Video lebih lama"],
+  "ProcurementQualityAcceptanceWorkspace.tsx": ["Ajukan penerimaan mutu","Kebijakan sebelumnya","Kebijakan terbaru","Kembali ke isian","Kembali ke riwayat","Muat ulang sumber","Penerimaan sebelumnya","Penerimaan terbaru","Riwayat sebelumnya","Riwayat terbaru","Tinjau pengajuan","Tinjau penolakan mutu","Tinjau persetujuan mutu"],
+  "ProcurementReceivingWorkspace.tsx": ["Batal mengisi penerimaan","Berikutnya","Catat pemberitahuan pemasok","Catat penerimaan fisik koli","Kembali memeriksa","Muat data terbaru","Muat rincian penerimaan terbaru","Penerimaan lebih lama","Penerimaan terbaru","Pesanan berikutnya","Pesanan terbaru","Terbaru","Tinjau pemberitahuan pemasok","Tinjau penerimaan fisik koli"],
+  "ProcurementRequestWorkspace.tsx": ["Batalkan pilihan kemasan","Berikutnya","Buat permintaan","Cari kemasan","Kemasan berikutnya","Kemasan sebelumnya","Kembali ke permintaan","Kirim permintaan","Muat data terbaru","Periksa rincian permintaan","Tambahkan kemasan","Terbaru","Tinjau penolakan","Tinjau persetujuan","Ubah rincian"],
+  "ProcurementSettlementWorkspace.tsx": ["Berikutnya","Impor lebih lama","Impor terbaru","Kembali memeriksa","Lihat bukti asli untuk verifikasi pemasok","Muat data terbaru","Muat hasil verifikasi terbaru","Mulai pemeriksaan debit pemasok","Riwayat verifikasi debit","Simpan verifikasi debit pemasok","Terbaru","Tinjau verifikasi debit pemasok","Tutup bukti asli pemasok","Verifikasi lebih lama","Verifikasi terbaru"],
+  "ProcurementStockReceiptWorkspace.tsx": ["Alokasi berikutnya","Alokasi terbaru","Berikutnya","Catat stok ditahan","Kembali ke rincian","Muat data terbaru","Pemeriksaan berikutnya","Pemeriksaan terbaru","Periksa penerimaan stok","Pesanan berikutnya","Pesanan terbaru","Simpan penerimaan stok ditahan","Terbaru"],
+  "ProcurementStockValuationWorkspace.tsx": ["Ajukan penilaian stok","Alokasi lebih lama","Alokasi terbaru","Berikutnya","Kebijakan berikutnya","Kebijakan terbaru","Kembali ke rincian","Lihat nilai penerimaan","Muat data terbaru","Muat ulang nilai tercatat","Pencocokan berikutnya","Pencocokan terbaru","Penerimaan berikutnya","Penerimaan terbaru","Periksa penilaian stok","Terbaru","Tinjau penolakan penilaian","Tinjau persetujuan penilaian"],
+  "ProcurementSupplierPayableWorkspace.tsx": ["Akui utang dari penilaian","Kebijakan sebelumnya","Kebijakan terbaru","Kembali ke isian","Kembali ke riwayat","Lihat utang dan sisa","Muat ulang sumber","Penilaian sebelumnya","Penilaian terbaru","Perbarui sisa tercatat","Riwayat sebelumnya","Riwayat terbaru","Terapkan uang muka terverifikasi","Tinjau pengajuan","Tinjau penolakan","Tinjau persetujuan","Uang muka sebelumnya","Uang muka terbaru","Utang sebelumnya","Utang terbaru"],
+  "PurchaseArrivalPanel.tsx": ["Kembali","Muat jadwal kedatangan","Periksa usulan jadwal","Pulihkan hasil jadwal","Simpan jadwal yang ditinjau","Tinjau penolakan jadwal","Tinjau persetujuan jadwal"],
+  "PurchaseOrderWorkspace.tsx": ["Batalkan pilihan barang","Berikutnya","Buat pesanan pembelian","Kembali ke rincian","Muat data terbaru","Muat tujuan penerimaan terbaru","Pemasok berikutnya","Pemasok terbaru","Periksa pesanan pembelian","Permintaan berikutnya","Permintaan terbaru","Tambahkan barang","Tambahkan pembagian tujuan","Terbaru","Tinjau penolakan pesanan","Tinjau persetujuan pesanan","Tujuan berikutnya"],
+  "ReplenishmentSuggestion.tsx": ["Gunakan saran dalam formulir"],
+  "SupplierBankWorkspace.tsx": ["Ajukan rekening pemasok","Berikutnya","Kembali ke isian","Muat data terbaru","Pemasok berikutnya","Pemasok terbaru","Periksa hasil pemeriksaan bank","Periksa usulan rekening","Terbaru","Tinjau penolakan rekening","Tinjau persetujuan rekening"],
+  "SupplierClaimWorkspace.tsx": ["Ajukan klaim pemasok","Berikutnya","Invoice berikutnya","Invoice terbaru","Kembali ke rincian","Muat data terbaru","Muat invoice opsional","Pemeriksaan berikutnya","Pemeriksaan terbaru","Periksa klaim pemasok","Pesanan berikutnya","Pesanan terbaru","Tambah baris klaim","Terbaru","Tinjau penolakan klaim","Tinjau persetujuan klaim"],
+  "SupplierDocumentWorkspace.tsx": ["Berikutnya","Buat draf dokumen","Gambar lebih lama","Kembali ke dokumen","Muat data terbaru","Muat dokumen terbaru","Muat saran pembacaan","Muat status gambar","Pencocokan lebih lama","Periksa alokasi pencocokan","Periksa draf dokumen","Pesanan berikutnya","Pesanan terbaru","Sumber berikutnya","Sumber terbaru","Tambah alokasi","Terbaru","Tinjau pencocokan dokumen","Tutup gambar asli","Unggah gambar asli"],
+  "SupplierPdfMatchObservations.tsx": ["Gunakan rujukan PDF untuk pencocokan"],
+  "SupplierWorkspace.tsx": ["Ajukan pemasok","Ajukan perubahan pemasok ini","Batalkan pemetaan","Berikutnya","Cari kemasan","Kemasan berikutnya","Kemasan sebelumnya","Kembali ke isian","Muat data terbaru","Periksa hasil pengamatan","Periksa usulan pemasok","Tambahkan pemetaan","Terbaru","Tinjau penolakan pemasok","Tinjau persetujuan pemasok"],
+  "supplier-document-forms.tsx": ["Persetujuan berikutnya","Persetujuan terbaru","Tambah baris dokumen"],
+};
+const occurrences = (text: string, needle: string) => text.split(needle).length - 1;
+const procurementFiles = readdirSync("src/modules/procurement").filter(name => name.endsWith(".tsx"));
+/** The props of every DataList with onSelect in a file, up to its renderTitle (the package pickers are not queues). */
+const queueProps = (code: string) => [...code.matchAll(/<DataList\b[\s\S]*?renderTitle=/g)].map(match => match[0]).filter(props => /onSelect=/.test(props) && !/Kemasan yang tersedia/.test(props));
+
+test("I-4 FIX-FLOW D: every procurement file calls the refresh and kept-location helpers exactly as often as at e9a7f4ef", () => {
+  for (const name of procurementFiles) {
+    const code = read("src/modules/procurement/" + name), expected = dCalls[name] ?? [0, 0, 0, 0];
+    ["refreshAfterConfirmedSave", "restoreKeptLocation", "takeKeptKey", "keep.current"].forEach((helper, index) =>
+      assert.equal(occurrences(code, helper), expected[index], `${name}: ${helper}`));
+  }
+});
+
+test("I-1/I-4: every button label procurement had at e9a7f4ef is still on its page (no dropped entry point)", () => {
+  for (const [name, expected] of Object.entries(oldProcurementLabels)) {
+    const code = read("src/modules/procurement/" + name);
+    for (const label of expected) assert.ok(code.includes(label), `${name}: lost the button "${label}"`);
+  }
+  has(procurement("ProcurementSettlementWorkspace"), /<Button variant="secondary"[^]{0,200}?>Riwayat verifikasi debit<\/Button>/, "settlement: the history entry point is a Button");
+  assert.ok(occurrences(procurement("ProcurementSettlementWorkspace"), "loadHistory(") >= 4, "settlement: loadHistory is called from its entry point and from the history pager");
+});
+
+test("I-2/I-4: every procurement queue keeps the disabled guard its rows had", () => {
+  let queues = 0;
+  for (const name of procurementFiles)
+    for (const props of queueProps(read("src/modules/procurement/" + name))) { queues++; has(props, /\sdisabled=\{/, `${name}: a queue DataList lost its disabled guard`); }
+  assert.ok(queues >= 14, "13 queues and the settlement history are checked");
+  has(procurement("ProcurementRequestWorkspace"), /<DataList label='Daftar permintaan'[^]*?disabled=\{locked \|\| reviewLocked\}/, "requests: a lock or an open review blocks the queue");
+});
+
+test("I-3/I-4: every queue row shows the state its old row showed", () => {
+  const withBadge = ["ProcurementDisbursementWorkspace", "ProcurementFundingWorkspace", "ProcurementInspectionWorkspace", "ProcurementRequestWorkspace", "ProcurementSettlementWorkspace",
+    "ProcurementStockValuationWorkspace", "PurchaseOrderWorkspace", "SupplierBankWorkspace", "SupplierClaimWorkspace", "SupplierDocumentWorkspace", "SupplierWorkspace"];
+  for (const name of withBadge) {
+    const code = procurement(name), start = code.search(/<DataList label='/), block = code.slice(start, code.indexOf("renderTitle=", start) + 900);
+    has(block, /renderBadge=/, `${name}: the queue row shows its state as a Badge`);
+  }
+  const inspection = procurement("ProcurementInspectionWorkspace");
+  has(inspection, /<Badge status=\{value\.draft\.state === 'draft' \? 'Draf menunggu video' : 'Diajukan · barang dalam karantina'\} \/>/, "inspection: the state, not the supplier name, is the Badge");
+  lacks(inspection, /<Badge status=\{value\.draft\.notice\.order\.supplier\.displayName\}/, "inspection: the supplier name is not a status");
+  has(procurement("SupplierDocumentWorkspace"), /Dokumen diajukan · periksa sisa pencocokan[^]*Draf menunggu bukti asli/, "documents: both states");
+  has(procurement("SupplierBankWorkspace"), /renderBadge=\{value => <Badge status=\{states\[value\.state\]\} \/>\}/, "banks: the proposal state");
+  has(procurement("ProcurementSettlementWorkspace"), /Debit bank terverifikasi[^]*Menunggu verifikasi debit bank|Menunggu verifikasi debit bank[^]*Debit bank terverifikasi/, "settlement: both states");
+  has(procurement("ProcurementStockReceiptWorkspace"), /ditahan, belum dinilai/, "stock receipts: the held state");
+});
+
+test("fix round 1 minors: pickers expose aria-pressed, meta wraps, no empty text beside an error, health row header, focusable work heading", () => {
+  has(read("src/components/workspace-kit/data-list.tsx"), /aria-pressed=\{toggle \? selectedKey === key : undefined\}/, "DataList: toggle rows expose aria-pressed");
+  for (const name of ["ProcurementRequestWorkspace", "SupplierWorkspace"]) has(procurement(name), /<DataList label="Kemasan yang tersedia" toggle\b/, `${name}: the picker is a toggle list`);
+  has(read("src/app/foundation.css"), /\.data-list-meta\{[^}]*overflow-wrap:anywhere/, "foundation: long meta wraps");
+  for (const name of procurementFiles.filter(name => /Workspace\.tsx$/.test(name)))
+    lacks(read("src/modules/procurement/" + name), /\bempty=\{\{ title:/, `${name}: an empty message is gated on the absence of an error`);
+  has(read("src/modules/operations/HealthReportView.tsx"), /rowHeader: true/, "health: the queue name is the row header");
+  has(read("src/components/workspace-kit/list-table.tsx"), /scope="row"/, "DataTable: rowHeader renders th scope=row");
+  has(read("src/modules/identity/WorkSummary.tsx"), /variant="plain" focusable/, "work summary heading takes focus");
+  has(read("src/components/workspace-kit/section.tsx"), /tabIndex=\{focusable \? -1 : undefined\}/, "Section: focusable heading");
+});
