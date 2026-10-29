@@ -2,6 +2,7 @@ import type { PaymentOcrView } from './payment-client';
 import common from '../administration/access.module.css';
 import styles from './invoice.module.css';
 import { dateTimeFormatter, formatPercent } from "@/lib/format";
+import { Button } from '@/components/workspace-kit/button';
 
 const labels = { amount: 'Jumlah transfer', currency: 'Mata uang', transfer_date: 'Tanggal transfer', transfer_time: 'Waktu transfer', recipient: 'Penerima', account: 'Rekening tujuan', bank: 'Bank tujuan', reference: 'Referensi bank' };
 const flags: Record<string, string> = { unknown: 'Belum terbaca', ambiguous: 'Lebih dari satu kemungkinan', low_confidence: 'Perlu pemeriksaan ulang', unparsed: 'Format belum dikenali', masked: 'Nomor tersamarkan', timezone_unverified: 'Zona waktu belum dipastikan', no_text: 'Tidak ada teks yang terbaca', amount_unknown: 'Jumlah transfer belum diketahui', touches_image_edge: 'Periksa tepi gambar', ambiguous_fields: 'Ada data yang ambigu' };
@@ -11,7 +12,7 @@ export function PaymentOcrPanel({ view, locked, onRefresh }: { view: PaymentOcrV
   return <section className={common.accountSection} aria-label="Pembacaan bukti otomatis"><h2>Pembacaan bukti otomatis</h2>
     <p>Hasil OCR membantu pemeriksaan gambar. Petugas tetap harus memeriksa dana masuk secara terpisah. Hasil ini tidak mengubah pengajuan atau saldo tagihan.</p>
     <p role="status">{view ? states[view.state] : 'Muat hasil untuk memeriksa pembacaan bukti yang diajukan.'}</p>
-    <button className={common.secondary} disabled={locked} onClick={onRefresh}>Muat hasil OCR</button>
+    <Button variant="secondary" disabled={locked} onClick={onRefresh}>Muat hasil OCR</Button>
     {view?.result && <><p>{view.result.qualityFlags.map(flag => flags[flag]).join(' · ') || 'Periksa kembali semua saran terhadap bukti asli.'}</p>
       <dl className={styles.facts}>{view.result.fields.map(field => <div key={field.field}><dt>{labels[field.field]}</dt><dd><span>{field.value ?? 'Belum diketahui'}</span>
         {field.confidence !== null && <p>Keyakinan pembacaan: {formatPercent(Number(field.confidence), 1)}</p>}

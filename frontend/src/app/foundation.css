@@ -150,6 +150,8 @@ button:disabled{cursor:not-allowed}
 .list-table[data-density="compact"] tbody tr{height:var(--row-h-compact)}
 .list-table[data-density="compact"] td{padding:var(--space-1) var(--space-3)}
 .list-table[data-density="compact"] th{padding:var(--space-2) var(--space-3)}
+.list-table tbody th[scope="row"]{position:static;background:transparent;color:var(--foreground);font-size:14px;line-height:20px;font-weight:400;padding:var(--space-3) var(--space-4);border-bottom:1px solid var(--border)}
+.list-table tbody tr:last-child th[scope="row"]{border-bottom:0}
 .list-table tbody tr:hover,.list-table tbody tr[aria-current="true"]{background:var(--secondary)}
 .list-table-open{display:inline-flex;align-items:center;justify-content:center;height:var(--control-h-compact);padding:0 var(--space-3);border-radius:var(--radius-control);border:1px solid var(--control-border);background:var(--card);color:var(--primary);font-size:14px;font-weight:600;white-space:nowrap}
 .list-table-open:hover:not(:disabled){background:var(--secondary)}
@@ -158,12 +160,13 @@ button:disabled{cursor:not-allowed}
 .list-table-pagination{display:flex;align-items:center;justify-content:flex-end;gap:var(--space-2);padding:var(--space-3) var(--space-4);border-top:1px solid var(--border);font-size:13px;color:var(--muted-foreground)}
 @media (max-width:639px){
   .list-table thead{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
-  .list-table,.list-table tbody,.list-table tr,.list-table td{display:block;width:100%}
+  .list-table,.list-table tbody,.list-table tr,.list-table td,.list-table tbody th[scope="row"]{display:block;width:100%}
   .list-table tbody tr,.list-table[data-density="compact"] tbody tr{height:auto;padding:var(--space-4);border-bottom:1px solid var(--border)}
-  .list-table td,.list-table[data-density="compact"] td{display:flex;justify-content:space-between;gap:var(--space-3);padding:var(--space-1) 0;border:0;text-align:right}
-  .list-table td::before{content:attr(data-label);color:var(--muted-foreground);font-size:12px;text-align:left}
-  .list-table td:first-child{font-weight:600;font-size:15px}
+  .list-table td,.list-table[data-density="compact"] td,.list-table tbody th[scope="row"]{display:flex;justify-content:space-between;gap:var(--space-3);padding:var(--space-1) 0;border:0;text-align:right}
+  .list-table td::before,.list-table tbody th[scope="row"]::before{content:attr(data-label);color:var(--muted-foreground);font-size:12px;text-align:left}
+  .list-table td:first-child,.list-table tbody th[scope="row"]:first-child{font-weight:600;font-size:15px}
   .list-table td:last-child{justify-content:flex-end;padding-top:var(--space-2)}
+  .list-table-caption{display:block;width:100%}
 }
 /* Facts (U-022): one description list — two columns from 640 px, 13 px muted term, 15/600 value. */
 .facts-list,.review-panel dl{display:grid;grid-template-columns:minmax(0,1fr);gap:var(--space-4) var(--space-6);margin:0;font-variant-numeric:tabular-nums}
@@ -272,6 +275,20 @@ button:disabled{cursor:not-allowed}
 /* A lone button in a grid region (section body, stack) keeps its own width on desktop; on phones it spans the row (§11.5). */
 .ui-section-body>.ui-button,.ui-section>.ui-button,.ui-stack>.ui-button{justify-self:start}
 @media (max-width:639px){.ui-section-body>.ui-button,.ui-section>.ui-button,.ui-stack>.ui-button{justify-self:stretch}}
+/* Form column (§7): 720 px, fields 16 px apart, groups (fieldset) on the same rhythm, the action row 24 px below the last field. */
+.ui-form{display:grid;gap:var(--space-4);min-width:0;max-width:var(--content-narrow)}
+.ui-form fieldset{display:grid;gap:var(--space-4);min-width:0;margin:0;padding:0;border:0}
+.ui-form legend{padding:0;margin-bottom:var(--space-2);font-size:16px;line-height:24px;font-weight:600}
+.ui-form>:is(.ui-actions,.ui-button),.ui-form fieldset>:is(.ui-actions,.ui-button){margin-top:var(--space-2)}
+.ui-form .ui-button{justify-self:start}
+@media (max-width:639px){.ui-form .ui-button{justify-self:stretch}}
+/* Two-column work desk (§5): queue column at least 320 px, detail 1fr, 24 px gap; one column below 1024 px (queue first). */
+.ui-desk{display:grid;grid-template-columns:minmax(320px,.8fr) minmax(0,1.5fr);align-items:start;gap:var(--space-6);min-width:0}
+.ui-desk>*{min-width:0}
+.ui-desk>.ui-stack>.ui-section+.ui-section{margin-top:0}
+.ui-desk>.ui-section+.ui-section{margin-top:0}
+@media (max-width:1023px){.ui-desk{grid-template-columns:minmax(0,1fr)}}
+
 /* An inline notice (§9): the state panel's geometry without its role, for warnings that are not errors (a stale base, a large
    change). Pages give it role="status" only where the notice announces a change; errors stay StateView (role="alert"). */
 .ui-notice{display:grid;gap:var(--space-2);max-width:none;margin:0;padding:var(--space-4) var(--space-6);border-radius:var(--radius-card);background:var(--tone-neutral);color:var(--foreground);font-size:15px;line-height:24px;font-weight:600;overflow-wrap:anywhere}
@@ -308,7 +325,8 @@ button:disabled{cursor:not-allowed}
 .data-list-open:hover .data-list-title{text-decoration:underline;text-underline-offset:4px}
 .data-list-head{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:var(--space-1) var(--space-3);min-width:0}
 .data-list-title{margin:0;font-size:15px;line-height:24px;font-weight:600;overflow-wrap:anywhere}
-.data-list-meta{margin:0;font-size:13px;line-height:20px;color:var(--muted-foreground)}
+.data-list-head>.status-badge{flex:none;max-width:100%}.data-list-title{flex:1 1 8ch;min-width:0}
+.data-list-meta small{font-size:inherit}.data-list-meta{margin:0;font-size:13px;line-height:20px;color:var(--muted-foreground);overflow-wrap:anywhere}
 .data-list-content{display:grid;gap:var(--space-2);margin-top:var(--space-2)}
 .data-list-actions{margin-top:var(--space-3);justify-content:flex-end}
 
