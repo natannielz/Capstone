@@ -10,6 +10,7 @@ import styles from '../administration/access.module.css';
 import invoice from './invoice.module.css';
 import { dateTimeFormatter } from '@/lib/format';
 import { autoLoadEndsSession } from './payment-review-session';
+import { Button } from '@/components/workspace-kit/button';
 
 const states: Record<string, string> = { pending: 'Menunggu penanggung jawab', assigned: 'Dalam pemeriksaan', rejected: 'Pengajuan ditolak', replacement_requested: 'Bukti pengganti diminta' };
 const actions: Record<string, string> = { claim: 'Ambil tanggung jawab pemeriksaan', release: 'Lepaskan tanggung jawab', reject: 'Tolak pengajuan', request_replacement: 'Minta bukti pengganti' };
@@ -43,7 +44,7 @@ export function PaymentReviewActionPanel({ actorId, owner, allowed, fresh, locke
   const disabled = locked || busy, canAct = allowed && fresh && !disabled, open = view && !view.verified && ['pending', 'assigned'].includes(view.state);
   return <section className={invoice.correctionPanel} aria-label="Penanggung jawab pemeriksaan"><h3>Penanggung jawab dan tindak lanjut</h3>
     <p>Diajukan {dateTimeFormatter.format(new Date(owner.submission!.submittedAt))}. Pengajuan dan bukti asli tetap tersimpan.</p>
-    <button className={styles.secondary} disabled={disabled} onClick={() => void work(load)}>Muat ulang status pemeriksaan</button>
+    <Button variant="secondary" disabled={disabled} onClick={() => void work(load)}>Muat ulang status pemeriksaan</Button>
     {busy && <p role="status">Memeriksa status…</p>}{error !== null && <p role="alert" className={styles.alert}>{message(error)}</p>}
     {allowed && !fresh && <p className={styles.alert}>Verifikasi dua langkah terbaru diperlukan. <Link href="/identity/account?operation=payment.review.manage&returnPath=%2Fbilling%2Fpayment-reviews">Verifikasi dua langkah untuk tindak lanjut</Link></p>}
     {view && <><dl className={styles.facts}>
@@ -65,14 +66,14 @@ export function PaymentReviewActionPanel({ actorId, owner, allowed, fresh, locke
           <textarea id="review-action-public" required maxLength={1000} value={publicExplanation} disabled={disabled || !!confirm} onChange={event => setPublicExplanation(event.target.value)} />
           <p>Jelaskan perbaikan yang diperlukan. Teks ini terlihat oleh pemilik pengajuan; hindari catatan internal atau data rekening.</p></>}
         <p>Tanggung jawab tidak menambah kewenangan verifikasi bank. Penolakan atau permintaan pengganti menutup verifikasi baru untuk pengajuan ini. Dana dan saldo invoice tetap utuh.</p>
-        {!confirm ? <button className={styles.primary} disabled={!canAct}>Periksa tindak lanjut</button> : <section className={styles.state} aria-label="Konfirmasi tindak lanjut pemeriksaan">
+        {!confirm ? <Button variant="primary" type="submit" disabled={!canAct}>Periksa tindak lanjut</Button> : <section className={styles.state} aria-label="Konfirmasi tindak lanjut pemeriksaan">
           <h4 ref={heading} tabIndex={-1}>{actions[confirm.body.action]}</h4><p>Alasan internal: {confirm.body.reason}</p>
           {confirm.body.publicExplanation && <p>Penjelasan untuk pelanggan: {confirm.body.publicExplanation}</p>}
           <p>Pengajuan {owner.id} · Bukti versi {owner.submission!.evidence.version} · Tindak lanjut versi {confirm.revision}</p>
-          <button type="button" className={styles.primary} disabled={!canAct} onClick={() => void work(async () => {
+          <Button variant="primary" type="button" disabled={!canAct} onClick={() => void work(async () => {
             if (journal.list(actorId).length) throw new AccessFailure(400, 'resolve_previous_attempt');
             await submitTrackedRequest(ledger, journal, actorId, 'billing.payment.review.manage', 'billing.payment.review.manage', confirm, key => gateway.save(confirm, key, active)); await load();
-          })}>Simpan tindak lanjut</button><button type="button" className={styles.secondary} disabled={disabled} onClick={() => { setConfirm(null); formHeading.current?.focus(); }}>Kembali ke tindakan</button>
+          })} busy={busy}>Simpan tindak lanjut</Button><Button variant="secondary" type="button" disabled={disabled} onClick={() => { setConfirm(null); formHeading.current?.focus(); }}>Kembali ke tindakan</Button>
         </section>}
       </form>}
     </>}

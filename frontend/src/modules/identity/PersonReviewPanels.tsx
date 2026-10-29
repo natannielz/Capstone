@@ -6,6 +6,16 @@ import { LatestPersonReviewRead, PersonReviewPreviewSession, personReviewActionA
   type PersonReviewAccount, type PersonReviewAction, type PersonReviewCommand, type PersonReviewDetail, type PersonReviewDraft, type PersonReviewPage,
   type PersonReviewPreview, type PersonReviewSummary, type PersonReviewTarget, type PersonReviewTargetPage } from "./person-review-workflow";
 import styles from "../administration/access.module.css";
+import { Button } from "@/components/workspace-kit/button";
+import { Section } from "@/components/workspace-kit/section";
+import { StateView } from "@/components/workspace-kit/state-view";
+import { DataList } from "@/components/workspace-kit/data-list";
+import { Toolbar } from "@/components/workspace-kit/toolbar";
+import { Field } from "@/components/workspace-kit/field";
+import { Facts } from "@/components/workspace-kit/facts";
+import { Badge } from "@/components/workspace-kit/badge";
+import { Tabs } from "@/components/workspace-kit/tabs";
+import type { TablePagination } from "@/components/workspace-kit/data-table";
 
 type ReadProps = { gateway: PersonReviewGateway; actorId: string; revision: number; locked: boolean; onReset: () => void; onFailure: (error: unknown) => void };
 export type PersonReviewSelection = { kind: "target"; target: PersonReviewTarget } | { kind: "proposal"; detail: PersonReviewDetail };
@@ -30,21 +40,16 @@ export function PersonReviewQueue({ gateway, actorId, revision, locked, onReset,
     return () => reads.cancel();
   }, [gateway, actorId, revision, query, onFailure, reads]);
   function change(next: typeof query) { reads.cancel(); setPage(null); setQuery(next); onReset(); }
-  return <section className={styles.queue} aria-labelledby="person-queue-title" aria-busy={busy}>
-    <div className={styles.queueHeader}><h2 id="person-queue-title">Daftar pengajuan</h2><p className={styles.help}>Pengajuan yang tersedia dalam penugasan Anda.</p>
-      <label>Status pengajuan<select value={query.status} disabled={locked} onChange={event => change({ status: event.target.value, offset: 0 })}>
+  return <Section title="Daftar pengajuan" id="person-queue-title" description="Pengajuan yang tersedia dalam penugasan Anda." busy={busy}>
+    <Toolbar label="Saring pengajuan" filters={<Field id="person-queue-status" label="Status pengajuan"><select value={query.status} disabled={locked} onChange={event => change({ status: event.target.value, offset: 0 })}>
         <option value="pending">Menunggu keputusan</option><option value="approved">Disetujui</option><option value="rejected">Ditolak</option><option value="withdrawn">Ditarik</option><option value="">Semua status</option>
-      </select></label></div>
-    {busy && <p role="status" className={styles.empty}>Memuat pengajuan…</p>}
-    {error !== null && <p role="alert" className={styles.alert}>{personReviewMessage(error)}</p>}
-    {page && <><p className={styles.empty} role="status">{page.total} pengajuan tersedia.</p>
-      <ul className={styles.queueList}>{page.items.map(item => <li key={item.result.proposalId}><button type="button" className={styles.queueRow} disabled={locked} onClick={() => onSelect(item)}>
-        <strong>Pengajuan oleh {name(item.requester)}</strong><span>{personReviewStatus(item.result.status)} · {item.affectedAccountCount} akun</span>
-        <small>{personReviewDate(item.result.recordedAt)}</small><span className={styles.srOnly}>Buka rincian pengajuan</span>
-      </button></li>)}</ul>
-      {page.items.length === 0 && <p className={styles.empty}>Belum ada pengajuan pada status ini.</p>}
-      <PersonReviewPagination offset={query.offset} total={page.total} locked={locked || busy} onChange={offset => change({ ...query, offset })} /></>}
-  </section>;
+      </select></Field>} resultText={page ? `${page.total} pengajuan tersedia.` : undefined} />
+    <DataList label="Daftar pengajuan" items={page?.items ?? []} getKey={item => item.result.proposalId} loading={busy} disabled={locked}
+      error={error !== null ? { message: personReviewMessage(error) } : undefined} empty={page ? { title: "Belum ada pengajuan pada status ini." } : undefined}
+      onSelect={onSelect} renderTitle={item => <>Pengajuan oleh {name(item.requester)}</>} renderBadge={item => <Badge status={personReviewStatus(item.result.status)} />}
+      renderMeta={item => <>{item.affectedAccountCount} akun · {personReviewDate(item.result.recordedAt)}<span className={styles.srOnly}> Buka rincian pengajuan</span></>}
+      pagination={page ? pager(query.offset, page.items.length, page.total, locked || busy, offset => change({ ...query, offset })) : undefined} />
+  </Section>;
 }
 
 export function PersonReviewTargetSearch({ gateway, actorId, revision, locked, onReset, onFailure, onSelect }: ReadProps & { onSelect: (target: PersonReviewTarget) => void }) {
@@ -68,27 +73,26 @@ export function PersonReviewTargetSearch({ gateway, actorId, revision, locked, o
   }, [gateway, actorId, query, revision, onFailure, reads]);
   function change(next: { term: string; offset: number }) { reads.cancel(); setPage(null); setQuery(next); onReset(); }
   function search(event: FormEvent) { event.preventDefault(); if (!locked && input.trim().length >= 2) change({ term: input.trim(), offset: 0 }); }
-  return <section className={styles.queue} aria-labelledby="person-search-title" aria-busy={busy}>
-    <div className={styles.queueHeader}><h2 id="person-search-title">Pilih keterkaitan akun</h2><p className={styles.help}>Cari nama atau email dalam lingkup penugasan Anda. Periksa semua akun dalam hasil yang dipilih.</p>
-      <form onSubmit={search} className={styles.lookup}><label>Cari nama atau email<input type="search" minLength={2} maxLength={80} autoComplete="off" value={input} disabled={locked} onChange={event => {
+  return <Section title="Pilih keterkaitan akun" id="person-search-title" description="Cari nama atau email dalam lingkup penugasan Anda. Periksa semua akun dalam hasil yang dipilih." busy={busy}>
+    <form onSubmit={search}><Toolbar label="Cari keterkaitan akun" search={<Field id="person-search-term" label="Cari nama atau email" width="search"><input type="search" minLength={2} maxLength={80} autoComplete="off" value={input} disabled={locked} onChange={event => {
         reads.cancel(); setInput(event.target.value); setPage(null); setError(null); setBusy(false); onReset();
-      }} /></label><button type="submit" className={styles.secondary} disabled={locked || input.trim().length < 2}>Cari</button></form></div>
-    {busy && <p role="status" className={styles.empty}>Mencari akun yang dapat ditinjau…</p>}
-    {error !== null && <p role="alert" className={styles.alert}>{personReviewMessage(error)}</p>}
-    {page && <><p role="status" className={styles.empty}>{page.total} keterkaitan akun ditemukan.</p>
-      <ul className={styles.queueList}>{page.items.map(item => <li key={item.groupId}><button type="button" className={styles.queueRow} disabled={locked} onClick={() => onSelect(item)}>
-        <strong>{item.accounts.map(name).join(", ")}</strong><span>{personReviewStatus(item.status)} · {String(item.accounts.length)} akun terkait</span>
-        <span>Pilih untuk memeriksa dampak</span>
-      </button></li>)}</ul>
-      {page.items.length === 0 && <p className={styles.empty}>Tidak ada keterkaitan akun yang cocok dalam lingkup Anda.</p>}
-      <PersonReviewPagination offset={query?.offset ?? 0} total={page.total} locked={locked || busy} onChange={offset => query && change({ ...query, offset })} /></>}
-  </section>;
+      }} /></Field>} filters={<Button type="submit" variant="secondary" disabled={locked || input.trim().length < 2}>Cari</Button>}
+      resultText={page ? `${page.total} keterkaitan akun ditemukan.` : undefined} /></form>
+    {(busy || error !== null || page) && <DataList label="Hasil pencarian keterkaitan akun" items={page?.items ?? []} getKey={item => item.groupId} loading={busy} disabled={locked}
+      error={error !== null ? { message: personReviewMessage(error) } : undefined} empty={page ? { title: "Tidak ada keterkaitan akun yang cocok dalam lingkup Anda." } : undefined}
+      onSelect={onSelect} renderTitle={item => item.accounts.map(name).join(", ")} renderBadge={item => <Badge status={personReviewStatus(item.status)} />}
+      renderMeta={item => <>{String(item.accounts.length)} akun terkait · Pilih untuk memeriksa dampak</>}
+      pagination={page && query ? pager(query.offset, page.items.length, page.total, locked || busy, offset => change({ ...query, offset })) : undefined} />}
+  </Section>;
 }
 
-function PersonReviewPagination({ offset, total, locked, onChange }: { offset: number; total: string; locked: boolean; onChange: (offset: number) => void }) {
-  return <div className={styles.pagination} aria-label="Halaman hasil"><button type="button" className={styles.secondary} disabled={locked || offset === 0} onClick={() => onChange(Math.max(0, offset - 25))}>Sebelumnya</button>
-    <span>Halaman {String(Math.floor(offset / 25) + 1)}</span><button type="button" className={styles.secondary} disabled={locked || offset >= 10000 || BigInt(offset + 25) >= BigInt(total)} onClick={() => onChange(offset + 25)}>Berikutnya</button></div>;
+/** Offset pages of 25 (the API's page size), as the kit pager: hidden when everything fits; at most 10,000 rows deep. */
+function pager(offset: number, count: number, total: string, locked: boolean, onChange: (offset: number) => void): TablePagination {
+  return { label: "Halaman hasil", start: offset + 1, end: offset + count, total: Number(total), hasPrevious: offset > 0, hasNext: offset < 10000 && BigInt(offset + 25) < BigInt(total),
+    disabled: locked, onPrevious: () => onChange(Math.max(0, offset - 25)), onNext: () => onChange(offset + 25) };
 }
+
+
 
 function AffectedAccounts({ accounts }: { accounts: PersonReviewAccount[] }) {
   return <><h3>Akun yang terdampak</h3><ul className={styles.historyList}>{accounts.map(account => <li key={account.userId}>
@@ -117,6 +121,7 @@ export function PersonReviewEditor({ selection, actorId, permissions, gateway, l
   const needsPreview = action === "propose" || action === "approve";
   const validPreview = preview !== null && Date.parse(preview.expiresAt) > now();
   const canAct = action === "propose" ? permissions.includes("person.review.propose") : action !== null && original !== null && personReviewActionAllowed(action, original, permissions);
+  const decisionItems = original ? (["approve", "reject", "withdraw"] as const).filter(item => personReviewActionAllowed(item, original, permissions)).map(item => ({ label: actionLabels[item], value: item })) : [];
   const editable = !locked && canAct;
   function invalidate() { reads.cancel(); previews.invalidate(); setPreview(null); setConfirmed(false); setBusy(false); setError(null); }
   function draft(): PersonReviewDraft {
@@ -139,36 +144,36 @@ export function PersonReviewEditor({ selection, actorId, permissions, gateway, l
     try { await onSubmit(personReviewCommand(draft(), needsPreview ? previews.value : null, now())); }
     catch (failure) { setError(failure); }
   }
-  return <section className={styles.detail} aria-labelledby="person-review-title" aria-busy={busy}><div className={styles.form}>
+  return <section className="ui-section" aria-labelledby="person-review-title" aria-busy={busy}>
     <h2 id="person-review-title" ref={heading} tabIndex={-1}>{original ? "Periksa pengajuan" : "Ajukan penangguhan keterkaitan"}</h2>
-    {shownSummary && <><p><strong>{personReviewStatus(shownSummary.result.status)}</strong></p><dl className={styles.facts}>
-      <div><dt>Pengaju</dt><dd>{name(shownSummary.requester)}</dd></div><div><dt>Waktu tercatat</dt><dd>{personReviewDate(shownSummary.result.recordedAt)}</dd></div>
-      <div><dt>Versi pengajuan yang diperiksa</dt><dd>{shownSummary.result.version}</dd></div><div><dt>Jumlah akun terdampak</dt><dd>{shownSummary.affectedAccountCount}</dd></div></dl>
+    {shownSummary && <><p><Badge status={personReviewStatus(shownSummary.result.status)} /></p><Facts items={[
+      { term: "Pengaju", value: name(shownSummary.requester) }, { term: "Waktu tercatat", value: personReviewDate(shownSummary.result.recordedAt) },
+      { term: "Versi pengajuan yang diperiksa", value: shownSummary.result.version }, { term: "Jumlah akun terdampak", value: shownSummary.affectedAccountCount }]} />
       <p className={styles.preserve}><strong>Alasan pengajuan</strong><br />{shownSummary.reason}</p></>}
     <AffectedAccounts accounts={affected} />
     <p className={styles.help}>Versi keterkaitan yang diperiksa: {preview?.target.version ?? target?.version ?? original?.result.groupVersion}.</p>
-    {selection.kind === "proposal" && selection.detail.decision && <section className={styles.review}><h3>Keputusan yang tercatat</h3>
+    {selection.kind === "proposal" && selection.detail.decision && <section className={styles.preview}><h3>Keputusan yang tercatat</h3>
       <p className={styles.preserve}>Diputuskan oleh <strong>{name(selection.detail.decision.actor)}</strong> · {personReviewDate(selection.detail.decision.decidedAt)}</p><p className={styles.preserve}>{selection.detail.decision.reason}</p></section>}
-    {original?.result.status === "pending" && <div className={styles.actions} aria-label="Pilih keputusan">{(["approve", "reject", "withdraw"] as const).filter(item => personReviewActionAllowed(item, original, permissions)).map(item =>
-      <button type="button" key={item} className={action === item ? styles.primary : styles.secondary} aria-pressed={action === item} disabled={locked} onClick={() => { invalidate(); setAction(item); }}>{actionLabels[item]}</button>)}</div>}
-    {action && canAct && <form onSubmit={event => void submit(event)}>
-      <fieldset className={styles.fields} disabled={locked}>
+    {original?.result.status === "pending" && (decisionItems.length > 1 ? <Tabs label="Pilih keputusan" disabled={locked} current={action ?? ""} onSelect={value => { invalidate(); setAction(value as PersonReviewAction); }}
+      items={decisionItems} /> : decisionItems.map(item => <Button key={item.value} variant="secondary" aria-pressed={action === item.value} disabled={locked} onClick={() => { invalidate(); setAction(item.value); }}>{item.label}</Button>))}
+    {action && canAct && <form className="ui-form" onSubmit={event => void submit(event)}>
+      <fieldset disabled={locked}>
         <legend>{action === "propose" ? "Alasan dan pratinjau" : actionLabels[action]}</legend>
-        <label>Alasan {action === "propose" ? "pengajuan" : "keputusan"}<textarea required rows={3} maxLength={1000} value={reason} onChange={event => { invalidate(); setReason(event.target.value); }} /></label>
+        <Field id="person-review-reason" label={"Alasan " + (action === "propose" ? "pengajuan" : "keputusan")}><textarea required rows={3} maxLength={1000} value={reason} onChange={event => { invalidate(); setReason(event.target.value); }} /></Field>
         {needsPreview && <><p className={styles.help}>{action === "propose" ? "Pengajuan akan menunggu keputusan petugas lain. Penangguhan diterapkan setelah disetujui." : "Persetujuan memerlukan petugas yang independen dari pengaju dan akun terdampak."}</p>
-          <button type="button" className={styles.secondary} disabled={!reason.trim() || busy || !fresh} onClick={() => void inspect()}>{busy ? "Menyiapkan pratinjau…" : "Periksa dampak terbaru"}</button>
+          <Button variant="secondary" type="button" disabled={!reason.trim() || busy || !fresh} onClick={() => void inspect()}>{busy ? "Menyiapkan pratinjau…" : "Periksa dampak terbaru"}</Button>
           {preview && <div className={styles.preview} role="status"><strong>{validPreview ? "Pratinjau siap diperiksa" : "Pratinjau telah berakhir"}</strong>
             <p>Berlaku sampai {personReviewDate(preview.expiresAt)}. Perubahan pilihan atau alasan memerlukan pratinjau baru.</p></div>}
-          {validPreview && <p className={styles.alert}>Jika disetujui, keterkaitan akun di atas akan ditangguhkan. Sesi aplikasi akun terdampak akan dicabut, dan izin yang bergantung pada keterkaitan ini harus diperiksa kembali.</p>}
+          {validPreview && <StateView kind="unknown" title="Jika disetujui, keterkaitan akun di atas akan ditangguhkan. Sesi aplikasi akun terdampak akan dicabut, dan izin yang bergantung pada keterkaitan ini harus diperiksa kembali." />}
         </>}
         {!needsPreview && <p className={styles.help}>Keputusan ini mengakhiri pengajuan yang dipilih. Penangguhan keterkaitan akun tidak diterapkan oleh keputusan ini.</p>}
         <label className={styles.checkbox}><input type="checkbox" checked={confirmed} disabled={busy || (needsPreview && !validPreview) || !fresh} onChange={event => setConfirmed(event.target.checked)} />Saya telah memeriksa akun, alasan, versi, dan dampak tindakan ini.</label>
         {!fresh && <p className={styles.help}>Verifikasi dua langkah terbaru diperlukan. Gunakan pilihan verifikasi di atas sebelum melanjutkan.</p>}
-        {error !== null && <p role="alert" className={styles.alert}>{personReviewMessage(error)}</p>}
-        <div className={styles.actions}><button type="submit" className={styles.primary} disabled={!reason.trim() || busy || !confirmed || !fresh || (needsPreview && !validPreview)}>{actionLabels[action]}</button>
-          <button type="button" className={styles.secondary} onClick={onCancel}>Batal</button></div>
+        {error !== null && <StateView kind="error" title={personReviewMessage(error)} />}
+        <div className="ui-actions"><Button type="submit" variant="primary" disabled={!reason.trim() || busy || !confirmed || !fresh || (needsPreview && !validPreview)} busy={busy}>{actionLabels[action]}</Button>
+          <Button variant="secondary" type="button" onClick={onCancel}>Batal</Button></div>
       </fieldset>
     </form>}
-    {(!action || !canAct) && <button type="button" className={styles.secondary} disabled={locked} onClick={onCancel}>Kembali ke daftar</button>}
-  </div></section>;
+    {(!action || !canAct) && <Button variant="secondary" type="button" disabled={locked} onClick={onCancel}>Kembali ke daftar</Button>}
+  </section>;
 }

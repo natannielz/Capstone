@@ -2,6 +2,7 @@
 
 import styles from '../administration/access.module.css';
 import {supplierPdfLabels, type SupplierDocumentPdfMatchObservation, type RememberedSupplierPdfObservation} from './supplier-document-pdf-observations';
+import { Button } from '@/components/workspace-kit/button';
 
 function Details({reference}: {reference: SupplierDocumentPdfMatchObservation}) {
   return <details><summary>Rincian rujukan dokumen</summary><p>Hasil pembacaan {reference.candidate.resultId} · sidik hasil {reference.candidate.resultHash}.</p>
@@ -30,10 +31,10 @@ export function SupplierPdfMatchSelection({candidate, observations, locked, mayU
     <p>Pilih rujukan setelah memeriksa PDF asli. Setiap isian, sumber, jumlah kemasan dan nilai tetap dipilih atau diisi sendiri.</p>
     {candidate && <section aria-label="Observasi PDF yang akan digunakan"><Comparison observation={candidate}/>
       {!mayUse && <p>Buka pencocokan manual dan perbarui verifikasi sebelum menggunakan rujukan ini.</p>}
-      <button type="button" className={styles.secondary} disabled={locked || !mayUse} onClick={onUse}>Gunakan rujukan PDF untuk pencocokan</button></section>}
+      <Button variant="secondary" type="button" disabled={locked || !mayUse} onClick={onUse}>Gunakan rujukan PDF untuk pencocokan</Button></section>}
     {observations.length > 0 && <><p role="status">Rujukan berikut akan ikut dalam tinjauan akhir. Rujukan lain untuk isian yang sama akan menggantikan pilihan sebelumnya.</p>
       <ul>{observations.map(observation => <li key={observation.reference.field}><Comparison observation={observation}/>
-        <button type="button" className={styles.secondary} disabled={locked || !mayUse} onClick={() => onRemove(observation.reference.field)}>
-          Hapus rujukan PDF: {supplierPdfLabels[observation.reference.field]}</button></li>)}</ul></>}
+        <Button variant="secondary" type="button" disabled={locked || !mayUse} onClick={() => onRemove(observation.reference.field)}>
+          Hapus rujukan PDF: {supplierPdfLabels[observation.reference.field]}</Button></li>)}</ul></>}
   </section>;
 }

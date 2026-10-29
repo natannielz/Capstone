@@ -3,7 +3,7 @@ import { Button } from "./button";
 import { Pagination } from "./pagination";
 import { StateView, regionState } from "./state-view";
 
-export type ListColumn<Row> = { key: string; header: string; align?: "start" | "end"; width?: string; render: (row: Row) => ReactNode };
+export type ListColumn<Row> = { key: string; header: string; align?: "start" | "end"; width?: string; rowHeader?: boolean; render: (row: Row) => ReactNode };
 export type TablePagination = Omit<Parameters<typeof Pagination>[0], "label" | "compact"> & { label?: string };
 
 /**
@@ -30,7 +30,8 @@ export function ListTable<Row>({ columns, rows, getKey, onOpen, openLabel, capti
       <caption className="list-table-caption">{caption}</caption>
       <thead><tr>{columns.map(column => <th key={column.key} scope="col" data-align={column.align ?? "start"} style={column.width ? { width: column.width } : undefined}>{column.header}</th>)}{onOpen && <th scope="col"><span className="list-table-sr">Tindakan</span></th>}</tr></thead>
       <tbody>{rows.map(row => { const key = getKey(row); return <tr key={key} aria-current={selectedKey === key ? "true" : undefined}>
-        {columns.map(column => <td key={column.key} data-label={column.header} data-align={column.align ?? "start"} className={column.align === "end" ? "numeric" : undefined}>{column.render(row)}</td>)}
+        {columns.map(column => column.rowHeader ? <th key={column.key} scope="row" data-label={column.header} data-align={column.align ?? "start"}>{column.render(row)}</th>
+          : <td key={column.key} data-label={column.header} data-align={column.align ?? "start"} className={column.align === "end" ? "numeric" : undefined}>{column.render(row)}</td>)}
         {onOpen && <td data-label=""><button type="button" className="list-table-open" disabled={disabled} onClick={() => onOpen(row)}>{openLabel ? openLabel(row) : "Buka"}</button></td>}
       </tr>; })}</tbody>
     </table>

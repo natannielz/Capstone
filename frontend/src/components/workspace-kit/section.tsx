@@ -11,17 +11,19 @@ export function sectionId(title: string): string {
  * cards. One level of boxing only: never put a bordered card inside a card Section — use DataList rows or an inset panel.
  * Only the header carries data-kit, so legacy content inside the body keeps the page's element styles.
  */
-export function Section({ title, description, actions, children, variant = "card", id, label, busy }: {
+export function Section({ title, description, actions, children, variant = "card", id, label, busy, focusable = false }: {
   title: string; description?: ReactNode; actions?: ReactNode; children?: ReactNode; variant?: "card" | "plain"; id?: string;
   /** Keeps an existing region name (rehearsals find regions by name) when it differs from the visible h2. */
   label?: string;
   /** aria-busy while the region's content is being read. */
   busy?: boolean;
+  /** The h2 can take programmatic focus (tabIndex -1), for pages that move focus to a region after an action. */
+  focusable?: boolean;
 }) {
   const headingId = id ?? sectionId(title);
   return <section className="ui-section" data-variant={variant} aria-labelledby={label ? undefined : headingId} aria-label={label} aria-busy={busy}>
     <div className="ui-section-header" data-kit="">
-      <div><h2 id={headingId}>{title}</h2>{description && <p className="ui-section-description">{description}</p>}</div>
+      <div><h2 id={headingId} tabIndex={focusable ? -1 : undefined}>{title}</h2>{description && <p className="ui-section-description">{description}</p>}</div>
       {actions && <div className="ui-actions">{actions}</div>}
     </div>
     <div className="ui-section-body">{children}</div>

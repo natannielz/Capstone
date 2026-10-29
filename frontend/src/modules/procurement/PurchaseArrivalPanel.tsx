@@ -8,6 +8,9 @@ import {arrivalJournalPrefix, PurchaseArrivalJournal} from './purchase-arrival-j
 import styles from '../administration/access.module.css';
 import { dateTimeFormatter } from '@/lib/format';
 import { recordNumber } from '@/lib/document-numbers';
+import { Button } from '@/components/workspace-kit/button';
+import { Field } from '@/components/workspace-kit/field';
+import { StateView } from '@/components/workspace-kit/state-view';
 
 type Line = {skuId: string; definitionId: string; skuCode: string; familyName: string; packageLabel: string};
 type Props = {actorId: string; order: {id: string; lines: readonly Line[]} | null; canPrepare: boolean; canApprove: boolean;
@@ -100,30 +103,30 @@ export function PurchaseArrivalPanel({actorId, order, canPrepare, canApprove, fr
         if (order?.id === saved.orderId && skuId === saved.skuId) setValue(await gateway.read(saved.orderId, saved.skuId, context));}
       else setNotice('Hasil belum terkonfirmasi. Referensi tetap tersimpan; periksa kembali tanpa mengirim ulang.');});
   }
-  return <section className={styles.form} aria-label="Jadwal kedatangan pemasok"><h2>Jadwal kedatangan pemasok</h2>
+  return <section className="ui-form" aria-label="Jadwal kedatangan pemasok"><h2>Jadwal kedatangan pemasok</h2>
     <p>Catat waktu dari konfirmasi pemasok untuk kemasan pada pesanan yang sudah disetujui. Pemeriksa independen meninjau setiap perubahan. Jadwal tidak menambah stok atau mencatat pembayaran.</p>
-    {error !== null && <p role="alert" className={styles.alert}>{message(error)}</p>}{notice && <p role="status">{notice}</p>}{busy && <p role="status">Memeriksa jadwal kedatangan…</p>}
-    {pending && <section className={styles.review}><p>Referensi hasil tersimpan untuk pesanan {recordNumber('purchaseOrder', pending.orderId)}. Pulihkan sebelum membuat perubahan lain.</p><button type="button" className={styles.secondary} disabled={locked} onClick={() => void recover()}>Pulihkan hasil jadwal</button></section>}
+    {error !== null && <StateView kind="error" title={message(error)} />}{notice && <p role="status">{notice}</p>}{busy && <p role="status">Memeriksa jadwal kedatangan…</p>}
+    {pending && <section className={styles.preview}><p>Referensi hasil tersimpan untuk pesanan {recordNumber('purchaseOrder', pending.orderId)}. Pulihkan sebelum membuat perubahan lain.</p><Button variant="secondary" type="button" disabled={locked} onClick={() => void recover()}>Pulihkan hasil jadwal</Button></section>}
     {storageBlocked && <p role="alert">Referensi lokal tidak dapat dibaca. Hubungi operator; perubahan baru ditahan agar hasil yang belum diketahui tidak terulang.</p>}
-    {!order ? <p>Pilih pesanan pembelian yang disetujui untuk melihat jadwal per barang.</p> : <><label>Barang dan kemasan untuk jadwal<select value={skuId} disabled={commandLocked || review !== null} onChange={event => {setSkuId(event.target.value); clearForm();}}><option value="">Pilih barang</option>{order.lines.map(line => <option key={line.skuId} value={line.skuId}>{line.familyName} · {line.skuCode} · {line.packageLabel}</option>)}</select></label>
-      <button type="button" className={styles.secondary} disabled={commandLocked || !skuId || review !== null} onClick={() => void load()}>Muat jadwal kedatangan</button></>}
+    {!order ? <p>Pilih pesanan pembelian yang disetujui untuk melihat jadwal per barang.</p> : <><Field id="purchase-arrival-panel-1" label="Barang dan kemasan untuk jadwal"><select value={skuId} disabled={commandLocked || review !== null} onChange={event => {setSkuId(event.target.value); clearForm();}}><option value="">Pilih barang</option>{order.lines.map(line => <option key={line.skuId} value={line.skuId}>{line.familyName} · {line.skuCode} · {line.packageLabel}</option>)}</select></Field>
+      <Button variant="secondary" type="button" disabled={commandLocked || !skuId || review !== null} onClick={() => void load()}>Muat jadwal kedatangan</Button></>}
     {value && <><h3>{states[value.state]}</h3><p>Waktu yang disetujui: {when(value.expectedAt)}</p>{value.state === 'pending' && <p>Usulan kedatangan: {when(value.proposedAt)}</p>}
       {value.confirmationReference && <p>Referensi konfirmasi: {value.confirmationReference}</p>}
-      {!review && <><label>Alasan pencatatan atau keputusan<textarea rows={3} maxLength={1000} disabled={commandLocked} value={reason} onChange={event => setReason(event.target.value)} /></label>
-        {canPrepare && <form onSubmit={event => void prepare(event)}><fieldset className={styles.fields} disabled={commandLocked || !fresh}>
+      {!review && <><Field id="purchase-arrival-panel-2" label="Alasan pencatatan atau keputusan"><textarea rows={3} maxLength={1000} disabled={commandLocked} value={reason} onChange={event => setReason(event.target.value)} /></Field>
+        {canPrepare && <form onSubmit={event => void prepare(event)}><fieldset disabled={commandLocked || !fresh}>
           <label className={styles.checkbox}><input type="checkbox" checked={unknown} onChange={event => setUnknown(event.target.checked)} />Pemasok belum dapat memastikan waktu; tarik jadwal sebelumnya.</label>
-          {!unknown && <label>Perkiraan kedatangan (WIB)<input required type="datetime-local" value={date} onChange={event => setDate(event.target.value)} /></label>}
-          <label>Referensi konfirmasi pemasok<input required maxLength={256} value={reference} onChange={event => setReference(event.target.value)} /></label>
-          <button className={styles.secondary} disabled={!reason.trim()}>Periksa usulan jadwal</button></fieldset></form>}
-        {canApprove && value.state === 'pending' && <div className={styles.actions}><button type="button" className={styles.primary} disabled={commandLocked || !fresh || !reason.trim()} onClick={() => void decide('approve')}>Tinjau persetujuan jadwal</button><button type="button" className={styles.secondary} disabled={commandLocked || !fresh || !reason.trim()} onClick={() => void decide('reject')}>Tinjau penolakan jadwal</button></div>}
+          {!unknown && <Field id="purchase-arrival-panel-3" label="Perkiraan kedatangan (WIB)"><input required type="datetime-local" value={date} onChange={event => setDate(event.target.value)} /></Field>}
+          <Field id="purchase-arrival-panel-4" label="Referensi konfirmasi pemasok"><input required maxLength={256} value={reference} onChange={event => setReference(event.target.value)} /></Field>
+          <Button variant="secondary" disabled={!reason.trim()} type="submit">Periksa usulan jadwal</Button></fieldset></form>}
+        {canApprove && value.state === 'pending' && <div className={styles.actions}><Button variant="primary" type="button" disabled={commandLocked || !fresh || !reason.trim()} onClick={() => void decide('approve')}>Tinjau persetujuan jadwal</Button><Button variant="secondary" type="button" disabled={commandLocked || !fresh || !reason.trim()} onClick={() => void decide('reject')}>Tinjau penolakan jadwal</Button></div>}
       </>}
       {!fresh && <p>Verifikasi MFA terbaru diperlukan sebelum mengubah atau memutuskan jadwal.</p>}
     </>}
-    {review && <section className={styles.review} aria-label="Konfirmasi jadwal kedatangan"><h3>Periksa jadwal dan sumber konfirmasi</h3>
+    {review && <section className={styles.preview} aria-label="Konfirmasi jadwal kedatangan"><h3>Periksa jadwal dan sumber konfirmasi</h3>
       <p>{when(review.shown.input.expectedAt)}</p><p>Referensi pemasok: {review.shown.input.confirmationReference}</p><p>Alasan: {review.reason}</p>
       <p>{review.shown.decision === 'approve' ? 'Keputusan: setujui jadwal.' : review.shown.decision === 'reject' ? 'Keputusan: tolak jadwal.' : 'Usulan akan diperiksa oleh orang lain yang berwenang.'}</p>
       <label className={styles.checkbox}><input type="checkbox" checked={confirmed} disabled={commandLocked} onChange={event => setConfirmed(event.target.checked)} />Saya sudah memeriksa barang, waktu dan konfirmasi pemasok.</label>
-      <div className={styles.actions}><button type="button" className={styles.primary} disabled={commandLocked || !fresh || !confirmed} onClick={() => void save()}>Simpan jadwal yang ditinjau</button><button type="button" className={styles.secondary} disabled={commandLocked} onClick={() => {setReview(null); setConfirmed(false);}}>Kembali</button></div>
+      <div className={styles.actions}><Button variant="primary" type="button" disabled={commandLocked || !fresh || !confirmed} onClick={() => void save()}>Simpan jadwal yang ditinjau</Button><Button variant="secondary" type="button" disabled={commandLocked} onClick={() => {setReview(null); setConfirmed(false);}}>Kembali</Button></div>
     </section>}
   </section>;
 }
