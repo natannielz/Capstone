@@ -95,7 +95,7 @@ export function PolicyFinalReview({ command, busy, onSubmit, onCancel }: {
 }) {
   const [confirmed, setConfirmed] = useState(false);
   return <form onSubmit={event => { event.preventDefault(); onSubmit(confirmed); }} aria-labelledby="policy-final-heading">
-    <p className={styles.eyebrow}>Pemeriksaan akhir</p><h2 id="policy-final-heading">{policyActionLabel[command.operation]}</h2>
+    <h2 id="policy-final-heading">{policyActionLabel[command.operation]}</h2><p className={common.help}>Pemeriksaan akhir</p>
     {"proposalId" in command ? <>
       {!command.review.bindingCurrent && <p className={common.alert}>Pengaturan dasar sudah berubah. Tindakan ini hanya menyelesaikan pengajuan lama.</p>}
       <PolicyProposalFacts proposal={command.review.proposal} />

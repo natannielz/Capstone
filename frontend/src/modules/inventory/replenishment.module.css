@@ -1,11 +1,12 @@
-.field { display: grid; gap: .4rem; margin-block: .8rem; min-width: 0; }
-.field input, .field select, .field textarea { min-width: 0; max-width: 100%; padding: .75rem; border: 1px solid #c6d7d5; border-radius: .6rem; font: inherit; background: white; color: #163a38; }
-.field textarea { min-height: 6rem; resize: vertical; }
-.fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .25rem 1rem; }
-.search { display: flex; flex-wrap: wrap; align-items: end; gap: .75rem; }
+/* Replenishment desk on the UI standard (U-032): fields take the shared 44 px control look (3:1 border, radius 8), tokens only. */
+.field { display: grid; gap: var(--space-2); margin-block: var(--space-3); min-width: 0; }
+.field input, .field select, .field textarea { min-width: 0; max-width: 100%; height: var(--control-h); padding: 0 var(--space-3); border: 1px solid var(--control-border); border-radius: var(--radius-control); font: inherit; font-size: 15px; background: var(--card); color: var(--foreground); }
+.field textarea { height: auto; min-height: 96px; padding: var(--space-3); resize: vertical; }
+.fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-1) var(--space-4); }
+.search { display: flex; flex-wrap: wrap; align-items: end; gap: var(--space-3); }
 .search .field { flex: 1 1 15rem; }
-.search button { margin-bottom: .8rem; padding: .75rem 1rem; }
-.options { display: grid; gap: .6rem; margin-block: 1rem; }
-.options button { display: grid; gap: .3rem; text-align: left; white-space: normal; overflow-wrap: anywhere; }
+.search button { margin-bottom: var(--space-3); }
+.options { display: grid; gap: var(--space-2); margin-block: var(--space-4); }
+.options button { display: grid; gap: var(--space-1); height: auto; min-height: var(--control-h); padding: var(--space-2) var(--space-4); text-align: left; white-space: normal; overflow-wrap: anywhere; }
 .options button[aria-pressed="true"] { box-shadow: inset 0 0 0 2px var(--primary); background: var(--secondary); }
 @media (max-width: 640px) { .fields { grid-template-columns: 1fr; } }

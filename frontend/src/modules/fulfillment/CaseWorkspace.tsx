@@ -24,9 +24,15 @@ import { canRecordRefundPayout, createRefundPayoutGateway } from './refund-payou
 import { RefundSettlementPanel } from './RefundSettlementPanel';
 import { canVerifyRefundSettlement, createRefundSettlementGateway } from './refund-settlement-client';
 import common from '../administration/access.module.css';
-import styles from '../ordering/order-draft.module.css';
+import local from './fulfillment.module.css';
 import { SessionAccessState } from "@/components/workspace-kit/session-access-state";
 import { recordNumber } from '@/lib/document-numbers';
+import { Button } from '@/components/workspace-kit/button';
+import { PageHeader } from '@/components/workspace-kit/page-header';
+import { StateView } from '@/components/workspace-kit/state-view';
+import { Section } from '@/components/workspace-kit/section';
+import { DataList } from '@/components/workspace-kit/data-list';
+import { Badge } from '@/components/workspace-kit/badge';
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 const issues = { wrong_item: 'Barang tidak sesuai', damaged: 'Barang rusak', missing: 'Barang kurang', other: 'Masalah lainnya' };
@@ -55,11 +61,11 @@ export function CaseWorkspace() {
     const restored = (event: PageTransitionEvent) => { if (event.persisted) { setAccount(null); setRevision(value => value + 1); } };
     window.addEventListener('pageshow', restored); return () => { window.clearInterval(timer); window.removeEventListener('pageshow', restored); }; }, [account]);
   const denied = useCallback((failure: unknown) => { if (failure instanceof AccessFailure && failure.code !== 'step_up_required' && (failure.status === 401 || failure.status === 403 || failure.code === 'actor_changed')) { setAccount(null); setError(failure); } }, []);
-  return <main className={common.page}><header className={common.header}><div><Link href="/identity/account" className={common.brand}>Unit Toko</Link><h1>Keluhan barang</h1>
-    <p>Laporkan masalah pada barang yang diterima. Penanggung jawab akan memeriksa pengajuan sebelum menentukan penyelesaiannya.</p></div><Link href="/identity/account" className={common.secondary}>Akun saya</Link></header>
-    {error !== null && account !== null && <p role="alert" className={common.alert}>{message(error)}</p>}
-    {loading ? <p role="status">Memeriksa akun…</p> : !account || sessionTiming(account.session, elapsed).expired ? <SessionAccessState kind={account ? "expired" : undefined} error={error} returnPath="/fulfillment/cases" onRetry={() => setRevision(value => value + 1)} />
-      : <CaseDesk key={account.actorId + ':' + account.observedAt} account={account} fresh={sessionTiming(account.session, elapsed).fresh} onDenied={denied} />}
+  return <main className={common.page}><PageHeader title="Keluhan barang" description="Laporkan masalah pada barang yang diterima. Penanggung jawab akan memeriksa pengajuan sebelum menentukan penyelesaiannya." />
+    <div className="ui-stack">
+    {error !== null && account !== null && <StateView kind="error" title={message(error)} />}
+    {loading ? <StateView kind="loading" title="Memeriksa akun…" /> : !account || sessionTiming(account.session, elapsed).expired ? <SessionAccessState kind={account ? "expired" : undefined} error={error} returnPath="/fulfillment/cases" onRetry={() => setRevision(value => value + 1)} />
+      : <CaseDesk key={account.actorId + ':' + account.observedAt} account={account} fresh={sessionTiming(account.session, elapsed).fresh} onDenied={denied} />}</div>
   </main>;
 }
 function CaseDesk({ account, fresh, onDenied }: { account: Account; fresh: boolean; onDenied: (failure: unknown) => void }) {
@@ -87,6 +93,8 @@ function CaseDesk({ account, fresh, onDenied }: { account: Account; fresh: boole
     catch (failure) { if (active && current()) { setError(failure); onDenied(failure); } } finally { if (active) setBusy(false); }
   }); return () => { active = false; controller.abort(); }; }, [gateway, account.actorId, before, refresh, canRead, current, onDenied]);
   useEffect(() => { if (review || selected) heading.current?.focus(); }, [review, selected]);
+  // The row button that started a read shows it is busy until the record arrives (§8).
+  const [opening, setOpening] = useState<string | null>(null);
   async function perform(work: () => Promise<void>) {
     if (!current() || busy || recovering || offline || editing || pending.current) return; pending.current = true; setBusy(true); setError(null);
     try { await work(); } catch (failure) { if (current()) { setReview(null); setError(failure); onDenied(failure); } }
@@ -140,26 +148,26 @@ function CaseDesk({ account, fresh, onDenied }: { account: Account; fresh: boole
       } } } : {}}
       onFailure={failure => { setError(failure); onDenied(failure); }} onResolved={() => { recovery.refresh(); ledgers.clear(); if (current()) { setResult(recovered.current); setSource(null); setReview(null); setSelected(null); setReason(''); setQuantities({}); setBefore(null); setRefresh(value => value + 1); } recovered.current = null; }} />
     {canManage && (!fresh || error instanceof AccessFailure && error.code === 'step_up_required') && <p role="status">Verifikasi dua langkah terbaru diperlukan untuk keputusan dan pemulihannya. <Link href="/identity/account?operation=case.manage&returnPath=%2Ffulfillment%2Fcases">Verifikasi dua langkah untuk keputusan</Link></p>}
-    {recovery.error !== null && <p role="alert">{message(recovery.error)}</p>}{error !== null && <p role="alert" className={common.alert}>{message(error)}</p>}
-    {offline && <p role="status">Koneksi terputus. Pengajuan belum dapat dikirim; isian hanya tersimpan di halaman ini.</p>}{busy && <p role="status">Memeriksa keluhan…</p>}
+    {recovery.error !== null && <StateView kind="error" title={message(recovery.error)} />}{error !== null && <StateView kind="error" title={message(error)} />}
+    {offline && <StateView kind="offline" title="Koneksi terputus. Pengajuan belum dapat dikirim; isian hanya tersimpan di halaman ini." />}{busy && <StateView kind="loading" title="Memeriksa keluhan…" rows={2} />}
     {result && <p role="status">Pengajuan keluhan {recordNumber('case', result.caseId)} tercatat untuk invoice {result.invoiceId}. Buka rincian untuk memeriksa keputusan terbaru. Penyelesaian mengikuti pemeriksaan dan persetujuan yang berlaku.</p>}
-    {canRequest && !source && !review && <section className={common.accountSection} aria-label="Sumber keluhan"><h2>Pilih penjualan</h2>
+    {canRequest && !source && !review && <Section title="Pilih penjualan" label="Sumber keluhan">
       {account.actions.includes('invoice.read') && <p>Buka invoice melalui <Link href="/billing/invoices">halaman tagihan</Link>, lalu pilih Laporkan masalah barang.</p>}
       <form onSubmit={event => { event.preventDefault(); void load(); }}><label>Nomor ID invoice<input required inputMode="numeric" pattern="[1-9][0-9]*" maxLength={19} disabled={locked} value={invoiceId} onChange={event => setInvoiceId(event.target.value)} /></label>
-        <button className={common.primary} disabled={locked}>Periksa barang pada invoice</button></form></section>}
-    {source && !review && <section className={common.accountSection} aria-label="Pengajuan keluhan"><h2>Laporkan masalah barang</h2><p>Invoice {source.number} · {source.buyerName} · {source.sellerName}</p>
+        <Button type="submit" variant="primary" disabled={locked}>Periksa barang pada invoice</Button></form></Section>}
+    {source && !review && <Section title="Laporkan masalah barang" label="Pengajuan keluhan"><p>Invoice {source.number} · {source.buyerName} · {source.sellerName}</p>
       <form onSubmit={event => { event.preventDefault(); preview(); }}><label>Jenis masalah<select disabled={locked} value={issue} onChange={event => setIssue(event.target.value)}>{Object.entries(issues).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
         <p>Isi jumlah satuan dasar hanya untuk barang yang bermasalah. Kosongkan barang lainnya. Jumlah tidak boleh melebihi penerimaan pada invoice ini.</p>
-        {source.lines.map(line => <fieldset className={styles.line} key={line.receiptId + ':' + line.skuId} disabled={locked}><legend>{line.productName} · {line.skuCode}</legend>
+        {source.lines.map(line => <fieldset className={local.count} key={line.receiptId + ':' + line.skuId} disabled={locked}><legend>{line.productName} · {line.skuCode}</legend>
           <p>{line.packageLabel}: {line.baseUnitsPerPackage} {line.baseUnitCode} per kemasan. Diterima: {line.acceptedBaseUnits} {line.baseUnitCode}. Bukti {line.receiptId}.</p>
           <label>Jumlah bermasalah — {line.productName} — bukti {line.receiptId}<input inputMode="numeric" pattern="[1-9][0-9]*" maxLength={19} value={quantities[line.receiptId + ':' + line.skuId] ?? ''} onChange={event => setQuantities(values => ({ ...values, [line.receiptId + ':' + line.skuId]: event.target.value }))} /></label></fieldset>)}
-        <label>Jelaskan masalah<textarea required maxLength={1000} disabled={locked} value={reason} onChange={event => setReason(event.target.value)} /></label><button className={common.primary} disabled={locked}>Tinjau keluhan</button>
-        <button type="button" className={common.secondary} disabled={locked} onClick={() => { setSource(null); setQuantities({}); setReason(''); }}>Ganti invoice</button></form></section>}
-    {review && <section className={common.accountSection} aria-label="Tinjauan keluhan"><h2 ref={heading} tabIndex={-1}>Tinjau keluhan barang</h2><p>Invoice {review.source.number} · {issues[review.body.issue]}</p>
+        <label>Jelaskan masalah<textarea required maxLength={1000} disabled={locked} value={reason} onChange={event => setReason(event.target.value)} /></label><Button type="submit" variant="primary" disabled={locked}>Tinjau keluhan</Button>
+        <Button variant="secondary" disabled={locked} onClick={() => { setSource(null); setQuantities({}); setReason(''); }}>Ganti invoice</Button></form></Section>}
+    {review && <section className="ui-section" aria-label="Tinjauan keluhan"><h2 ref={heading} tabIndex={-1}>Tinjau keluhan barang</h2><p>Invoice {review.source.number} · {issues[review.body.issue]}</p>
       <ul>{review.body.lines.map(line => { const item = review.source.lines.find(item => item.receiptId === line.receiptId && item.skuId === line.skuId)!; return <li key={line.receiptId + ':' + line.skuId}><strong>{item.productName}</strong><p>{line.reportedBaseUnits} {item.baseUnitCode} bermasalah dari {item.acceptedBaseUnits} {item.baseUnitCode} diterima. {item.packageLabel}: {item.baseUnitsPerPackage} {item.baseUnitCode} per kemasan. Bukti {line.receiptId}.</p></li>; })}</ul>
       <p>{review.body.reason}</p><label className={common.checkbox}><input type="checkbox" disabled={locked} checked={consent} onChange={event => setConsent(event.target.checked)} /><span>Saya telah memeriksa barang dan jumlah yang dilaporkan. Pengajuan ini akan diperiksa sebelum penyelesaian disetujui.</span></label>
-      <button className={common.primary} disabled={locked || !consent} onClick={() => void confirm()}>Kirim keluhan</button><button className={common.secondary} disabled={locked} onClick={() => setReview(null)}>Kembali ke isian</button></section>}
-    {selected && <section className={common.accountSection} aria-label="Rincian keluhan"><h2 ref={heading} tabIndex={-1}>Keluhan {recordNumber('case', selected.id)}</h2><p>{states[selected.state]} · {issues[selected.issue]} · Invoice {selected.source.number}</p><p>{selected.reportedProblem}</p>
+      <div className="ui-actions"><Button variant="primary" disabled={locked || !consent} onClick={() => void confirm()}>Kirim keluhan</Button><Button variant="secondary" disabled={locked} onClick={() => setReview(null)}>Kembali ke isian</Button></div></section>}
+    {selected && <section className="ui-section" aria-label="Rincian keluhan"><h2 ref={heading} tabIndex={-1}>Keluhan {recordNumber('case', selected.id)}</h2><p>{states[selected.state]} · {issues[selected.issue]} · Invoice {selected.source.number}</p><p>{selected.reportedProblem}</p>
       <ul>{selected.lines.map(line => { const item = selected.source.lines.find(item => item.receiptId === line.receiptId && item.skuId === line.skuId)!; return <li key={line.receiptId + ':' + line.skuId}>{item.productName}: {line.reportedBaseUnits} {item.baseUnitCode} bermasalah dari {item.acceptedBaseUnits} diterima. {item.packageLabel} berisi {item.baseUnitsPerPackage} {item.baseUnitCode}. Bukti {line.receiptId}.</li>; })}</ul>
       {selected.decision && <section aria-label="Keputusan keluhan"><h3>Keputusan dan penjelasan</h3><p>{selected.decision.publicExplanation}</p>
         <ul>{selected.decision.lines.map(line => { const item = selected.source.lines.find(item => item.receiptId === line.receiptId && item.skuId === line.skuId)!; return <li key={line.receiptId + ':' + line.skuId}>{item.productName}: {line.reportedBaseUnits} {item.baseUnitCode} diizinkan untuk pemeriksaan. Bukti {line.receiptId}.</li>; })}</ul>
@@ -176,10 +184,14 @@ function CaseDesk({ account, fresh, onDenied }: { account: Account; fresh: boole
         fresh={fresh} locked={locked} current={current} freshCurrent={freshCurrent} journal={recovery.journal} onDenied={onDenied} onBusyChange={setEditing} onSettled={recovery.refresh} />}
       {selected.state === 'return_authorized' && canVerifyPayout && <RefundSettlementPanel key={'settlement:' + selected.id} actorId={account.actorId} owner={selected} actions={account.actions}
         fresh={fresh} locked={locked} current={current} freshCurrent={freshCurrent} journal={recovery.journal} onDenied={onDenied} onBusyChange={setEditing} onSettled={recovery.refresh} />}
-      <button className={common.secondary} disabled={busy || recovering || editing} onClick={() => setSelected(null)}>Tutup keluhan</button></section>}
-    {canRead && <section className={common.accountSection} aria-label="Daftar keluhan"><h2>Pengajuan dalam akses Anda</h2>{!busy && !page.items.length && <p>Belum ada pengajuan pada halaman ini.</p>}
-      <ul>{page.items.map(item => <li key={item.id}><strong>Keluhan {recordNumber('case', item.id)}</strong><p>{item.source.buyerName} · {item.source.number} · {states[item.state]}</p><button className={common.secondary} disabled={busy || recovering || offline || editing || !!review} onClick={() => void perform(async () => { const value = await gateway.read(account.actorId, item.id, item.revision); if (current()) setSelected(value); })}>Buka keluhan {recordNumber('case', item.id)}</button></li>)}</ul>
-      {page.hasMore && <button className={common.secondary} disabled={busy || recovering || offline || editing || !!review} onClick={() => setBefore(page.items.at(-1)!.id)}>Keluhan lebih lama</button>}
-      <button className={common.secondary} disabled={busy || recovering || offline || editing || !!review} onClick={() => { setBefore(null); setRefresh(value => value + 1); }}>Muat keluhan terbaru</button></section>}
+      <div className="ui-actions"><Button variant="secondary" disabled={busy || recovering || editing} onClick={() => setSelected(null)}>Tutup keluhan</Button></div></section>}
+    {canRead && <Section title="Pengajuan dalam akses Anda" label="Daftar keluhan"
+      actions={<Button variant="secondary" disabled={busy || recovering || offline || editing || !!review} onClick={() => { setBefore(null); setRefresh(value => value + 1); }}>Muat keluhan terbaru</Button>}>
+      <DataList label="Daftar keluhan" items={page.items} getKey={item => item.id} loading={busy}
+        empty={error === null ? { title: "Belum ada pengajuan pada halaman ini." } : undefined}
+        renderTitle={item => <>Keluhan {recordNumber('case', item.id)}</>} renderBadge={item => <Badge status={states[item.state]} />}
+        renderMeta={item => <>{item.source.buyerName} · {item.source.number}</>}
+        renderActions={item => <Button variant="secondary" disabled={busy || recovering || offline || editing || !!review} busy={opening === item.id} onClick={() => { setOpening(item.id); void perform(async () => { const value = await gateway.read(account.actorId, item.id, item.revision); if (current()) setSelected(value); }).finally(() => setOpening(null)); }}>Buka keluhan {recordNumber('case', item.id)}</Button>} />
+      {page.hasMore && <div className="ui-actions"><Button variant="secondary" disabled={busy || recovering || offline || editing || !!review} onClick={() => setBefore(page.items.at(-1)!.id)}>Keluhan lebih lama</Button></div>}</Section>}
   </>;
 }

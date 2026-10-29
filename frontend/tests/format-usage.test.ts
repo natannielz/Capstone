@@ -29,3 +29,15 @@ test("no amount is printed with a raw IDR prefix", () => {
       .map(({ path, index }) => `${path}:${index + 1}`));
   assert.deepEqual(offenders, []);
 });
+
+// F-023: business dates arrive as ISO "2026-10-22" and periods as "2026-10"; procurement and inventory pages show them as "22 Okt 2026" / "Oktober 2026" via formatDate / formatMonth.
+// The names cover ...Date, ...On, neededBy (and other ...By), ...Until and ...Month, bare or on a record.
+test("procurement and inventory pages print no raw ISO calendar date", () => {
+  const raw = /(?<![=(])\{(?:[A-Za-z_.?]+\.)?[a-zA-Z]*(?:Date|On|By|Until|Month)(?:\s*\?\?[^}]*)?\}|\+ ?[A-Za-z_.?]+\.[a-zA-Z]*(?:Date|On|By|Until|Month)\b|\$\{[A-Za-z_.?]+\.[a-zA-Z]*(?:Date|On|By|Until|Month)\}/;
+  const offenders = ["src/modules/procurement", "src/modules/inventory"].flatMap(sources)
+    .filter(path => path.endsWith(".tsx"))
+    .flatMap(path => readFileSync(path, "utf8").split("\n").map((line, index) => ({ path, line, index }))
+      .filter(({ line }) => raw.test(line))
+      .map(({ path, index }) => `${path}:${index + 1}`));
+  assert.deepEqual(offenders, []);
+});
