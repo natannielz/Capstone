@@ -14973,6 +14973,8 @@ export interface components {
             threshold: null | components["schemas"]["Money"];
         };
         OrderSubmitDto: {
+            /** @description Positive decimal Int64 string, from 1 through 9223372036854775807. JSON numbers are invalid. */
+            draftId?: null | string;
             input: components["schemas"]["OrderDraftInputDto"];
             reason: string;
             review: string;

@@ -147,12 +147,7 @@ public sealed class AuthorizationStore(IMongoDatabase database, MongoUnitOfWork 
             }
             if (requireReceipt) throw new PersistenceConflictException("operation_receipt_unavailable", "The recorded operation receipt is unavailable");
             var personProof = await RequirePersonAuthorityAsync(actor, authorization, null, session, token);
-            var receipt = new BsonDocument
-            {
-                { "schemaVersion", CollectionMigrations.FoundationDocumentSchemaVersion }, { "actorId", actor.UserId },
-                { "operation", operation }, { "key", metadata.IdempotencyKey }, { "bodyHash", hash },
-                { "createdAt", clock.UtcNow.UtcDateTime }, { "result", new BsonDocument() }
-            };
+            var receipt = CommandReceipt(actor.UserId, operation, metadata.IdempotencyKey, hash, clock.UtcNow.UtcDateTime, new BsonDocument());
             if (personProof is not null)
                 receipt.Add(PersonApprovalReceipt.Field, PersonApprovalReceipt.Create(authorization.Permission!, authorization.Target!.Approval!));
             await records.InsertOneAsync(session, receipt, cancellationToken: token);
@@ -166,6 +161,16 @@ public sealed class AuthorizationStore(IMongoDatabase database, MongoUnitOfWork 
         }, cancellationToken);
     }
 
+
+    /// <summary>The receipt row of one command. ExecuteCommandAsync inserts it with an empty result and fills the result in; an owner that
+    /// writes a command's effect inside another command's transaction (F-030's successor draft) builds its receipt here too, so the
+    /// two can never drift apart.</summary>
+    internal static BsonDocument CommandReceipt(long actorId, string operation, string key, string bodyHash, DateTime createdAt, BsonDocument result) => new()
+    {
+        { "schemaVersion", CollectionMigrations.FoundationDocumentSchemaVersion }, { "actorId", actorId },
+        { "operation", operation }, { "key", key }, { "bodyHash", bodyHash },
+        { "createdAt", createdAt }, { "result", result }
+    };
 
     private async Task<PersonAuthorityProof?> RequirePersonAuthorityAsync(ActorContext actor,
         CommandAuthorization authorization, BsonDocument? receipt, IClientSessionHandle session, CancellationToken token)

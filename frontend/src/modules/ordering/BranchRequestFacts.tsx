@@ -1,5 +1,5 @@
 import type { BranchRequest, BranchRequestPreview } from './branch-request-client';
-import { requestStateLabel } from './branch-request-state';
+import { branchRequestNumber, requestStateLabel } from './branch-request-state';
 import { Badge } from '@/components/workspace-kit/badge';
 import { Facts } from '@/components/workspace-kit/facts';
 import styles from './branch-request.module.css';
@@ -8,7 +8,7 @@ import { dateTimeFormatter, formatNumber } from '@/lib/format';
 export const requestDate = (value: string) => dateTimeFormatter.format(new Date(value));
 export function BranchRequestFacts({ value }: { value: BranchRequest | BranchRequestPreview }) {
   return <>
-    {'number' in value && <div className={styles.row}><h2>{value.number}</h2><Badge tone={value.state === 'accepted' ? 'success' : value.state === 'rejected' ? 'danger' : 'neutral'} label={requestStateLabel(value.state)} /></div>}
+    {'number' in value && <div className={styles.row}><h2>{branchRequestNumber(value.id)}</h2><Badge tone={value.state === 'accepted' ? 'success' : value.state === 'rejected' ? 'danger' : 'neutral'} label={requestStateLabel(value.state)} /></div>}
     <Facts items={[{ term: 'Cabang pemesan', value: <>{value.labels.buyingOrganization} · {value.labels.branch}{value.labels.division && ' · ' + value.labels.division}</> },
       { term: 'Toko tujuan', value: <>{value.labels.shop} · {value.labels.channel}</> },
       ...'recordedAt' in value ? [{ term: 'Diajukan pada', value: requestDate(value.recordedAt) }] : []]} />

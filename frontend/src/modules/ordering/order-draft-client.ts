@@ -56,6 +56,8 @@ export function parseDiscardedDraft(value: unknown) {
   return window30(discardedAt, restorableUntil) ? { id: priceId(row.id), revision: priceId(row.revision), discardedAt, restorableUntil, input: parseDraftInput(row.input) } : invalid();
 }
 export type DiscardedDraft = ReturnType<typeof parseDiscardedDraft>;
+/** F-030: a draft that has become an order is closed; the keranjang moves on to a fresh draft. */
+export const orderDraftSubmittedMessage = 'Draf ini sudah diajukan menjadi pesanan. Draf itu tidak dapat diubah lagi; tambahkan barang ke keranjang untuk pesanan berikutnya.';
 /** Messages for discard/restore conflicts; other failures fall back to draftMessage. */
 export function discardConflictMessage(code: string): string | null {
   if (code === 'order_draft_discarded') return 'Draf ini sudah dibuang. Pulihkan dulu dari daftar Draf yang dibuang untuk mengubahnya.';

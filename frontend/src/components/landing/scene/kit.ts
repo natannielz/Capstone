@@ -29,7 +29,7 @@ export function createKit(renderer: WebGLRenderer, fonts: Fonts, cinematic: bool
   };
   const floorMap = texture(studioFloor()); floorMap.wrapS = floorMap.wrapT = RepeatWrapping; floorMap.repeat.set(6, 6);
   const routeMap = texture(routeLine()); routeMap.wrapS = RepeatWrapping;
-  const labelMap = texture(shippingLabel(fonts, { number: "PT-00000142", from: "Kantor Cabang A", to: "Unit Toko Pusat", summary: "5 KEMASAN" }));
+  const labelMap = texture(shippingLabel(fonts, { number: "PB-000142", from: "Kantor Cabang A", to: "Unit Toko Pusat", summary: "5 KEMASAN" }));
   const receiptMap = texture(receiptSlip(fonts, false)), stampedMap = texture(receiptSlip(fonts, true));
 
   const material = {

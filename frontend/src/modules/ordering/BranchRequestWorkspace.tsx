@@ -9,7 +9,7 @@ import { AccessFailure, MutationLedger } from '../administration/workflow';
 import { OperationRecovery, useOperationRecovery } from '../administration/OperationRecovery';
 import { submitTrackedRequest } from '../administration/operation-journal';
 import { createBranchRequestGateway, type BranchRequest, type BranchRequestDecisionPreview, type BranchRequestPreview } from './branch-request-client';
-import { requestMessage, requestStateLabel, type BranchRequestAction, type BranchRequestOperation, type BranchRequestResult } from './branch-request-state';
+import { branchRequestNumber, requestMessage, requestStateLabel, type BranchRequestAction, type BranchRequestOperation, type BranchRequestResult } from './branch-request-state';
 import { BranchRequestComposer } from './BranchRequestComposer';
 import { BranchRequestFacts, requestDate } from './BranchRequestFacts';
 import { buttonClassName } from '@/components/workspace-kit/button';
@@ -141,15 +141,15 @@ function RequestDesk({ account, incoming, onFailure }: { account: Account; incom
       onFailure={failure => { setError({ value: failure, writing: false }); onFailure(failure); }} onResolved={() => { recovery.refresh(); ledger.resetAfterReconciliation(); setError(null); const result = recovered.current; recovered.current = null; if (result && current()) { setBusy(true); void readResult(result).finally(() => { if (alive.current) setBusy(false); }); } }} />
     {recovery.error !== null && <StateView kind="error" title={requestMessage(recovery.error)} />}
     {error && <StateView kind="error" title={requestMessage(error.value, error.writing)} />}
-    {confirmed && <section ref={detail} tabIndex={-1} className={styles.recorded} aria-label="Hasil permintaan"><h2>{confirmed.number} tercatat</h2><p role="status">{requestStateLabel(confirmed.state)}</p><p>{confirmed.state === 'pending' ? 'Permintaan telah tersimpan dan menunggu peninjauan toko.' : confirmed.state === 'accepted' ? 'Toko telah menerima permintaan untuk ditindaklanjuti.' : 'Penolakan toko telah tersimpan.'}</p></section>}
+    {confirmed && <section ref={detail} tabIndex={-1} className={styles.recorded} aria-label="Hasil permintaan"><h2>{branchRequestNumber(confirmed.requestId)} tercatat</h2><p role="status">{requestStateLabel(confirmed.state)}</p><p>{confirmed.state === 'pending' ? 'Permintaan telah tersimpan dan menunggu peninjauan toko.' : confirmed.state === 'accepted' ? 'Toko telah menerima permintaan untuk ditindaklanjuti.' : 'Penolakan toko telah tersimpan.'}</p></section>}
     {tab === 'new' && canSubmit && !confirmed && <BranchRequestComposer actorId={account.actorId} locked={locked} current={current} onSubmit={submit} onFailure={onFailure} />}
     {tab === 'history' && canRead && <Section title={incoming ? 'Kebutuhan yang ditujukan ke toko Anda' : 'Permintaan yang Anda ajukan'} label={incoming ? 'Daftar permintaan masuk' : 'Daftar permintaan saya'} busy={busy}
       actions={<Button disabled={locked} onClick={() => { setActing('refresh'); setCursor(null); setReload(value => value + 1); }} busy={acting === 'refresh'}>Muat permintaan terbaru</Button>}>
       <DataList label={incoming ? 'Permintaan masuk' : 'Permintaan saya'} items={page.items} getKey={item => item.id} loading={busy}
         empty={error ? undefined : { title: 'Belum ada permintaan pada halaman ini.' }}
-        renderTitle={item => item.number} renderBadge={item => <Badge tone={stateTone(item.state)} label={requestStateLabel(item.state)} />}
+        renderTitle={item => branchRequestNumber(item.id)} renderBadge={item => <Badge tone={stateTone(item.state)} label={requestStateLabel(item.state)} />}
         renderMeta={item => <>{item.labels.branch} → {item.labels.shop} · {item.lines.length} jenis kemasan<br />{requestDate(item.recordedAt)}</>}
-        renderActions={item => <Button disabled={locked} busy={acting === 'open:' + item.id} onClick={() => void select(item.id)}>Lihat {item.number}</Button>} />
+        renderActions={item => <Button disabled={locked} busy={acting === 'open:' + item.id} onClick={() => void select(item.id)}>Lihat {branchRequestNumber(item.id)}</Button>} />
       <div className="ui-actions"><Button disabled={locked || cursor === null} onClick={() => setCursor(null)}>Awal daftar</Button><Button disabled={locked || page.nextRequestId === null} onClick={() => setCursor(page.nextRequestId)}>Permintaan lebih lama</Button></div>
     </Section>}
     {incoming && !canRead && <Section title="Pemeriksaan hasil tindakan Anda"><p>Akun ini dapat memeriksa hasil keputusan miliknya. Akses membaca daftar permintaan belum termasuk dalam penugasan Anda.</p></Section>}

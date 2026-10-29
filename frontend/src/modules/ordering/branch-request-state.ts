@@ -2,6 +2,11 @@ import { z } from 'zod';
 import { AccessFailure } from '../administration/workflow';
 import { RequestNotSentError } from '../../api/client';
 import { IdentityFailure } from '../identity/identity-workflow';
+import { recordNumber } from '@/lib/document-numbers';
+
+/** F-026: what people read for a branch request, "PB-000001". The server's `number` ("PT-00000001") stays an internal key:
+ *  it is still checked against the id, but never shown. */
+export const branchRequestNumber = (requestId: string) => recordNumber('branchRequest', requestId);
 
 export const requestIdSchema = z.string().refine(value => /^[1-9][0-9]{0,18}$(?![\s\S])/u.test(value) && BigInt(value) <= BigInt('9223372036854775807'));
 export const requestText = (maximum: number) => z.string().min(1).max(maximum).refine(value => value.trim() === value && !/[\u0000-\u001f\u007f]/u.test(value));

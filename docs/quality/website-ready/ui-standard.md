@@ -175,7 +175,7 @@ Sits directly above the list/table it controls, inside the same `Section` (or di
 - One `Section` containing a `<ul>` of rows separated by 1 px dividers — **not** one bordered card per row.
 - Row padding 16 px 0 (first row 0 top), grid: `title + badge` line (15/600 title left, `Badge` right), meta line (13 px muted, 4 px below), optional content (line items, 8 px gap), action row (right-aligned on desktop, full-width stacked on mobile, 12 px above).
 - Selected row (in a desk): `--secondary` background, `inset 3px 0 0 var(--primary)` marker (same as sidebar `aria-current`), not a coloured border box.
-- Whole row clickable when it has one destination; then no separate "Lihat PT-…" button.
+- Whole row clickable when it has one destination; then no separate "Lihat PB-…" button.
 
 ### 6.4 `Facts` (description lists)
 
