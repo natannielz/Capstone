@@ -1,16 +1,12 @@
-.form { display: grid; gap: .65rem; max-width: 58rem; }
-.form input:not([type="checkbox"]), .form select, .form textarea { width: 100%; min-width: 0; padding: .7rem; border: 1px solid #cbd5d1; border-radius: .5rem; background: #fff; color: #163e2e; font: inherit; }
-.form label { font-weight: 650; margin-top: .5rem; }
-.form input[type="file"] { overflow-wrap: anywhere; }
-.check { display: flex; align-items: flex-start; gap: .65rem; line-height: 1.6; }
-.check input { flex: none; margin-top: .4rem; }
-.actions { display: flex; flex-wrap: wrap; gap: .7rem; align-items: center; margin: 1rem 0; }
-.source, .preview { margin: 1rem 0; padding: 1rem; background: #f4f8f5; border: 1px solid #dce6df; border-radius: .7rem; overflow-wrap: anywhere; }
-.tableScroll { max-width: 100%; overflow-x: auto; margin: 1rem 0; }
-.table { width: 100%; min-width: 40rem; border-collapse: collapse; font-size: .92rem; }
-.table caption { text-align: left; font-weight: 650; padding: .7rem 0; }
-.table th, .table td { text-align: left; vertical-align: top; padding: .8rem; border-bottom: 1px solid #dce6df; max-width: 22rem; overflow-wrap: anywhere; }
-.table th { background: #eaf2ec; }
-.table small { display: block; color: #52655c; margin-top: .4rem; }
-.scrollHint { display: none; }
-@media (max-width: 600px) { .preview { padding: .65rem; } .actions > button { width: 100%; } .scrollHint { display: block; font-size: .85rem; color: #52655c; } }
+/* Bank statement and bank receipt pages (ui-standard.md): tokens only, on-scale spacing, one level of boxing.
+   Forms use the shared .ui-form column and Field; source and preview details are inset panels inside their section. */
+.check { display: flex; align-items: flex-start; gap: var(--space-2); min-height: var(--control-h); padding: var(--space-2) 0; font-size: 15px; font-weight: 400; line-height: 24px; }
+.check input { flex: none; width: 20px; height: 20px; margin: 2px 0 0; accent-color: var(--primary); }
+.source, .preview { display: grid; gap: var(--space-2); padding: var(--space-4); border-radius: var(--radius-control); background: var(--muted); overflow-wrap: anywhere; min-width: 0; }
+.source p, .preview p, .preview h3 { margin: 0; }
+.preview { gap: var(--space-4); }
+.note { display: block; margin: var(--space-1) 0 0; font-size: 13px; line-height: 20px; color: var(--muted-foreground); }
+/* Row pager under the statement rows: previous, "Halaman n dari m", next. */
+.pager { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
+.pager span { font-size: 13px; color: var(--muted-foreground); }
+@media (max-width: 639px) { .preview { padding: var(--space-3); } .pager > button { flex: 1 1 140px; } }

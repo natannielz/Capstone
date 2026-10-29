@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {RequestNotSentError} from '../../api/client';
 import {createIdentityGateway} from '../identity/identity-client';
@@ -16,6 +15,14 @@ import styles from '../billing/invoice.module.css';
 import {formatDate, formatDateTime} from '@/lib/format';
 import { SessionAccessState } from "@/components/workspace-kit/session-access-state";
 import { orderNumber } from '@/lib/document-numbers';
+import { Button } from '@/components/workspace-kit/button';
+import { PageHeader } from '@/components/workspace-kit/page-header';
+import { Section } from '@/components/workspace-kit/section';
+import { StateView } from '@/components/workspace-kit/state-view';
+import { DataList } from '@/components/workspace-kit/data-list';
+import { Field } from '@/components/workspace-kit/field';
+import { Facts } from '@/components/workspace-kit/facts';
+import { Badge } from '@/components/workspace-kit/badge';
 
 type Account = {actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number};
 const currency = (value: string) => orderAmount('IDR', value);
@@ -52,21 +59,19 @@ export function InvoiceReleaseWorkspace() {
     window.addEventListener('pageshow', restored); return () => {window.clearInterval(timer); window.removeEventListener('pageshow', restored);};
   }, [account]);
   const denied = useCallback((error: unknown) => {if (error instanceof AccessFailure && ([401, 403].includes(error.status) || error.code === 'actor_changed')) {setAccount(null); setFailure(error);}}, []);
-  return <main className={common.page}><header className={common.header}><div><Link href="/identity/account" className={common.brand}>Unit Toko</Link>
-    <h1>Persetujuan penerbitan invoice</h1><p>Periksa penerimaan, ketentuan tagihan, dan pembukuan sebelum memberikan persetujuan penerbitan.</p></div>
-    <Link href="/identity/account" className={common.secondary}>Akun saya</Link></header>
-    {failure !== null && account !== null && <p role="alert" className={common.alert}>{message(failure)}</p>}
-    {busy ? <p role="status">Memeriksa akun…</p> : !account || sessionTiming(account.session, elapsed).expired ? <SessionAccessState kind={account ? "expired" : undefined} error={failure} returnPath="/billing/invoice-releases" onRetry={() => setRefresh(value => value + 1)} />
-      : <ReleaseDesk key={account.actorId + ':' + account.observedAt} account={account} onDenied={denied} />}</main>;
+  return <main className={common.page}><PageHeader title="Persetujuan penerbitan invoice" description="Periksa penerimaan, ketentuan tagihan, dan pembukuan sebelum memberikan persetujuan penerbitan." />
+    <div className="ui-stack">{failure !== null && account !== null && <StateView kind="error" title={message(failure)} />}
+    {busy ? <StateView kind="loading" title="Memeriksa akun…" /> : !account || sessionTiming(account.session, elapsed).expired ? <SessionAccessState kind={account ? "expired" : undefined} error={failure} returnPath="/billing/invoice-releases" onRetry={() => setRefresh(value => value + 1)} />
+      : <ReleaseDesk key={account.actorId + ':' + account.observedAt} account={account} onDenied={denied} />}</div></main>;
 }
-function Facts({value}: {value: InvoiceReleaseFacts}) {
+function ReleaseFacts({value}: {value: InvoiceReleaseFacts}) {
   const origins = {issue_date: 'tanggal terbit', earliest_receipt: 'penerimaan pertama', latest_receipt: 'penerimaan terakhir'};
   const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
-  return <><dl className={styles.facts}><div><dt>Pembeli</dt><dd>{value.buyerName}</dd></div><div><dt>Penjual</dt><dd>{value.sellerName}</dd></div>
-    <div><dt>Jatuh tempo</dt><dd>{value.termDays} {value.dayRule === 'working_days' ? 'hari kerja' : 'hari kalender'} sejak {origins[value.termOrigin]}</dd></div>
-    <div><dt>Pengelompokan</dt><dd>{value.grouping === 'receipt' ? 'Per penerimaan' : value.grouping === 'buying_branch_period_channel' ? 'Cabang, periode, dan kanal' : 'Organisasi pembeli, periode, dan kanal'}</dd></div>
-    <div><dt>Pembulatan</dt><dd>{value.rounding === 'half_even' ? 'Nilai tengah ke angka genap' : 'Nilai tengah dibulatkan naik'}</dd></div>
-    <div><dt>Periode pembukuan</dt><dd>{value.accountingPeriod ?? 'Diperiksa pada pratinjau'}</dd></div></dl>
+  return <><Facts items={[{term: 'Pembeli', value: value.buyerName}, {term: 'Penjual', value: value.sellerName},
+    {term: 'Jatuh tempo', value: <>{value.termDays} {value.dayRule === 'working_days' ? 'hari kerja' : 'hari kalender'} sejak {origins[value.termOrigin]}</>},
+    {term: 'Pengelompokan', value: value.grouping === 'receipt' ? 'Per penerimaan' : value.grouping === 'buying_branch_period_channel' ? 'Cabang, periode, dan kanal' : 'Organisasi pembeli, periode, dan kanal'},
+    {term: 'Pembulatan', value: value.rounding === 'half_even' ? 'Nilai tengah ke angka genap' : 'Nilai tengah dibulatkan naik'},
+    {term: 'Periode pembukuan', value: value.accountingPeriod ?? 'Diperiksa pada pratinjau'}]} />
     <p>Hari kerja: {value.workingDays.map(day => days[day]).join(', ') || 'Tidak dicantumkan'}.</p><p>Hari libur: {value.holidays.map(date).join(', ') || 'Tidak dicantumkan'}.</p>
     <p>Dokumen pajak: {value.taxDocumentProcess}</p><p>Penomoran: {value.numberingProcedure}</p><p>Penerbitan ulang: {value.reissueProcedure}</p>
     <ul className={styles.lines}>{value.lines.map(line => <li className={styles.line} key={[line.receiptId, line.skuId, line.lineRevision].join(':')}><strong>{line.productName} — {line.packageLabel}</strong>
@@ -92,6 +97,8 @@ function ReleaseDesk({account, onDenied}: {account: Account; onDenied: (error: u
   const [review, setReview] = useState<InvoiceReleaseCommand | null>(null), [confirmed, setConfirmed] = useState(false), [pending, setPending] = useState<InvoiceReleaseReference[]>([]);
   const [busy, setBusy] = useState(false), [storageFailed, setStorageFailed] = useState(false), [offline, setOffline] = useState(false), [error, setError] = useState<unknown>(null), [notice, setNotice] = useState('');
   const alive = useRef(false), epoch = useRef(0), running = useRef(false), focus = useRef<HTMLElement>(null);
+  // A failed read (not a failed command) replaces the source and history lists with one error body (U-036).
+  const [readFailed, setReadFailed] = useState(false);
   const current = useCallback(() => alive.current && !sessionTiming(account.session, performance.now() - account.observedAt).expired, [account]);
   const canPropose = account.actions.includes('invoice.release.propose'), canApprove = account.actions.includes('invoice.release.approve');
   const locked = busy || offline || storageFailed || pending.length > 0;
@@ -111,12 +118,12 @@ function ReleaseDesk({account, onDenied}: {account: Account; onDenied: (error: u
   useEffect(() => {
     let live = true; const controller = new AbortController(), generation = ++epoch.current;
     void Promise.resolve().then(async () => {
-      if (!live) return; setBusy(true); setError(null);
+      if (!live) return; setBusy(true); setError(null); setReadFailed(false);
       try {
         const sources = canPropose ? await gateway.candidates(account.actorId, sourceCursor, controller.signal) : {items: [], nextShipmentId: null};
         const records = await gateway.list(account.actorId, historyCursor, controller.signal);
         if (!live || !current() || generation !== epoch.current) return; setCandidates(sources); setHistory(records);
-      } catch (failure) {if (live && current()) {setError(failure); onDenied(failure);}} finally {if (live) setBusy(false);}
+      } catch (failure) {if (live && current()) {setError(failure); setReadFailed(true); onDenied(failure);}} finally {if (live) setBusy(false);}
     }); return () => {live = false; controller.abort();};
   }, [gateway, account.actorId, canPropose, sourceCursor, historyCursor, refresh, current, onDenied]);
   async function work(task: (valid: () => boolean) => Promise<void>) {
@@ -168,48 +175,56 @@ function ReleaseDesk({account, onDenied}: {account: Account; onDenied: (error: u
     });
   }
   const update = (key: keyof ReturnType<typeof blank>, value: string) => setFields(previous => ({...previous, [key]: value}));
-  return <>{error !== null && account !== null && <p role="alert" className={common.alert}>{message(error)}</p>}{notice && <p role="status">{notice}</p>}
-    {offline && <p role="status">Koneksi belum tersedia. Referensi permintaan tetap disimpan.</p>}{storageFailed && <p role="alert">Penyimpanan referensi pemulihan belum tersedia. Periksa penyimpanan browser sebelum membuat perubahan.</p>}
-    {pending.length > 0 && <section className={common.accountSection} aria-label="Pemulihan persetujuan invoice"><h2>Periksa hasil permintaan asli</h2>
-      {pending.map(reference => <p key={reference.action + reference.key}>{actionText[reference.action]} · referensi {reference.key}<button className={common.secondary} disabled={busy || offline || storageFailed} onClick={() => void recover(reference)}>Periksa hasil {actionText[reference.action].toLowerCase()}</button></p>)}</section>}
-    {canPropose && <section className={common.accountSection} aria-label="Penerimaan untuk persetujuan invoice"><h2>Pilih bukti penerimaan</h2>
-      {candidates.items.length === 0 && <p>Belum ada penerimaan yang tersedia pada halaman ini.</p>}
-      <ul className={styles.lines}>{candidates.items.map(item => <li className={styles.line} key={item.shipmentId}><label><input type="checkbox" checked={chosen.includes(item.receiptId)} disabled={locked || !!review || item.invoiced} onChange={event => {
+  const reloadSources = () => {clear(); setSourceCursor(null); setRefresh(value => value + 1);};
+  const reloadHistory = () => {clear(); setHistoryCursor(null); setRefresh(value => value + 1);};
+  const readError = <StateView kind="error" title={message(error)} action={<Button disabled={locked} onClick={() => {clear(); setSourceCursor(null); setHistoryCursor(null); setRefresh(value => value + 1);}}>Coba lagi</Button>} />;
+  return <>{error !== null && account !== null && !readFailed && <StateView kind="error" title={message(error)} />}{notice && <p role="status">{notice}</p>}
+    {offline && <StateView kind="offline" title="Koneksi belum tersedia. Referensi permintaan tetap disimpan." />}{storageFailed && <StateView kind="error" title="Penyimpanan referensi pemulihan belum tersedia. Periksa penyimpanan browser sebelum membuat perubahan." />}
+    {pending.length > 0 && <Section title="Periksa hasil permintaan asli" label="Pemulihan persetujuan invoice">
+      <DataList label="Permintaan yang perlu diperiksa" items={pending} getKey={reference => reference.action + reference.key}
+        renderTitle={reference => <>{actionText[reference.action]} · referensi {reference.key}</>}
+        renderActions={reference => <Button variant="secondary" disabled={busy || offline || storageFailed} onClick={() => void recover(reference)}>Periksa hasil {actionText[reference.action].toLowerCase()}</Button>} /></Section>}
+    {canPropose && <Section title="Pilih bukti penerimaan" label="Penerimaan untuk persetujuan invoice"
+      actions={<Button variant="secondary" disabled={locked || !!review} onClick={reloadSources}>Penerimaan terbaru</Button>}>
+      {readFailed ? readError : <>
+      {candidates.items.length === 0 ? <StateView kind="empty" title="Belum ada penerimaan yang tersedia pada halaman ini." />
+      : <ul className={styles.lines}>{candidates.items.map(item => <li className={styles.line} key={item.shipmentId}><label className={common.checkbox}><input type="checkbox" checked={chosen.includes(item.receiptId)} disabled={locked || !!review || item.invoiced} onChange={event => {
         epoch.current++; setEligible(null); setRecord(null); setChosen(value => event.target.checked ? [...value, item.receiptId] : value.filter(id => id !== item.receiptId));
-      }} />Penerimaan {item.receiptId} — {item.buyerName}</label><p>Kiriman {item.shipmentId} · {date(item.receivedAt)} · {item.acceptedLines} baris {item.invoiced && '· Sudah ditagihkan'}</p></li>)}</ul>
-      <div className={common.actions}><button className={common.primary} disabled={locked || !!review || chosen.length === 0} onClick={() => void inspect()}>Periksa sumber penerbitan</button>
-        <button className={common.secondary} disabled={locked || !!review} onClick={() => {clear(); setSourceCursor(null); setRefresh(value => value + 1);}}>Penerimaan terbaru</button>
-        {candidates.nextShipmentId && <button className={common.secondary} disabled={locked || !!review} onClick={() => {clear(); setSourceCursor(candidates.nextShipmentId);}}>Penerimaan sebelumnya</button>}</div>
-    </section>}
-    {eligible && !review && <section className={common.accountSection} aria-label="Usulan persetujuan invoice"><h2>Lengkapi usulan</h2><Facts value={eligible.facts} />
-      {eligible.state === 'propose' ? <p role="status">Masih ada usulan untuk sumber ini. Periksa riwayat dan keputusan pemeriksa.</p> : <fieldset disabled={locked}><legend>Fakta yang telah ditinjau</legend>
+      }} />Penerimaan {item.receiptId} — {item.buyerName}</label><p>Kiriman {item.shipmentId} · {date(item.receivedAt)} · {item.acceptedLines} baris {item.invoiced && '· Sudah ditagihkan'}</p></li>)}</ul>}
+      <div className="ui-actions"><Button variant="primary" disabled={locked || !!review || chosen.length === 0} onClick={() => void inspect()}>Periksa sumber penerbitan</Button>
+        {candidates.nextShipmentId && <Button variant="secondary" disabled={locked || !!review} onClick={() => {clear(); setSourceCursor(candidates.nextShipmentId);}}>Penerimaan sebelumnya</Button>}</div></>}
+    </Section>}
+    {eligible && !review && <Section title="Lengkapi usulan" label="Usulan persetujuan invoice"><ReleaseFacts value={eligible.facts} />
+      {eligible.state === 'propose' ? <p role="status">Masih ada usulan untuk sumber ini. Periksa riwayat dan keputusan pemeriksa.</p> : <div className="ui-form"><fieldset disabled={locked}><legend>Fakta yang telah ditinjau</legend>
         <p>Isi nilai dari persetujuan dan sumber pembukuan yang berlaku. Nilai kosong belum dianggap nol.</p>
-        <label>Awal periode penerimaan<input type="date" value={fields.periodFrom} onChange={event => update('periodFrom', event.target.value)} /></label>
-        <label>Akhir periode penerimaan<input type="date" value={fields.periodTo} onChange={event => update('periodTo', event.target.value)} /></label>
-        <label>Mulai berlaku (WIB)<input type="datetime-local" value={fields.validFrom} onChange={event => update('validFrom', event.target.value)} /></label>
-        <label>Akhir berlaku (WIB)<input type="datetime-local" value={fields.validUntil} onChange={event => update('validUntil', event.target.value)} /></label>
-        {([['templateApprovalReference', 'Referensi persetujuan format invoice'], ['numberingApprovalReference', 'Referensi persetujuan penomoran'], ['eligibilityReviewReference', 'Referensi pemeriksaan kelayakan'], ['receivable', 'Pemetaan akun piutang'], ['revenue', 'Pemetaan akun pendapatan'], ['tax', 'Pemetaan akun pajak'], ['charges', 'Pemetaan akun biaya']] as const).map(([key, label]) => <label key={key}>{label}<input value={fields[key]} maxLength={1000} onChange={event => update(key, event.target.value)} /></label>)}
+        <Field id="release-period-from" label="Awal periode penerimaan" width="date"><input type="date" value={fields.periodFrom} onChange={event => update('periodFrom', event.target.value)} /></Field>
+        <Field id="release-period-to" label="Akhir periode penerimaan" width="date"><input type="date" value={fields.periodTo} onChange={event => update('periodTo', event.target.value)} /></Field>
+        <Field id="release-valid-from" label="Mulai berlaku (WIB)"><input type="datetime-local" value={fields.validFrom} onChange={event => update('validFrom', event.target.value)} /></Field>
+        <Field id="release-valid-until" label="Akhir berlaku (WIB)"><input type="datetime-local" value={fields.validUntil} onChange={event => update('validUntil', event.target.value)} /></Field>
+        {([['templateApprovalReference', 'Referensi persetujuan format invoice'], ['numberingApprovalReference', 'Referensi persetujuan penomoran'], ['eligibilityReviewReference', 'Referensi pemeriksaan kelayakan'], ['receivable', 'Pemetaan akun piutang'], ['revenue', 'Pemetaan akun pendapatan'], ['tax', 'Pemetaan akun pajak'], ['charges', 'Pemetaan akun biaya']] as const).map(([key, label]) => <Field key={key} id={'release-' + key} label={label}><input value={fields[key]} maxLength={1000} onChange={event => update(key, event.target.value)} /></Field>)}
         {eligible.facts.lines.map(line => {const key = [line.receiptId, line.skuId, line.lineRevision].join(':'); return <fieldset key={key}><legend>{line.skuCode} · penerimaan {line.receiptId} · baris {line.lineRevision}</legend>
-          <label>Pajak {key}<input inputMode="decimal" value={amounts[key]?.tax ?? ''} onChange={event => setAmounts(value => ({...value, [key]: {tax: event.target.value, charges: value[key]?.charges ?? ''}}))} /></label>
-          <label>Biaya {key}<input inputMode="decimal" value={amounts[key]?.charges ?? ''} onChange={event => setAmounts(value => ({...value, [key]: {tax: value[key]?.tax ?? '', charges: event.target.value}}))} /></label></fieldset>;})}
-        <label>Alasan perubahan persetujuan invoice<textarea value={reason} maxLength={1000} onChange={event => setReason(event.target.value)} /></label>
-        <button className={common.primary} onClick={() => void propose()}>Tinjau usulan penerbitan</button></fieldset>}
+          <Field id={'release-tax-' + key} label={'Pajak ' + key} width="rupiah"><input inputMode="decimal" value={amounts[key]?.tax ?? ''} onChange={event => setAmounts(value => ({...value, [key]: {tax: event.target.value, charges: value[key]?.charges ?? ''}}))} /></Field>
+          <Field id={'release-charges-' + key} label={'Biaya ' + key} width="rupiah"><input inputMode="decimal" value={amounts[key]?.charges ?? ''} onChange={event => setAmounts(value => ({...value, [key]: {tax: value[key]?.tax ?? '', charges: event.target.value}}))} /></Field></fieldset>;})}
+        <Field id="release-reason" label="Alasan perubahan persetujuan invoice"><textarea value={reason} maxLength={1000} onChange={event => setReason(event.target.value)} /></Field>
+        <Button variant="primary" onClick={() => void propose()}>Tinjau usulan penerbitan</Button></fieldset></div>}
+    </Section>}
+    <Section title="Persetujuan yang tersimpan" label="Riwayat persetujuan invoice"
+      actions={<Button variant="secondary" disabled={locked || !!review} onClick={reloadHistory}>Riwayat terbaru</Button>}>
+      {readFailed ? (canPropose ? null : readError) : <DataList label="Persetujuan yang tersimpan" items={history.items} getKey={item => item.result.releaseId} empty={{title: 'Belum ada persetujuan yang tersedia pada halaman ini.'}}
+        renderTitle={item => <>Persetujuan {item.result.releaseId}</>} renderBadge={item => <Badge status={actionText[item.result.action]} />} renderMeta={item => item.facts.buyerName}
+        renderActions={item => <Button variant="secondary" disabled={locked || !!review} onClick={() => void load(item.result.recordId)}>Lihat persetujuan {item.result.releaseId}</Button>} />}
+      {history.nextId && <Button variant="secondary" disabled={locked || !!review} onClick={() => {clear(); setHistoryCursor(history.nextId);}}>Riwayat sebelumnya</Button>}
+    </Section>
+    {record && !review && <section ref={focus} tabIndex={-1} className="ui-section" aria-label="Fakta persetujuan tersimpan"><h2>Persetujuan {record.result.releaseId} — {actionText[record.result.action]}</h2>
+      <p>Fakta berikut merupakan catatan pada {date(record.recordedAt)}. Keputusan baru akan memeriksa sumber dan akses kembali.</p><InputFacts value={record.input} /><ReleaseFacts value={record.facts} /><p>Alasan tersimpan: {record.reason}</p>
+      {record.result.action === 'propose' && canApprove && <div className="ui-form"><fieldset disabled={locked}><legend>Keputusan pemeriksa</legend><p>Pemeriksa harus berbeda orang dari pengusul dan memiliki verifikasi serta akses yang masih berlaku.</p>
+        <Field id="release-decision-reason" label="Alasan keputusan persetujuan invoice"><textarea value={reason} maxLength={1000} onChange={event => setReason(event.target.value)} /></Field>
+        <div className="ui-actions"><Button variant="primary" onClick={() => void decide('approve')}>Tinjau persetujuan penerbitan</Button><Button variant="secondary" onClick={() => void decide('reject')}>Tinjau penolakan penerbitan</Button></div></fieldset></div>}
     </section>}
-    <section className={common.accountSection} aria-label="Riwayat persetujuan invoice"><h2>Persetujuan yang tersimpan</h2>
-      {history.items.length === 0 && <p>Belum ada persetujuan yang tersedia pada halaman ini.</p>}<ul>{history.items.map(item => <li key={item.result.releaseId}><button className={common.secondary} disabled={locked || !!review} onClick={() => void load(item.result.recordId)}>Lihat persetujuan {item.result.releaseId}</button> · {actionText[item.result.action]} · {item.facts.buyerName}</li>)}</ul>
-      <button className={common.secondary} disabled={locked || !!review} onClick={() => {clear(); setHistoryCursor(null); setRefresh(value => value + 1);}}>Riwayat terbaru</button>
-      {history.nextId && <button className={common.secondary} disabled={locked || !!review} onClick={() => {clear(); setHistoryCursor(history.nextId);}}>Riwayat sebelumnya</button>}
-    </section>
-    {record && !review && <section ref={focus} tabIndex={-1} className={common.accountSection} aria-label="Fakta persetujuan tersimpan"><h2>Persetujuan {record.result.releaseId} — {actionText[record.result.action]}</h2>
-      <p>Fakta berikut merupakan catatan pada {date(record.recordedAt)}. Keputusan baru akan memeriksa sumber dan akses kembali.</p><InputFacts value={record.input} /><Facts value={record.facts} /><p>Alasan tersimpan: {record.reason}</p>
-      {record.result.action === 'propose' && canApprove && <fieldset disabled={locked}><legend>Keputusan pemeriksa</legend><p>Pemeriksa harus berbeda orang dari pengusul dan memiliki verifikasi serta akses yang masih berlaku.</p>
-        <label>Alasan keputusan persetujuan invoice<textarea value={reason} maxLength={1000} onChange={event => setReason(event.target.value)} /></label>
-        <div className={common.actions}><button className={common.primary} onClick={() => void decide('approve')}>Tinjau persetujuan penerbitan</button><button className={common.secondary} onClick={() => void decide('reject')}>Tinjau penolakan penerbitan</button></div></fieldset>}
-    </section>}
-    {review && <section ref={focus} tabIndex={-1} className={common.accountSection} aria-label="Konfirmasi persetujuan invoice"><h2>Periksa {actionText[review.action].toLowerCase()} penerbitan</h2>
-      <InputFacts value={review.preview.input} /><Facts value={review.preview.facts} /><p>Alasan: {review.reason}</p>
-      <label><input type="checkbox" checked={confirmed} disabled={locked} onChange={event => setConfirmed(event.target.checked)} />Saya sudah memeriksa penerimaan, alokasi biaya, kalender, dan akun pembukuan yang ditampilkan.</label>
-      <div className={common.actions}><button className={common.primary} disabled={locked || !confirmed} onClick={() => void commit()}>Konfirmasi {actionText[review.action].toLowerCase()} penerbitan</button>
-        <button className={common.secondary} disabled={locked} onClick={() => {epoch.current++; setReview(null); setConfirmed(false);}}>Batalkan perubahan persetujuan</button></div></section>}
+    {review && <section ref={focus} tabIndex={-1} className="ui-section" aria-label="Konfirmasi persetujuan invoice"><h2>Periksa {actionText[review.action].toLowerCase()} penerbitan</h2>
+      <InputFacts value={review.preview.input} /><ReleaseFacts value={review.preview.facts} /><p>Alasan: {review.reason}</p>
+      <label className={common.checkbox}><input type="checkbox" checked={confirmed} disabled={locked} onChange={event => setConfirmed(event.target.checked)} />Saya sudah memeriksa penerimaan, alokasi biaya, kalender, dan akun pembukuan yang ditampilkan.</label>
+      <div className="ui-actions"><Button variant="primary" disabled={locked || !confirmed} onClick={() => void commit()} busy={busy}>Konfirmasi {actionText[review.action].toLowerCase()} penerbitan</Button>
+        <Button variant="secondary" disabled={locked} onClick={() => {epoch.current++; setReview(null); setConfirmed(false);}}>Batalkan perubahan persetujuan</Button></div></section>}
   </>;
 }

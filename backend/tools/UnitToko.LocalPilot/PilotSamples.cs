@@ -79,6 +79,11 @@ public static class PilotSamples
                 Meta("approve." + proposal["_id"].AsInt64, ApproveReason), ct), "persetujuan usulan tertunda " + proposal["_id"].AsInt64);
         }
 
+        // Over the cap (e.g. the version 122 conversion of a public assortment made every published product a sample), guests get
+        // nothing at all: narrow the set to the chosen products through removal proposals. A set inside the cap, whatever staff chose,
+        // is never touched.
+        if (!await NarrowAsync()) return;
+
         var samples = await SamplesAsync();
         var waiting = (await proposals.Find(new BsonDocument("state", "pending")).ToListAsync(ct)).SelectMany(row => row["families"].AsBsonArray.Select(id => id.AsInt64)).ToHashSet();
         var missing = Missing(chosen, samples, waiting);
@@ -92,7 +97,67 @@ public static class PilotSamples
         if (!await SkipOnConflictAsync(() => service.DecideAsync(Actor(Checker), proposalId, CatalogPublicSampleDecision.Approve, Meta("approve." + proposalId, ApproveReason), ct),
             "persetujuan usulan " + proposalId)) return;
         Console.WriteLine("Sampel tamu: " + missing.Length + " produk contoh ditambahkan (diajukan petugas, disetujui peninjau).");
+
+        // True when the set is inside the cap (now or after narrowing); false when a conflict skipped a step.
+        async Task<bool> NarrowAsync()
+        {
+            var reason = "SYNTHETIC: sampel tamu melebihi batas " + limit + " sehingga katalog tamu tidak dapat dibuka; dipersempit ke contoh pilihan";
+            // First finish a narrowing the pilot itself started: its removal proposals (pilot key, removes only, no chosen product) left
+            // pending by an interrupted start are approved whatever the count now is. Finishing our own change is not touching a staff
+            // choice; stopping halfway would leave the leftovers looking staff-chosen and lock them in a proposal nobody decides.
+            foreach (var mine in (await proposals.Find(new BsonDocument("state", "pending")).ToListAsync(ct)).Where(row => row["proposedBy"].AsInt64 == Maker &&
+                row["requestKey"].AsString.StartsWith(ProposeKeyPrefix, StringComparison.Ordinal) && row["adds"].AsBsonArray.Count == 0 &&
+                row["removes"].AsBsonArray.All(value => !chosen.Contains(value.AsInt64))))
+                if (!await SkipOnConflictAsync(() => service.DecideAsync(Actor(Checker), mine["_id"].AsInt64, CatalogPublicSampleDecision.Approve,
+                    Meta("approve." + mine["_id"].AsInt64, reason), ct), "persetujuan usulan tertunda " + mine["_id"].AsInt64)) return false;
+            var held = await sampleRows.Find(FilterDefinition<BsonDocument>.Empty).Project(new BsonDocument { { "_id", 1 }, { "ownerScope", 1 } }).ToListAsync(ct);
+            if (held.Count <= limit) return true;
+            var blocked = (await proposals.Find(new BsonDocument("state", "pending")).ToListAsync(ct)).SelectMany(row => row["families"].AsBsonArray.Select(value => value.AsInt64)).ToHashSet();
+            var removable = held.Where(row => !chosen.Contains(row["_id"].AsInt64) && !blocked.Contains(row["_id"].AsInt64)).ToArray();
+            // The service takes a product's owner from its family (or, if the family is gone, from the sample): batch the same way, one owner
+            // per proposal and at most ChangeLimit products each.
+            var families = (await database.GetCollection<BsonDocument>("productFamilies").Find(Builders<BsonDocument>.Filter.In("_id", removable.Select(row => row["_id"].AsInt64)))
+                .Project(new BsonDocument { { "_id", 1 }, { "authoringOwner", 1 } }).ToListAsync(ct)).ToDictionary(row => row["_id"].AsInt64, row => row["authoringOwner"].AsBsonDocument);
+            BsonDocument OwnerOf(BsonDocument row) => families.TryGetValue(row["_id"].AsInt64, out var owner) ? owner : row["ownerScope"].AsBsonDocument;
+            // Propose every batch first, then approve: an interruption leaves only pending pilot proposals, which the next start approves.
+            var proposed = new List<(long Id, int Count)>(); var outside = 0;
+            foreach (var batch in removable.GroupBy(OwnerOf).SelectMany(owner => owner.Select(row => row["_id"].AsInt64).Order().Chunk(ChangeLimit)))
+            {
+                long removal = 0;
+                try
+                {
+                    if (!await SkipOnConflictAsync(async () => removal = (await service.ProposeAsync(Actor(Maker), [], [.. batch],
+                        Meta("propose." + Guid.NewGuid().ToString("N"), reason), ct))["proposalId"].AsInt64, "usulan penghapusan " + batch.Length + " sampel")) return false;
+                }
+                catch (AuthorizationDeniedException denied) when (IsOutsideOwnerScope(denied))
+                {
+                    // A catalog owner outside petugas's scope is not the pilot's to narrow; its owner's staff decide.
+                    outside += batch.Length;
+                    continue;
+                }
+                proposed.Add((removal, batch.Length));
+            }
+            var narrowed = 0;
+            foreach (var (removal, count) in proposed)
+            {
+                if (!await SkipOnConflictAsync(() => service.DecideAsync(Actor(Checker), removal, CatalogPublicSampleDecision.Approve, Meta("approve." + removal, reason), ct),
+                    "persetujuan usulan " + removal)) return false;
+                narrowed += count;
+            }
+            if (narrowed > 0)
+                Console.WriteLine("Sampel tamu: " + held.Count + " sampel melebihi batas " + limit + "; " + narrowed + " produk di luar contoh pilihan dihapus dari sampel " +
+                    "(diajukan petugas, disetujui peninjau).");
+            if (outside > 0)
+                Console.WriteLine("Sampel tamu: " + outside + " sampel milik katalog di luar cakupan petugas tidak dipersempit; staf pemilik katalog perlu meninjaunya.");
+            return true;
+        }
     }
+
+    /// <summary>The service's refusal for a catalog owner outside petugas's scope: that owner's batch is skipped and noted. Any other denial (permission_denied:
+    /// petugas holds no usable catalog.public.propose at all) fails the start like every other non-conflict error.</summary>
+    public static bool IsOutsideOwnerScope(AuthorizationDeniedException denied) => denied.Code == "scope_denied";
+
+    private const int ChangeLimit = 200;
 
     /// <summary>The chosen products that are neither samples already nor waiting in a proposal, in choice order.</summary>
     public static long[] Missing(IEnumerable<long> chosen, IReadOnlySet<long> samples, IReadOnlySet<long> waiting) =>

@@ -1,7 +1,6 @@
 'use client';
 import { orderLineKey, sameOrderLine } from '../ordering/order-line-identity';
 
-import Link from 'next/link';
 import {ScanInput} from '../inventory/ScanInput';
 import {sameScanPackage} from '../inventory/scan-client';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -14,9 +13,14 @@ import { OperationRecovery, useOperationRecovery } from '../administration/Opera
 import { submitTrackedRequest } from '../administration/operation-journal';
 import { createDispatchGateway, prepareDispatchCommand, type CourierChoice, type DispatchCommand, type DispatchPreparation, type DispatchQueueItem, type DispatchResult, type DispatchReview } from './dispatch-client';
 import common from '../administration/access.module.css';
-import styles from '../ordering/order-draft.module.css';
+import local from './fulfillment.module.css';
 import { SessionAccessState } from "@/components/workspace-kit/session-access-state";
 import { orderNumber } from '@/lib/document-numbers';
+import { Button } from '@/components/workspace-kit/button';
+import { PageHeader } from '@/components/workspace-kit/page-header';
+import { StateView } from '@/components/workspace-kit/state-view';
+import { Section } from '@/components/workspace-kit/section';
+import { DataList } from '@/components/workspace-kit/data-list';
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 function message(error: unknown) {
@@ -56,11 +60,11 @@ export function ShipmentDispatchWorkspace() {
   }, [account]);
   const failed = useCallback((failure: unknown) => { if (failure instanceof AccessFailure && (failure.status === 401 || failure.code === 'actor_changed' || failure.status === 403 && failure.code !== 'shipment_courier_unavailable')) { setAccount(null); setError(failure); } }, []);
   const expired = account !== null && sessionTiming(account.session, elapsed).expired;
-  return <main className={common.page}><header className={common.header}><div><Link href="/identity/account" className={common.brand}>Unit Toko</Link>
-    <h1>Keberangkatan kiriman</h1><p>Periksa kemasan yang disiapkan, pilih lot fisik dan kurir, lalu catat barang yang diberangkatkan.</p></div><Link href="/identity/account" className={common.secondary}>Akun saya</Link></header>
-    {error !== null && account !== null && <p role="alert" className={common.alert}>{message(error)}</p>}
-    {loading ? <p role="status">Memeriksa akun…</p> : !account || expired ? <SessionAccessState kind={account ? "expired" : undefined} error={error} returnPath="/fulfillment/dispatches" onRetry={() => setRevision(value => value + 1)} />
-      : <DispatchDesk key={account.actorId + ':' + account.observedAt} account={account} onFailure={failed} />}
+  return <main className={common.page}><PageHeader title="Keberangkatan kiriman" description="Periksa kemasan yang disiapkan, pilih lot fisik dan kurir, lalu catat barang yang diberangkatkan." />
+    <div className="ui-stack">
+    {error !== null && account !== null && <StateView kind="error" title={message(error)} />}
+    {loading ? <StateView kind="loading" title="Memeriksa akun…" /> : !account || expired ? <SessionAccessState kind={account ? "expired" : undefined} error={error} returnPath="/fulfillment/dispatches" onRetry={() => setRevision(value => value + 1)} />
+      : <DispatchDesk key={account.actorId + ':' + account.observedAt} account={account} onFailure={failed} />}</div>
   </main>;
 }
 function DispatchDesk({ account, onFailure }: { account: Account; onFailure: (error: unknown) => void }) {
@@ -82,6 +86,8 @@ function DispatchDesk({ account, onFailure }: { account: Account; onFailure: (er
     }); return () => { active = false; controller.abort(); };
   }, [gateway, actorId, before, reload, onFailure, current]);
   useEffect(() => { if (prepared || review) panel.current?.focus(); }, [prepared, review]);
+  // The row button that started a read shows it is busy until the record arrives (§8).
+  const [opening, setOpening] = useState<string | null>(null);
   async function select(suborderId: string) {
     if (!current() || locked || pending.current) return; pending.current = true; setBusy(true); setError(null); setResult(null); setPrepared(null); setReview(null); setCommand(null);
     try {
@@ -125,20 +131,21 @@ function DispatchDesk({ account, onFailure }: { account: Account; onFailure: (er
         recovery.refresh(); ledger.resetAfterReconciliation(); if (current() && recovered.current) { setResult(recovered.current); recovered.current = null; setReload(value => value + 1); }
       }} />
     {dispatchPending && <p role="status">Permintaan keberangkatan sedang diproses. Referensi bantuan telah disimpan. Tunggu hasil sebelum memeriksa atau mengirim permintaan lain.</p>}
-    {error !== null && <p role="alert" className={common.alert}>{message(error)}</p>}{recovery.error !== null && <p role="alert" className={common.alert}>{accessMessage(recovery.error)}</p>}
+    {error !== null && page.items.length > 0 && <StateView kind="error" title={message(error)} />}{recovery.error !== null && <StateView kind="error" title={accessMessage(recovery.error)} />}
     {result && <section className={common.success} role="status"><h2>Keberangkatan tercatat</h2><p>Kiriman {result.shipmentId} · nomor {result.numberEntity}/{result.numberChannel}/{result.numberYear}/{result.number}</p>
       <p>Stok dan sisa pesanan sudah diperbarui. Penerimaan barang oleh cabang belum dicatat.</p></section>}
-    <section className={common.accountSection} aria-label="Persiapan untuk diberangkatkan" aria-busy={busy}><h2>Persiapan tersimpan</h2>
-      {busy && !dispatchPending && <p role="status">Memuat pengiriman…</p>}{!busy && page.items.length === 0 && <p>Belum ada persiapan dalam penugasan ini.</p>}
-      <ul className={styles.lines}>{page.items.map(item => <li className={styles.line} key={item.preparationId}><strong>{item.source.buyerName}</strong> · Pesanan {orderNumber(item.source.orderId)}
-        <p>{item.lines.map(line => { const product = item.source.lines.find(product => sameOrderLine(product, line))!; return `${product.productName} — ${line.packages} ${product.definition.packageLabel}`; }).join(', ')}</p>
-        {item.canDispatch ? <button className={common.secondary} disabled={locked} onClick={() => void select(item.source.suborderId)}>Periksa keberangkatan pesanan {orderNumber(item.source.orderId)}</button>
-          : <p>{item.source.canPrepare ? 'Sisa pesanan berubah. Perbarui persiapan untuk pengiriman berikutnya.' : 'Pesanan ini tidak memiliki sisa yang dapat diberangkatkan.'}</p>}</li>)}</ul>
-      <div className={common.actions}><button className={common.secondary} disabled={locked} onClick={() => { setBefore(null); setReload(value => value + 1); }}>Muat persiapan terbaru</button>
-        {page.hasMore && <button className={common.secondary} disabled={locked} onClick={() => setBefore(page.items.at(-1)!.preparationId)}>Persiapan lebih lama</button>}</div>
-    </section>
-    {prepared && <section ref={panel} tabIndex={-1} className={styles.review} aria-label="Pemeriksaan keberangkatan"><h2>Keberangkatan pesanan {orderNumber(prepared.source.orderId)}</h2>
-      <p>{prepared.source.buyerName}</p><p className={styles.address}>{prepared.source.delivery.recipientName} · {prepared.source.delivery.phone}{'\n'}{prepared.source.delivery.address}{'\n'}{prepared.source.delivery.city} {prepared.source.delivery.postalCode}</p>
+    <Section title="Persiapan tersimpan" label="Persiapan untuk diberangkatkan" busy={busy}
+      actions={<Button variant="secondary" disabled={locked} onClick={() => { setBefore(null); setReload(value => value + 1); }}>Muat persiapan terbaru</Button>}>
+      <DataList label="Persiapan untuk diberangkatkan" items={page.items} error={error !== null && page.items.length === 0 ? { title: message(error), message: null, onRetry: () => { setBefore(null); setReload(value => value + 1); } } : undefined} getKey={item => item.preparationId} loading={busy && !dispatchPending}
+        empty={error === null ? { title: "Belum ada persiapan dalam penugasan ini." } : undefined}
+        renderTitle={item => item.source.buyerName}
+        renderMeta={item => <>Pesanan {orderNumber(item.source.orderId)} · {item.lines.map(line => { const product = item.source.lines.find(product => sameOrderLine(product, line))!; return `${product.productName} — ${line.packages} ${product.definition.packageLabel}`; }).join(', ')}</>}
+        renderContent={item => item.canDispatch ? null : <p>{item.source.canPrepare ? 'Sisa pesanan berubah. Perbarui persiapan untuk pengiriman berikutnya.' : 'Pesanan ini tidak memiliki sisa yang dapat diberangkatkan.'}</p>}
+        renderActions={item => item.canDispatch ? <Button variant="secondary" disabled={locked} busy={opening === item.source.suborderId} aria-label={'Periksa keberangkatan pesanan ' + orderNumber(item.source.orderId)} onClick={() => { setOpening(item.source.suborderId); void select(item.source.suborderId).finally(() => setOpening(null)); }}>Periksa keberangkatan</Button> : null} />
+      {page.hasMore && <div className="ui-actions"><Button variant="secondary" disabled={locked} onClick={() => setBefore(page.items.at(-1)!.preparationId)}>Persiapan lebih lama</Button></div>}
+    </Section>
+    {prepared && <section ref={panel} tabIndex={-1} className={"ui-section " + local.detail} aria-label="Pemeriksaan keberangkatan"><h2>Keberangkatan pesanan {orderNumber(prepared.source.orderId)}</h2>
+      <p>{prepared.source.buyerName}</p><p className={local.address}>{prepared.source.delivery.recipientName} · {prepared.source.delivery.phone}{'\n'}{prepared.source.delivery.address}{'\n'}{prepared.source.delivery.city} {prepared.source.delivery.postalCode}</p>
       <ul>{prepared.lines.map(line => { const item = prepared.source.lines.find(item => sameOrderLine(item, line))!;
         return <li key={orderLineKey(line)}>{item.productName} — {line.packages} {item.definition.packageLabel} · total {(BigInt(line.packages) * BigInt(item.definition.baseUnitsPerPackage)).toString()} {item.definition.baseUnitCode}</li>; })}</ul>
       {!review && <ScanInput key={prepared.preparationId + ':' + prepared.preparationRevision + ':' + prepared.source.review} actorId={actorId} disabled={locked} current={current}
@@ -156,21 +163,21 @@ function DispatchDesk({ account, onFailure }: { account: Account; onFailure: (er
         const reserved = prepared.lots.find(item => item.reservationId === lot.reservationId)!; const product = prepared.source.lines.find(item => sameOrderLine(item, reserved))!;
         return <li key={lot.reservationId}>{product.productName} · Lot {reserved.lotId} · {lot.packages} {product.definition.packageLabel}</li>; })}</ul>
         <p>Catatan: {command.reason}</p><p>Konfirmasi saat barang diserahkan untuk berangkat. Jumlah tersebut akan dikurangi dari stok fisik dan reservasi pesanan.</p>
-        <div className={common.actions}><button className={common.primary} disabled={locked} onClick={() => void confirm()}>Konfirmasi keberangkatan</button>
-          <button className={common.secondary} disabled={locked} onClick={() => { setReview(null); setCommand(null); }}>Kembali ke lot dan kurir</button></div>
+        <div className={common.actions}><Button variant="primary" disabled={locked} onClick={() => void confirm()}>Konfirmasi keberangkatan</Button>
+          <Button variant="secondary" disabled={locked} onClick={() => { setReview(null); setCommand(null); }}>Kembali ke lot dan kurir</Button></div>
       </> : <form onSubmit={event => { event.preventDefault(); void preview(); }}><fieldset disabled={locked}><legend>Pilih lot fisik dan kurir</legend>
         <p>Isi jumlah pada lot yang benar-benar diambil. Kosongkan lot yang tidak digunakan. Total harus sesuai kemasan yang disiapkan.</p>
         {prepared.lots.filter(lot => lot.remainingPackages > 0 && prepared.lines.some(line => sameOrderLine(line, lot))).map(lot => {
           const item = prepared.source.lines.find(item => sameOrderLine(item, lot))!;
-          return <div className={styles.line} key={lot.reservationId}><strong>{item.productName} — {item.definition.packageLabel}</strong><p>Lot {lot.lotId} · sisa reservasi {lot.remainingPackages} kemasan{lot.expiresOn ? ` · kedaluwarsa ${lot.expiresOn}` : ''}</p>
+          return <div className={local.count} key={lot.reservationId}><strong>{item.productName} — {item.definition.packageLabel}</strong><p>Lot {lot.lotId} · sisa reservasi {lot.remainingPackages} kemasan{lot.expiresOn ? ` · kedaluwarsa ${lot.expiresOn}` : ''}</p>
             <label>Jumlah lot {lot.lotId}<input inputMode="numeric" maxLength={7} value={values[lot.reservationId] ?? ''} onChange={event => setValues(previous => ({ ...previous, [lot.reservationId]: event.target.value }))} /></label></div>;
         })}
         <label htmlFor="shipment-dispatch-courier">Kurir</label><select id="shipment-dispatch-courier" required value={courierId} onChange={event => setCourierId(event.target.value)}><option value="">Pilih kurir yang ditugaskan</option>{couriers.map(courier => <option key={courier.userId} value={courier.userId}>{courier.displayName}</option>)}</select>
         {couriers.length === 0 && <p>Belum ada kurir dengan penugasan aktif untuk toko dan kanal ini.</p>}
-        {moreCouriers && <button type="button" className={common.secondary} onClick={() => void loadCouriers()}>Tampilkan kurir lainnya</button>}
+        {moreCouriers && <Button variant="secondary" onClick={() => void loadCouriers()}>Tampilkan kurir lainnya</Button>}
         <label>Catatan keberangkatan<input required maxLength={1000} value={reason} onChange={event => setReason(event.target.value)} /></label>
-        <button className={common.primary} disabled={locked || !courierId || scanBlocked}>Tinjau keberangkatan</button></fieldset></form>}
-      <button className={common.secondary} disabled={locked} onClick={() => void select(prepared.source.suborderId)}>Muat ulang lot dan kurir</button>
+        <Button type="submit" variant="primary" disabled={locked || !courierId || scanBlocked}>Tinjau keberangkatan</Button></fieldset></form>}
+      <Button variant="secondary" disabled={locked} onClick={() => void select(prepared.source.suborderId)}>Muat ulang lot dan kurir</Button>
     </section>}
   </>;
 }

@@ -43,6 +43,8 @@ public sealed class OrderSubmissionBrowserTests(MongoFixture fixture, ITestOutpu
         await PersonTestData.SeedDistinctPeopleAsync(data.Database, data.Prices.Catalog.Clock, data.Buyer.UserId, approver.UserId);
         var draftService = new OrderDraftService(data.Database, new(fixture.Client), new(data.Database), data.Prices.Catalog.Clock);
         var draft = await draftService.SaveAsync(data.Buyer, null, 0, data.Input, CatalogPriceTestData.Meta("browser-draft"));
+        // A request key is stable per saved draft and channel, so the deliberate replacement order after the first is cancelled needs its own draft.
+        var secondDraft = await draftService.SaveAsync(data.Buyer, null, 0, data.Input, CatalogPriceTestData.Meta("browser-draft-second"));
         foreach (var actor in new[] { data.Buyer, data.Prices.Maker, approver, store, picker })
             await data.Rows("accountProfiles").InsertOneAsync(new BsonDocument { { "_id", actor.UserId }, { "schemaVersion", 1 }, { "version", 1L },
                 { "displayName", "Akun fixture lokal" }, { "verifiedEmail", "order-" + actor.UserId + "@example.invalid" }, { "verifiedAt", data.Prices.Catalog.Clock.UtcNow.UtcDateTime }, { "updatedAt", data.Prices.Catalog.Clock.UtcNow.UtcDateTime } });
@@ -64,7 +66,7 @@ public sealed class OrderSubmissionBrowserTests(MongoFixture fixture, ITestOutpu
             buyerToken = data.Prices.Catalog.Issued[data.Buyer.UserId].OpaqueToken, deniedToken = data.Prices.Catalog.Issued[data.Prices.Maker.UserId].OpaqueToken,
             approverToken = data.Prices.Catalog.Issued[approver.UserId].OpaqueToken, storeToken = data.Prices.Catalog.Issued[store.UserId].OpaqueToken,
             pickerToken = data.Prices.Catalog.Issued[picker.UserId].OpaqueToken,
-            buyerId = data.Buyer.UserId.ToString(), deniedId = data.Prices.Maker.UserId.ToString(), draftId = draft["draftId"].AsInt64.ToString() };
+            buyerId = data.Buyer.UserId.ToString(), deniedId = data.Prices.Maker.UserId.ToString(), draftId = draft["draftId"].AsInt64.ToString(), secondDraftId = secondDraft["draftId"].AsInt64.ToString() };
         var start = new ProcessStartInfo(node!) { WorkingDirectory = Path.Combine(root, "frontend"), UseShellExecute = false, CreateNoWindow = true,
             RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
         start.ArgumentList.Add(Path.Combine(root, "frontend", "scripts", "verify-order-submission-browser.mjs"));

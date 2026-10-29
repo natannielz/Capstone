@@ -6,6 +6,13 @@ import { accessMessage } from "../administration/workflow";
 import { describeScope } from "../organizations/access-scope";
 import type { IdentityAdministrationGateway, InvitationAction } from "./identity-administration-client";
 import styles from "../administration/access.module.css";
+import { Button } from "@/components/workspace-kit/button";
+import { Section } from "@/components/workspace-kit/section";
+import { DataList } from "@/components/workspace-kit/data-list";
+import { Toolbar } from "@/components/workspace-kit/toolbar";
+import { Field } from "@/components/workspace-kit/field";
+import { Badge } from "@/components/workspace-kit/badge";
+import type { TablePagination } from "@/components/workspace-kit/data-table";
 import { dateTimeFormatter } from "@/lib/format";
 
 type Schemas = components["schemas"];
@@ -35,19 +42,17 @@ export function AccountDirectory({ gateway, actorId, revision, locked, onSelect,
     return () => { active = false; };
   }, [gateway, actorId, revision, query, onFailure]);
   function search(event: FormEvent) { event.preventDefault(); if (!locked && !busy) setQuery({ term: input.trim(), offset: 0 }); }
-  return <section className={styles.accountSection} aria-busy={busy}>
-    <h2>Direktori akun</h2><p className={styles.help}>Cari nama atau email terverifikasi dalam lingkup yang boleh Anda tinjau.</p>
-    <form onSubmit={search} className={styles.lookup}><label>Cari akun<input value={input} onChange={event => setInput(event.target.value)} minLength={2} maxLength={80} disabled={locked || busy} type="search" autoComplete="off" /></label><button className={styles.secondary} disabled={locked || busy}>Cari</button></form>
-    {error !== null && <p role="alert" className={styles.alert}>{accessMessage(error)}</p>}
-    {busy && <p role="status">Memuat akun…</p>}
-    {page && <><p role="status">{page.total} akun dapat ditinjau.</p><ul className={styles.historyList}>
-      {page.items.map(profile => <li key={profile.userId}><div className={styles.historyHeading}><strong>{profile.displayName ?? "Nama belum ditetapkan"}</strong><span>{invitationStatus(profile.status)}</span></div>
-        <p className={styles.preserve}>{profile.verifiedEmail}</p><p className={styles.help}>Email terverifikasi {jakartaTime(profile.verifiedAt)} · Akun {profile.userId}</p>
-        {canRecover && <button type="button" className={styles.secondary} disabled={locked} onClick={() => onSelect({ kind: "recovery", value: profile })}>Tinjau pemulihan {profile.displayName ?? profile.verifiedEmail}</button>}
-      </li>)}
-    </ul>{page.items.length === 0 && <p>Tidak ada akun yang cocok dalam lingkup Anda.</p>}
-    <Pagination offset={query.offset} total={page.total} locked={locked || busy} onChange={offset => setQuery({ ...query, offset })} /></>}
-  </section>;
+  return <Section title="Direktori akun" description="Cari nama atau email terverifikasi dalam lingkup yang boleh Anda tinjau." busy={busy}>
+    <form onSubmit={search}><Toolbar label="Cari akun" search={<Field id="identity-directory-search" label="Cari akun" width="search"><input value={input} onChange={event => setInput(event.target.value)} minLength={2} maxLength={80} disabled={locked || busy} type="search" autoComplete="off" /></Field>}
+      filters={<Button type="submit" variant="secondary" disabled={locked || busy}>Cari</Button>} resultText={page ? `${page.total} akun dapat ditinjau.` : undefined} /></form>
+    <DataList label="Direktori akun" items={page?.items ?? []} getKey={profile => profile.userId} loading={busy}
+      error={error !== null ? { message: accessMessage(error) } : undefined} empty={page ? { title: "Tidak ada akun yang cocok dalam lingkup Anda." } : undefined}
+      renderTitle={profile => profile.displayName ?? "Nama belum ditetapkan"} renderBadge={profile => <Badge status={invitationStatus(profile.status)} />}
+      renderMeta={profile => <>Email terverifikasi {jakartaTime(profile.verifiedAt)} · Akun {profile.userId}</>}
+      renderContent={profile => <p className={styles.preserve}>{profile.verifiedEmail}</p>}
+      renderActions={canRecover ? profile => <Button variant="secondary" disabled={locked} onClick={() => onSelect({ kind: "recovery", value: profile })}>Tinjau pemulihan {profile.displayName ?? profile.verifiedEmail}</Button> : undefined}
+      pagination={page ? pager(query.offset, page.items.length, page.total, locked || busy, offset => setQuery({ ...query, offset })) : undefined} />
+  </Section>;
 }
 
 export function InvitationQueue({ gateway, actorId, revision, locked, onSelect, onFailure }: Common) {
@@ -66,20 +71,20 @@ export function InvitationQueue({ gateway, actorId, revision, locked, onSelect, 
     });
     return () => { active = false; };
   }, [gateway, actorId, offset, revision, onFailure]);
-  return <section className={styles.accountSection} aria-busy={busy}><h2>Tinjau undangan</h2>
-    <p className={styles.help}>Persetujuan keanggotaan diperiksa terpisah dari verifikasi email. Pengiriman undangan melalui penyedia belum aktif.</p>
-    {error !== null && <p role="alert" className={styles.alert}>{accessMessage(error)}</p>}
-    {busy && <p role="status">Memuat undangan…</p>}
-    {page && <><p>{page.total} undangan dalam lingkup Anda.</p><ul className={styles.historyList}>{page.items.map(invitation => <li key={invitation.id}>
-      <div className={styles.historyHeading}><strong className={styles.preserve}>{invitation.intendedEmail}</strong><span>{invitationStatus(invitation.status)}</span></div>
-      <p>{describeScope(invitation.scope)}</p><p className={styles.help}>Berlaku sampai {jakartaTime(invitation.expiresAt)} · Versi {invitation.version}</p>
-      <div className={styles.actions}>{invitation.allowedActions.filter((action): action is InvitationAction => Object.hasOwn(actions, action)).map(action => <button type="button" className={styles.secondary} key={action} disabled={locked} onClick={() => onSelect({ kind: "invitation", value: invitation, action })}>{actions[action]} undangan {invitation.id}</button>)}</div>
-    </li>)}</ul>{page.items.length === 0 && <p>Tidak ada undangan yang dapat ditinjau.</p>}
-    <Pagination offset={offset} total={page.total} locked={locked || busy} onChange={setOffset} /></>}
-  </section>;
+  return <Section title="Tinjau undangan" description="Persetujuan keanggotaan diperiksa terpisah dari verifikasi email. Pengiriman undangan melalui penyedia belum aktif." busy={busy}>
+    {page && <p className={styles.help}>{page.total} undangan dalam lingkup Anda.</p>}
+    <DataList label="Tinjau undangan" items={page?.items ?? []} getKey={invitation => invitation.id} loading={busy}
+      error={error !== null ? { message: accessMessage(error) } : undefined} empty={page ? { title: "Tidak ada undangan yang dapat ditinjau." } : undefined}
+      renderTitle={invitation => <span className={styles.preserve}>{invitation.intendedEmail}</span>} renderBadge={invitation => <Badge status={invitationStatus(invitation.status)} />}
+      renderMeta={invitation => <>Berlaku sampai {jakartaTime(invitation.expiresAt)} · Versi {invitation.version}</>}
+      renderContent={invitation => <p>{describeScope(invitation.scope)}</p>}
+      renderActions={invitation => <>{invitation.allowedActions.filter((action): action is InvitationAction => Object.hasOwn(actions, action)).map(action => <Button key={action} variant="secondary" disabled={locked} onClick={() => onSelect({ kind: "invitation", value: invitation, action })}>{actions[action]} undangan {invitation.id}</Button>)}</>}
+      pagination={page ? pager(offset, page.items.length, page.total, locked || busy, setOffset) : undefined} />
+  </Section>;
 }
 
-function Pagination({ offset, total, locked, onChange }: { offset: number; total: string; locked: boolean; onChange: (offset: number) => void }) {
-  return <div className={styles.actions} aria-label="Halaman hasil"><button type="button" className={styles.secondary} disabled={locked || offset === 0} onClick={() => onChange(Math.max(0, offset - 25))}>Sebelumnya</button>
-    <span>Halaman {Math.floor(offset / 25) + 1}</span><button type="button" className={styles.secondary} disabled={locked || BigInt(offset + 25) >= BigInt(total)} onClick={() => onChange(offset + 25)}>Berikutnya</button></div>;
+/** Offset pages of 25 (the API's page size), as the kit pager: hidden when everything fits. */
+function pager(offset: number, count: number, total: string, locked: boolean, onChange: (offset: number) => void): TablePagination {
+  return { label: "Halaman hasil", start: offset + 1, end: offset + count, total: Number(total), hasPrevious: offset > 0, hasNext: BigInt(offset + 25) < BigInt(total),
+    disabled: locked, onPrevious: () => onChange(Math.max(0, offset - 25)), onNext: () => onChange(offset + 25) };
 }

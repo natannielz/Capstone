@@ -14,7 +14,7 @@ public sealed class AccountingReportMigrationTests(MongoFixture fixture)
     [Fact]
     public async Task Empty_interrupted_read_owner_preserves_stronger_validator_uuid_and_every_predecessor_without_seeding_or_rewriting_counters()
     {
-        await using var data = await StoreTestData.CreateAsync(fixture); await RestoreV83Async(data.Database);
+        await using var data = await UnitToko.Tests.Procurement.SupplierDocumentPdfMatchMigrationRehearsal.CreateAsync(fixture); await RestoreV83Async(data.Database);
         var protectedState = await SnapshotAsync(data.Database, excludeReport: true);
         var stronger = new BsonDocument("$and", new BsonArray { AccountingReportSchemas.Validator(), new BsonDocument("actorId", new BsonDocument("$ne", 999L)) });
         if (await AccountingReportRecords.DefinitionAsync(data.Database, AccountingReportRecords.Events, default) is null)
@@ -35,7 +35,7 @@ public sealed class AccountingReportMigrationTests(MongoFixture fixture)
     [Fact]
     public async Task Consumed_or_malformed_read_allocator_weakened_pdf_predecessor_and_hidden_read_index_refuse_before_any_ddl()
     {
-        await using var data = await StoreTestData.CreateAsync(fixture); await AccountingReportTestSchema.ApplyAsync(data.Database, data.Clock);
+        await using var data = await UnitToko.Tests.Procurement.SupplierDocumentPdfMatchMigrationRehearsal.CreateAsync(fixture); await AccountingReportTestSchema.ApplyAsync(data.Database, data.Clock);
         await RestoreV83Async(data.Database);
         var counters = data.Database.GetCollection<BsonDocument>("idCounters");
         foreach (var invalid in new BsonValue[] { new BsonInt64(1), new BsonInt32(0), new BsonString("0") }) {
@@ -61,7 +61,7 @@ public sealed class AccountingReportMigrationTests(MongoFixture fixture)
     [Fact]
     public async Task Unsupported_preinstallation_read_and_inconsistent_persisted_chart_are_preserved_and_never_adopted()
     {
-        await using var data = await AccountingReportTestData.CreateAsync(fixture); await RestoreV83Async(data.Database);
+        await using var data = await AccountingReportTestData.CreateAsync(fixture, UnitToko.Tests.Procurement.SupplierDocumentPdfMatchMigrationRehearsal.Version); await RestoreV83Async(data.Database);
         var unowned = EmptyReadEvent(data.Clock.UtcNow);
         await data.Rows(AccountingReportRecords.Events).InsertOneAsync(unowned);
         try { await RefusesAsync(data.Database, data.Clock); }
@@ -80,6 +80,7 @@ public sealed class AccountingReportMigrationTests(MongoFixture fixture)
     internal static async Task RestoreV83Async(IMongoDatabase database)
     {
         await UnitToko.Tests.Documents.PdfEvidenceAdmissionMigrationTests.RestoreV84Async(database);
+        await UnitToko.Tests.Documents.PdfDocumentExtractionMigrationTests.UndoM86OutboxExtensionAsync(database);
         var history = await database.GetCollection<BsonDocument>("schemaMigrations").Find(new BsonDocument()).Sort(new BsonDocument("_id", 1)).ToListAsync();
         if (history.Count <= 83) return;
         Assert.Equal(84, history.Count); Assert.True(MigrationHistory.IsValid(history, 84));

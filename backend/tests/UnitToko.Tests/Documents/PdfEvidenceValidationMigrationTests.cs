@@ -15,7 +15,7 @@ public sealed class PdfEvidenceValidationMigrationTests(MongoFixture fixture)
     [Fact]
     public async Task Empty_interrupted_owner_resumes_and_keeps_image_revalidation_contact_and_applied_history()
     {
-        await using var data = await StoreTestData.CreateAsync(fixture); var db = data.Database;
+        await using var data = await UnitToko.Tests.Procurement.SupplierDocumentPdfMatchMigrationRehearsal.CreateAsync(fixture); var db = data.Database;
         await RestoreV82Async(db);
         var before = await ProtectedAsync(db); var history = await HistoryAsync(db);
         var candidate = await (await db.ListCollectionsAsync(new ListCollectionsOptions {
@@ -41,7 +41,7 @@ public sealed class PdfEvidenceValidationMigrationTests(MongoFixture fixture)
     public async Task Positive_and_malformed_allocators_and_unowned_rows_refuse_before_any_collection_mutation()
     {
         foreach (var fault in new[] { "positive", "malformed", "unowned" }) {
-            await using var data = await StoreTestData.CreateAsync(fixture); var db = data.Database;
+            await using var data = await UnitToko.Tests.Procurement.SupplierDocumentPdfMatchMigrationRehearsal.CreateAsync(fixture); var db = data.Database;
             await RestoreV82Async(db);
             if (fault == "unowned") await db.GetCollection<BsonDocument>(PdfEvidenceValidationRecords.Results)
                 .InsertOneAsync(new BsonDocument("_id", 909L), new InsertOneOptions { BypassDocumentValidation = true });
@@ -59,7 +59,7 @@ public sealed class PdfEvidenceValidationMigrationTests(MongoFixture fixture)
     public async Task Unsafe_predecessor_and_unexplained_PDF_job_are_not_relabelled_or_repaired_by_migration()
     {
         foreach (var fault in new[] { "revalidation", "contact", "pdf-job" }) {
-            await using var data = await StoreTestData.CreateAsync(fixture); var db = data.Database;
+            await using var data = await UnitToko.Tests.Procurement.SupplierDocumentPdfMatchMigrationRehearsal.CreateAsync(fixture); var db = data.Database;
             await RestoreV82Async(db);
             if (fault == "pdf-job") await db.GetCollection<BsonDocument>("outboxEvents").InsertOneAsync(new BsonDocument {
                 { "kind", PdfEvidenceValidationRecords.Kind }, { "status", "pending" }, { "attempts", 0 } },

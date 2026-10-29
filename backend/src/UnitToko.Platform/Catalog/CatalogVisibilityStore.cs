@@ -95,6 +95,28 @@ public sealed class CatalogVisibilityStore
             return rows.Count == 0 ? null : Metadata(rows[0]);
         }, token);
 
+    /// <summary>Task discovery only, never authorization: whether this snapshot could browse the organisation catalog now (it holds
+    /// catalog.read with a current entitlement to an active assortment). Every catalog read still loads and fences its own authority.</summary>
+    public async Task<bool> CanBrowseAsync(ActorContext actor, AuthorizationSnapshot snapshot, CancellationToken token)
+    {
+        // Task discovery runs on every /access/current: an unreadable entitlement or assortment row withholds the catalog, never the whole read.
+        try { return await CanBrowseCoreAsync(actor, snapshot, token); }
+        catch (Exception failure) when (failure is not OperationCanceledException) { return false; }
+    }
+
+    private async Task<bool> CanBrowseCoreAsync(ActorContext actor, AuthorizationSnapshot snapshot, CancellationToken token)
+    {
+        var now = clock.UtcNow;
+        var rawEntitlements = await database.GetCollection<BsonDocument>("catalogEntitlements")
+            .Find(EligibleEntitlements(actor.UserId, now)).Limit(MaximumAuthorityRecords + 1).ToListAsync(token);
+        if (rawEntitlements.Count == 0 || rawEntitlements.Count > MaximumAuthorityRecords) return false;
+        var entitlements = rawEntitlements.Select(CatalogVisibilityBson.Entitlement).ToImmutableArray();
+        var rawAssortments = await database.GetCollection<BsonDocument>("catalogAssortments")
+            .Find(F.In("_id", entitlements.Select(value => value.AssortmentId).Distinct())).Limit(MaximumAuthorityRecords + 1).ToListAsync(token);
+        if (rawAssortments.Count > MaximumAuthorityRecords) return false;
+        return CatalogVisibilityPolicy.Compile(actor, snapshot, entitlements, [.. rawAssortments.Select(CatalogVisibilityBson.Assortment)], now).IsAllowed;
+    }
+
     internal Task<T> ReadCurrentAsync<T>(ActorContext actor, FilterDefinition<BsonDocument> selector,
         Func<IClientSessionHandle, FilterDefinition<BsonDocument>, CancellationToken, Task<T>> read, CancellationToken cancellationToken) =>
         authorization.ReadAsync(actor, (snapshot, session, token) =>

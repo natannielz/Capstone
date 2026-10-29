@@ -1,20 +1,22 @@
 'use client';
 
 import { SessionAccessState, lostAccessKind } from '@/components/workspace-kit/session-access-state';
-import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createIdentityGateway } from '../identity/identity-client';
 import { IdentityFailure, sessionTiming, type IdentitySession } from '../identity/identity-workflow';
 import { createAccessGateway } from '../administration/access-client';
 import { AccessFailure, MutationLedger, accessMessage } from '../administration/workflow';
 import { OperationRecovery, useOperationRecovery } from '../administration/OperationRecovery';
-import { submitTrackedRequest } from '../administration/operation-journal';
-import { createReceiptGateway, parseReceiptLink, prepareReceipt, type Receipt, type ReceiptReview, type ReceiptDeclaration } from './receipt-client';
+import { OperationJournal, submitTrackedRequest } from '../administration/operation-journal';
+import { createReceiptGateway, parseReceiptLink, prepareReceipt, receiptPageAccess, type Receipt, type ReceiptReview, type ReceiptDeclaration } from './receipt-client';
 import { ReceiptSummary } from './ShipmentReceiptPanel';
 import { ReceiptProofPanel } from './ReceiptProofPanel';
 import { createReceiptProofGateway, type ReceiptProof } from './receipt-proof-client';
 import common from '../administration/access.module.css';
-import styles from '../ordering/order-draft.module.css';
+import local from './fulfillment.module.css';
+import { Button } from '@/components/workspace-kit/button';
+import { PageHeader } from '@/components/workspace-kit/page-header';
+import { StateView } from '@/components/workspace-kit/state-view';
 
 type Account = { actorId: string; session: IdentitySession; observedAt: number; canReceive: boolean };
 type ReceiptLink = ReturnType<typeof parseReceiptLink>;
@@ -47,8 +49,12 @@ export function ReceiptWorkspace() {
       if (!session.authenticated || !session.account) throw new IdentityFailure(401, 'unauthenticated');
       const current = await access.current(); if (!active) return;
       if (current.userId !== session.account.userId) throw new AccessFailure(409, 'actor_changed');
-      const canReceive = current.allowedActions.includes('receipt.accept');
-      if (!canReceive && !current.allowedActions.includes('shipment.prepare')) throw new AccessFailure(403, 'scope_denied');
+      // A recipient gets the full page; a preparer with an unconfirmed receipt proof only its recovery; anyone else the standard denial (G-038).
+      let pending: string[] = [];
+      try { pending = new OperationJournal(() => window.localStorage).list(current.userId).map(entry => entry.operation); } catch { /* No readable journal: no recovery to offer. */ }
+      const pageAccess = receiptPageAccess(current.allowedActions, pending);
+      if (pageAccess === 'denied') throw new AccessFailure(403, 'scope_denied');
+      const canReceive = pageAccess === 'recipient';
       if (sessionTiming(session, performance.now() - observedAt).expired) throw new IdentityFailure(401, 'session_expired');
       setAccount({ actorId: current.userId, session, observedAt, canReceive }); setElapsed(performance.now() - observedAt);
     } catch (failure) { if (active) setError(failure); } finally { if (active) setLoading(false); }
@@ -58,13 +64,13 @@ export function ReceiptWorkspace() {
   const [lost, setLost] = useState(false);
   const denied = useCallback((failure: unknown) => { if (failure instanceof AccessFailure && failure.status === 401) { setAccount(null); setLink(null); setError(failure); setLost(true); } }, []);
   const expired = account && sessionTiming(account.session, elapsed).expired;
-  return <main className={common.page}><header className={common.header}><div><Link href="/identity/account" className={common.brand}>Unit Toko</Link><h1>Penerimaan kiriman</h1>
-    <p>Periksa barang bersama kurir. Konfirmasi hanya dengan akun penerima yang dituju.</p></div><Link href="/identity/account" className={common.secondary}>Akun saya</Link></header>
-    {error !== null && account && !expired && <p role="alert" className={common.alert}>{message(error)}</p>}
-    {loading ? <p role="status">Memeriksa akun penerima…</p> : !account || expired ? <>
+  return <main className={common.page}><PageHeader title="Penerimaan kiriman" description="Periksa barang bersama kurir. Konfirmasi hanya dengan akun penerima yang dituju." />
+    <div className="ui-stack">
+    {error !== null && account && !expired && <StateView kind="error" title={message(error)} />}
+    {loading ? <StateView kind="loading" title="Memeriksa akun penerima…" /> : !account || expired ? <>
       <SessionAccessState error={error} kind={expired ? "expired" : lost ? lostAccessKind(error) : undefined} returnPath="/fulfillment/receive" onRetry={() => { setError(null); setRevision(value => value + 1); }} detail={error !== null ? message(error) : undefined} />
       <p>Gunakan akun penerima sendiri. Setelah masuk, pindai kembali QR dari kurir; tautan QR tidak disimpan selama proses masuk.</p></>
-      : <ReceiptForm key={account.actorId + ':' + account.observedAt} account={account} link={link} onDenied={denied} />}
+      : <ReceiptForm key={account.actorId + ':' + account.observedAt} account={account} link={link} onDenied={denied} />}</div>
   </main>;
 }
 type Entry = { accepted: [string, string]; rejected: [string, string]; missing: [string, string]; exceptionReason: string };
@@ -112,29 +118,34 @@ function ReceiptForm({ account, link, onDenied }: { account: Account; link: Rece
   function change(sku: string, group: typeof groups[number], position: 0 | 1, value: string) {
     setEntries(previous => { const next: [string, string] = [...previous[sku][group]]; next[position] = value; return { ...previous, [sku]: { ...previous[sku], [group]: next } }; });
   }
-  return <section className={common.accountSection} aria-label="Konfirmasi penerimaan" aria-busy={busy}>
+  return <section className="ui-section" aria-label="Konfirmasi penerimaan" aria-busy={busy}>
+    {/* The region's heading for the outline (axe heading-order): its states and forms sit under it. */}
+    <h2 className={common.srOnly}>Konfirmasi penerimaan</h2>
     <OperationRecovery entries={recovery.entries.filter(entry => entry.operation !== 'fulfillment.receipt-proof.issue' || !receipt && !recoveredProof)} journal={recovery.journal} disabled={busy || offline} onBusyChange={setRecovering}
       recoveryAdapters={{ 'fulfillment.receipt-proof': { lookup: async entry => { const result = await proofs.recover(entry.actorId, entry.key); if (current() && result) setRecoveredProof(result.result); return result; } },
         'fulfillment.receipt': { lookup: async entry => { const result = await gateway.recover(entry.actorId, entry.key, entry.operation === 'fulfillment.receipt.challenge.issue'); if (current() && result && 'recordedAt' in result.result) setReceipt(result.result); return result; } } }}
       onFailure={failed} onResolved={() => { recovery.refresh(); ledger.resetAfterReconciliation(); setCommand(null); setEntries({}); setReview(null); }} />
-    {error !== null && <p role="alert" className={common.alert}>{message(error)}</p>}{recovery.error !== null && <p role="alert">{message(recovery.error)}</p>}
-    {offline && <p role="status">Koneksi terputus. Isian hanya ada di halaman ini dan belum dikirim. Jangan tutup halaman sebelum tersambung.</p>}
-    {expired && !receipt && <p role="status">QR kedaluwarsa. Pindai QR baru sebelum mengirim penerimaan.</p>}{busy && <p role="status">Memeriksa kiriman…</p>}
+    {error !== null && <StateView kind="error" title={message(error)} />}{recovery.error !== null && <StateView kind="error" title={message(recovery.error)} />}
+    {offline && <StateView kind="offline" title="Koneksi terputus. Isian hanya ada di halaman ini dan belum dikirim. Jangan tutup halaman sebelum tersambung." />}
+    {expired && !receipt && <p role="status">QR kedaluwarsa. Pindai QR baru sebelum mengirim penerimaan.</p>}{busy && <StateView kind="loading" title="Memeriksa kiriman…" rows={2} />}
     {receipt || recoveredProof ? <>{receipt && <ReceiptSummary receipt={receipt} />}<ReceiptProofPanel actorId={account.actorId} shipmentId={receipt?.shipmentId ?? recoveredProof!.shipmentId} receiptId={receipt?.id ?? recoveredProof!.receiptId}
-      asRecipient={receipt ? true : recoveredProof!.issuedAsRecipient} canIssue={!!receipt} current={current} onDenied={failed} /></> : !review ? <><p>{!account.canReceive ? 'Gunakan Periksa hasil untuk memulihkan bukti penerimaan yang telah Anda terbitkan.' : link ? 'Buka rincian kiriman sebelum menghitung barang.' : 'Pindai QR dari kurir. Jika konfirmasi sebelumnya terputus, gunakan Periksa hasil di atas.'}</p>
-      {link && account.canReceive && <button className={common.primary} disabled={busy || offline || recovery.locked} onClick={() => void load()}>Periksa kiriman</button>}</>
-      : command ? <div className={styles.review}><h2 ref={heading} tabIndex={-1}>Tinjau jumlah penerimaan</h2><p>{review.recipientName} · Kiriman {review.shipmentId} · Surat Jalan versi {review.documentVersion}</p>
+      asRecipient={receipt ? true : recoveredProof!.issuedAsRecipient} canIssue={!!receipt} current={current} onDenied={failed} /></> : !review ? (!account.canReceive ? <p>Gunakan Periksa hasil untuk memulihkan bukti penerimaan yang telah Anda terbitkan.</p>
+      : link ? <><p>Buka rincian kiriman sebelum menghitung barang.</p>
+        <div className="ui-actions"><Button variant="primary" disabled={busy || offline || recovery.locked} onClick={() => void load()}>Periksa kiriman</Button></div></>
+      : <StateView kind="empty" title="Pindai QR dari kurir"
+        message={recovery.entries.length > 0 ? 'Jika konfirmasi sebelumnya terputus, gunakan Periksa hasil di atas.' : 'Arahkan kamera ponsel ke QR yang ditunjukkan kurir; halaman ini terbuka kembali dengan rincian kiriman.'} />)
+      : command ? <div className={local.inset}><h2 ref={heading} tabIndex={-1}>Tinjau jumlah penerimaan</h2><p>{review.recipientName} · Kiriman {review.shipmentId} · Surat Jalan versi {review.documentVersion}</p>
         <ul>{command.body.lines.map(line => { const source = review.lines.find(item => item.skuId === line.skuId)!; return <li key={line.skuId}><strong>{source.productName}</strong>
           {groups.map(group => <p key={group}>{labels[group]}: {line[group].packages} {source.packageLabel} + {line[group].looseUnits} {source.baseUnitCode}</p>)}{line.exceptionReason && <p>{line.exceptionReason}</p>}</li>; })}</ul>
         <p>Catatan: {command.body.reason}</p><label className={common.checkbox}><input type="checkbox" checked={consent} disabled={locked} onChange={event => setConsent(event.target.checked)} /><span>{review.consentText}</span></label>
-        <button className={common.primary} disabled={locked || !consent} onClick={() => void confirm()}>Konfirmasi penerimaan</button>
-        <button className={common.secondary} disabled={locked} onClick={() => { returningToQuantities.current = true; setCommand(null); setConsent(false); }}>Kembali ke jumlah</button></div>
+        <div className="ui-actions"><Button variant="primary" disabled={locked || !consent} onClick={() => void confirm()}>Konfirmasi penerimaan</Button>
+        <Button variant="secondary" disabled={locked} onClick={() => { returningToQuantities.current = true; setCommand(null); setConsent(false); }}>Kembali ke jumlah</Button></div></div>
       : <form onSubmit={event => { event.preventDefault(); preview(); }}><h2>Hitung barang yang tiba</h2><p>Penerima: {review.recipientName}. Isi jumlah kemasan utuh dan satuan lepas; masukkan nol bila tidak ada.</p>
-        {review.lines.map(line => <fieldset key={line.skuId} className={styles.line} disabled={locked}><legend>{line.productName} · {line.skuCode}</legend><p>Dikirim {line.packages} {line.packageLabel}. Isi {line.baseUnitsPerPackage} {line.baseUnitCode} per kemasan.</p>
+        {review.lines.map(line => <fieldset key={line.skuId} className={local.count} disabled={locked}><legend>{line.productName} · {line.skuCode}</legend><p>Dikirim {line.packages} {line.packageLabel}. Isi {line.baseUnitsPerPackage} {line.baseUnitCode} per kemasan.</p>
           {groups.map(group => <div key={group}><h3>{labels[group]}</h3><label>{labels[group]} — kemasan utuh<input ref={group === 'accepted' && line.skuId === review.lines[0].skuId ? firstQuantity : undefined} inputMode="numeric" required pattern="[0-9]+" maxLength={7} value={entries[line.skuId][group][0]} onChange={event => change(line.skuId, group, 0, event.target.value)} /></label>
             <label>{labels[group]} — satuan lepas<input inputMode="numeric" required pattern="[0-9]+" maxLength={7} value={entries[line.skuId][group][1]} onChange={event => change(line.skuId, group, 1, event.target.value)} /></label></div>)}
           <label>Alasan perbedaan<textarea aria-label="Alasan perbedaan" maxLength={1000} value={entries[line.skuId].exceptionReason} onChange={event => setEntries(previous => ({ ...previous, [line.skuId]: { ...previous[line.skuId], exceptionReason: event.target.value } }))} /></label></fieldset>)}
         <label>Catatan penerimaan<input required maxLength={1000} disabled={locked} value={reason} onChange={event => setReason(event.target.value)} /></label>
-        <button className={common.primary} disabled={locked}>Tinjau jumlah</button></form>}
+        <Button type="submit" variant="primary" disabled={locked}>Tinjau jumlah</Button></form>}
   </section>;
 }

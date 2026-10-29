@@ -19,6 +19,12 @@ import type { ActivationCommand, ActivationDetail, ActivationHandoff, Activation
 import common from '../administration/access.module.css';
 import styles from './stock-source-policy.module.css';
 import { formatDateTime } from '@/lib/format';
+import { Button } from '@/components/workspace-kit/button';
+import { PageHeader } from '@/components/workspace-kit/page-header';
+import { Section } from '@/components/workspace-kit/section';
+import { StateView } from '@/components/workspace-kit/state-view';
+import { DataList } from '@/components/workspace-kit/data-list';
+import { Facts } from '@/components/workspace-kit/facts';
 
 const path = '/inventory/sources/activations';
 const factorHref = '/identity/account?operation=stock.source.approve&returnPath=' + encodeURIComponent(path);
@@ -75,11 +81,9 @@ export function StockSourceActivationWorkspace() {
   }, [refresh]);
   return <main className={common.page}>
     <a className={styles.skip} href="#activation-workspace">Langsung ke aktivasi sumber</a>
-    <header className={common.header}><div><Link className={common.brand} href="/identity/account">Unit Toko</Link>
-      <p className={styles.eyebrow}>Pengelolaan persediaan</p><h1>Aktivasi sumber stok</h1>
-      <p>Periksa serah terima sumber kosong dan ajukan peninjauan oleh petugas yang berbeda.</p></div></header>
-    <div id="activation-workspace">{loaded ? <ActivationDesk key={loaded.actorId + ':' + loaded.generation} loaded={loaded} refresh={refresh} /> :
-      (loading ? <section className={common.state} aria-busy="true"><h2>Memeriksa sesi dan akses</h2></section>
+    <PageHeader title="Aktivasi sumber stok" description="Periksa serah terima sumber kosong dan ajukan peninjauan oleh petugas yang berbeda." />
+    <div id="activation-workspace" className="ui-stack">{loaded ? <ActivationDesk key={loaded.actorId + ':' + loaded.generation} loaded={loaded} refresh={refresh} /> :
+      (loading ? <StateView kind="loading" title="Memeriksa sesi dan akses" />
         : <SessionAccessState error={error} returnPath={path} onRetry={() => void refresh()} detail={error !== null ? message(error) : undefined} />)}</div>
   </main>;
 }
@@ -102,21 +106,20 @@ function ActivationDesk({ loaded, refresh }: { loaded: Loaded; refresh: () => Pr
   if (state.expired || state.suspended) return <SessionAccessState error={state.error} kind={state.expired ? 'expired' : lostAccessKind(state.error)} returnPath={path} busy={busy} onRetry={() => void refresh()} detail={state.error !== null ? message(state.error) : undefined} />;
   return <>
     <AdministrationNavigation current="source-activations" actions={loaded.actions} locked={locked} />
-    <section className={common.accountSection}><div className={styles.heading}><div><h2>Periksa sumber yang ditugaskan</h2>
-      <p>Petugas: <strong>{loaded.session.account?.displayName ?? loaded.session.account?.verifiedEmail}</strong></p></div>
-      <button className={common.secondary} type="button" disabled={busy || state.review !== null} onClick={() => void refresh()}>Muat ulang sesi dan akses</button></div>
+    <Section title="Periksa sumber yang ditugaskan" description={<>Petugas: <strong>{loaded.session.account?.displayName ?? loaded.session.account?.verifiedEmail}</strong></>}
+      actions={<Button variant="secondary" disabled={busy || state.review !== null} onClick={() => void refresh()}>Muat ulang sesi dan akses</Button>}>
       {editor.canApprove && <p className={common.help}>{state.fresh ? 'Verifikasi dua langkah masih baru. ' : 'Peninjauan memerlukan verifikasi dua langkah terbaru. '}
         <Link href={factorHref} aria-disabled={busy} onClick={event => { if (busy) event.preventDefault(); }}>Verifikasi untuk peninjauan</Link></p>}
-    </section>
+    </Section>
     <aside className={styles.notice}><strong>Serah terima ini berlaku untuk sumber yang benar-benar kosong.</strong>
       <p>Pengajuan belum mengaktifkan sumber. Persetujuan hanya mengaktifkan pencatatan stok Unit Toko; jumlah stok, harga, pembayaran, dan invoice tidak diterbitkan oleh langkah ini.</p></aside>
     {state.sending && <p role="status">Menyimpan permintaan… Tunggu hasil sebelum melanjutkan.</p>}
-    {state.error !== null && <p role="alert" className={common.alert}>{message(state.error)}</p>}
-    {state.recoveryError !== null && <p role="alert" className={common.alert}>{message(state.recoveryError)}</p>}
-    {state.references.length > 0 && <section className={common.accountSection}><h2>Periksa permintaan semula</h2>
+    {state.error !== null && <StateView kind="error" title={message(state.error)} />}
+    {state.recoveryError !== null && <StateView kind="error" title={message(state.recoveryError)} />}
+    {state.references.length > 0 && <Section title="Periksa permintaan semula">
       <p>Gunakan referensi sumber yang dipakai saat mengirim. Periksa hasil terlebih dahulu; jangan mengulangi pengiriman.</p>
       <label>Referensi sumber semula<input inputMode="numeric" maxLength={19} value={state.recoveryPoolId} disabled={busy || state.review !== null}
-        onChange={event => editor.setRecoveryPool(event.target.value)} /></label></section>}
+        onChange={event => editor.setRecoveryPool(event.target.value)} /></label></Section>}
     <OperationRecovery entries={state.references} journal={editor.journal} disabled={state.sending || state.review !== null ||
       !editor.canPropose && !editor.canApprove || !/^[1-9][0-9]{0,18}$/.test(state.recoveryPoolId)}
       recoveryAdapters={{ 'stock.source.activation': { lookup: editor.receipt } }} onResolved={editor.reconciled}
@@ -126,12 +129,12 @@ function ActivationDesk({ loaded, refresh }: { loaded: Loaded; refresh: () => Pr
       <p>{time(state.result.recordedAt)}</p><Link href="/inventory/sources/revisions">Periksa status sumber terbaru</Link></div>}
     {state.attempt && <section className={styles.notice}><h2>Hasil belum terkonfirmasi</h2>
       <p>Permintaan mungkin telah tersimpan. Formulir ditahan sampai hasil permintaan semula dapat dipastikan.</p></section>}
-    <section className={common.accountSection}><h2>Pilih sumber stok</h2>
+    <Section title="Pilih sumber stok">
       <p className={common.help}>Gunakan referensi dari pengaturan sumber yang sudah disetujui. <Link href="/inventory/sources/revisions">Lihat pengaturan sumber</Link></p>
       <form className={styles.selection} onSubmit={event => { event.preventDefault(); void editor.loadPool(); }}>
         <label>Referensi sumber stok<input required inputMode="numeric" pattern="[1-9][0-9]{0,18}" maxLength={19} value={state.poolInput}
           disabled={locked || state.loadingPool} onChange={event => editor.changePool(event.target.value)} /></label>
-        <button className={common.primary} type="submit" disabled={locked || state.loadingPool}>{state.loadingPool ? 'Memeriksa sumber…' : 'Periksa sumber'}</button>
+        <Button variant={state.preview ? 'secondary' : 'primary'} type="submit" disabled={locked || state.loadingPool}>{state.loadingPool ? 'Memeriksa sumber…' : 'Periksa sumber'}</Button>
       </form>
       {state.preview && <section className={styles.preview}><div><PolicyConfigurationFacts configuration={state.preview.configuration} />
         <p>Acuan serah terima yang disetujui: <strong>{state.preview.requiredHandoffReference}</strong></p></div><div><h3>Kewajiban pada pemeriksaan ini</h3>
@@ -140,10 +143,10 @@ function ActivationDesk({ loaded, refresh }: { loaded: Loaded; refresh: () => Pr
       {state.poolId && editor.canPropose && state.preview && <form className={styles.form} onSubmit={event => { event.preventDefault(); editor.reviewProposal(); }}>
         <HandoffFields draft={state.draft} disabled={locked} prefix="maker" onChange={change => editor.changeDraft(change)} />
         <label>Alasan pengajuan<textarea required maxLength={1000} rows={3} value={state.reason} disabled={locked} onChange={event => editor.changeReason(event.target.value)} /></label>
-        <button className={common.primary} type="submit" disabled={locked || state.loadingPool}>Tinjau pengajuan</button>
+        <Button variant="primary" type="submit" disabled={locked || state.loadingPool}>Tinjau pengajuan</Button>
       </form>}
-    </section>
-    {state.poolId && editor.canApprove && <section className={common.accountSection}><h2>Tinjau pengajuan aktivasi</h2>
+    </Section>
+    {state.poolId && editor.canApprove && <Section title="Tinjau pengajuan aktivasi">
       <p>Periksa keadaan fisik secara mandiri. Pengaju dan peninjau harus orang yang berbeda.</p>
       <form className={styles.decision} onSubmit={event => { event.preventDefault(); void editor.loadAction(); }}>
         <fieldset className={common.fields} disabled={locked || state.loadingAction}><legend>Pengajuan dan keputusan</legend>
@@ -152,27 +155,27 @@ function ActivationDesk({ loaded, refresh }: { loaded: Loaded; refresh: () => Pr
             <option value="approve">Setujui aktivasi</option><option value="reject">Tolak pengajuan</option></select></label>
         </fieldset>
         {state.action === 'approve' && <HandoffFields draft={state.draft} disabled={locked || state.loadingAction} prefix="checker" onChange={change => editor.changeDraft(change)} />}
-        <button className={common.secondary} type="submit" disabled={locked || state.loadingAction || !state.fresh}>{state.loadingAction ? 'Memeriksa peninjauan…' : 'Periksa pengajuan dan serah terima'}</button>
+        <Button variant="secondary" type="submit" disabled={locked || state.loadingAction || !state.fresh}>{state.loadingAction ? 'Memeriksa peninjauan…' : 'Periksa pengajuan dan serah terima'}</Button>
       </form>
       {state.actionPreview && <div className={styles.preview}><ActivationFacts detail={state.actionPreview.proposal} /><form className={styles.form} onSubmit={event => { event.preventDefault(); editor.reviewDecision(); }}>
         <label>Alasan keputusan<textarea required maxLength={1000} rows={3} value={state.reason} disabled={locked} onChange={event => editor.changeReason(event.target.value)} /></label>
-        <button className={common.primary} type="submit" disabled={locked || !state.fresh}>Tinjau keputusan</button></form></div>}
-    </section>}
+        <Button variant="primary" type="submit" disabled={locked || !state.fresh}>Tinjau keputusan</Button></form></div>}
+    </Section>}
     {state.review && <div ref={reviewFocus} tabIndex={-1} className={styles.review}><FinalReview key={state.review.operation + state.review.poolId}
       command={state.review} disabled={busy} onCancel={() => editor.cancelReview()} onConfirm={confirmed => void editor.submitReviewed(confirmed)} /></div>}
-    {state.poolId && editor.canRead && <section className={styles.history}><header><div className={styles.heading}><div><h2>Riwayat aktivasi</h2>
-      <p>Status di bawah adalah keputusan yang tercatat saat itu. Periksa pengaturan sumber untuk mengetahui status terkini.</p></div>
-      <button className={common.secondary} type="button" disabled={locked || state.loadingHistory} onClick={() => void editor.loadHistory(state.historyOffset)}>Muat ulang riwayat</button></div></header>
-      <div className={styles.historyGrid}><div aria-busy={state.loadingHistory}>
-        {state.loadingHistory ? <p role="status">Memuat riwayat…</p> : state.history.items.length === 0 ? <p>Belum ada pengajuan aktivasi pada sumber ini.</p> :
-          <ul className={styles.locations}>{state.history.items.map(item => <li key={item.id}><strong>{status[item.status]} · pengajuan {item.id}</strong><span>{time(item.proposedAt)}</span>
-            <button className={common.secondary} type="button" disabled={locked || state.loadingDetail} onClick={() => void editor.chooseHistory(item.id)}>Lihat rincian</button></li>)}</ul>}
-        <div className={common.actions}><button type="button" className={common.secondary} disabled={locked || state.loadingHistory || state.historyOffset === 0}
-          onClick={() => void editor.loadHistory(Math.max(0, state.historyOffset - 25))}>Sebelumnya</button>
-          <button type="button" className={common.secondary} disabled={locked || state.loadingHistory || BigInt(state.history.total) <= BigInt(state.historyOffset + 25)}
-            onClick={() => void editor.loadHistory(state.historyOffset + 25)}>Berikutnya</button></div></div>
-        <div className={styles.detail}>{state.loadingDetail ? <p role="status">Memuat rincian…</p> : state.selected ? <ActivationFacts detail={state.selected} /> : <p>Pilih pengajuan untuk melihat serah terima dan keputusannya.</p>}</div>
-      </div></section>}
+    {state.poolId && editor.canRead && <Section title="Riwayat aktivasi" busy={state.loadingHistory}
+      description="Status di bawah adalah keputusan yang tercatat saat itu. Periksa pengaturan sumber untuk mengetahui status terkini."
+      actions={<Button variant="secondary" disabled={locked || state.loadingHistory} onClick={() => void editor.loadHistory(state.historyOffset)}>Muat ulang riwayat</Button>}>
+      <div className={styles.historyGrid}><div>
+        <DataList label="Riwayat aktivasi" items={state.loadingHistory ? [] : state.history.items} getKey={item => item.id} loading={state.loadingHistory}
+          empty={state.error === null ? { title: "Belum ada pengajuan aktivasi pada sumber ini." } : undefined}
+          renderTitle={item => <>{status[item.status]} · pengajuan {item.id}</>} renderMeta={item => time(item.proposedAt)}
+          renderActions={item => <Button variant="secondary" disabled={locked || state.loadingDetail} onClick={() => void editor.chooseHistory(item.id)}>Lihat rincian</Button>}
+          pagination={{ start: state.historyOffset + 1, end: state.historyOffset + state.history.items.length, total: Number(state.history.total), disabled: locked || state.loadingHistory,
+            hasPrevious: state.historyOffset > 0, hasNext: BigInt(state.history.total) > BigInt(state.historyOffset + 25),
+            onPrevious: () => void editor.loadHistory(Math.max(0, state.historyOffset - 25)), onNext: () => void editor.loadHistory(state.historyOffset + 25) }} /></div>
+        <div className={styles.detail}>{state.loadingDetail ? <StateView kind="loading" title="Memuat rincian…" /> : state.selected ? <ActivationFacts detail={state.selected} /> : <p>Pilih pengajuan untuk melihat serah terima dan keputusannya.</p>}</div>
+      </div></Section>}
   </>;
 }
 function HandoffFields({ draft, disabled, prefix, onChange }: { draft: ActivationHandoffDraft; disabled: boolean; prefix: string; onChange: (change: Partial<ActivationHandoffDraft>) => void }) {
@@ -187,8 +190,8 @@ function HandoffFields({ draft, disabled, prefix, onChange }: { draft: Activatio
   </fieldset>;
 }
 function HandoffFacts({ handoff }: { handoff: ActivationHandoff }) {
-  return <dl className={styles.facts}><div><dt>Acuan serah terima</dt><dd>{handoff.reference}</dd></div><div><dt>Waktu pemeriksaan</dt><dd>{time(handoff.observedAt)}</dd></div>
-    <div><dt>Kemasan fisik / nilai barang bawaan</dt><dd>0 / 0</dd></div><div><dt>Pernyataan operator</dt><dd>Sumber kosong; pencatat sebelumnya dihentikan; tidak ada stok yang belum dicatat.</dd></div></dl>;
+  return <Facts columns={1} items={[{ term: "Acuan serah terima", value: handoff.reference }, { term: "Waktu pemeriksaan", value: time(handoff.observedAt) },
+    { term: "Kemasan fisik / nilai barang bawaan", value: "0 / 0" }, { term: "Pernyataan operator", value: "Sumber kosong; pencatat sebelumnya dihentikan; tidak ada stok yang belum dicatat." }]} />;
 }
 function ActivationFacts({ detail }: { detail: ActivationDetail }) {
   return <section><h3>Pengajuan {detail.id} · {status[detail.status]}</h3><p>{time(detail.proposedAt)}</p>
@@ -207,6 +210,6 @@ function FinalReview({ command, disabled, onCancel, onConfirm }: { command: Acti
     <h3>Alasan yang akan dicatat</h3><p className={common.preserve}>{command.body.reason}</p>
     <fieldset className={common.fields} disabled={disabled}><legend>Konfirmasi tindakan</legend>
       <label><input type="checkbox" required checked={confirmed} onChange={event => setConfirmed(event.target.checked)} /> Saya telah memeriksa sumber, serah terima, dan keputusan ini. Tindakan ini tidak menambah stok, menetapkan harga, memproses pembayaran, atau menerbitkan invoice.</label>
-    </fieldset><div className={common.actions}><button className={common.primary} type="submit" disabled={disabled || !confirmed}>{label}</button>
-      <button className={common.secondary} type="button" disabled={disabled} onClick={onCancel}>Kembali memeriksa</button></div></form>;
+    </fieldset><div className={common.actions}><Button variant="primary" type="submit" disabled={disabled || !confirmed}>{label}</Button>
+      <Button variant="secondary" type="button" disabled={disabled} onClick={onCancel}>Kembali memeriksa</Button></div></form>;
 }

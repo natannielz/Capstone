@@ -1,4 +1,39 @@
-.facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin:24px 0}.facts dt{font-size:.85rem;color:#526960}.facts dd{margin:4px 0;font-weight:600;overflow-wrap:anywhere}.lines,.candidates{list-style:none;padding:0;display:grid;gap:12px}.lines li,.candidates li{padding:18px;border:1px solid #d8e3de;border-radius:10px;background:#fff;overflow-wrap:anywhere}.lines p,.candidates p{margin:6px 0;font-size:.9rem}.candidates label{display:flex;gap:12px;align-items:flex-start}.candidates label input{width:20px!important;height:20px;margin-top:3px;flex:none}.candidates label span span{display:block;font-size:.9rem;margin-top:5px}.total{display:flex;justify-content:space-between;gap:16px;padding:20px;background:#edf6f1;border-radius:10px;font-size:1.1rem}.total strong{overflow-wrap:anywhere}@media(max-width:600px){.facts{grid-template-columns:1fr}.total{flex-direction:column}.lines li,.candidates li{padding:14px}}
-.evidencePreview{margin-top:24px;padding:18px;border:1px solid #b4cdc0;border-radius:12px;background:#f6faf8}.evidenceImage{position:relative;width:100%;height:min(65vh,640px);min-height:200px;margin:16px 0;background:#e8efeb;border-radius:8px;overflow:hidden}.evidencePreview h3{overflow-wrap:anywhere}
-.correctionPanel{margin:24px 0;padding-top:20px;border-top:1px solid #d8e3de}.correctionFields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin:20px 0}.correctionField{display:flex;flex-direction:column;gap:8px;padding:14px;background:#f6faf8;border:1px solid #d8e3de;border-radius:8px;min-width:0}.correctionField label{font-weight:600}.correctionField p{margin:0;font-size:.85rem;overflow-wrap:anywhere;color:#526960}.correctionField input{margin-top:auto}@media(max-width:600px){.correctionFields{grid-template-columns:1fr}}
-.queueMeta{margin:2px 0 0;font-size:13px;line-height:1.45;color:var(--muted-foreground)}
+/* Billing pages and their panels (ui-standard.md): tokens only, spacing 4/8/12/16/24/32/48, one level of boxing.
+   Lists inside a section are divided rows, not bordered cards; detail and preview panels are inset (muted, no border). */
+.facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4) var(--space-6); margin: 0; font-variant-numeric: tabular-nums; }
+.facts > div { display: grid; gap: var(--space-1); min-width: 0; }
+.facts dt { font-size: 13px; line-height: 20px; color: var(--muted-foreground); }
+.facts dd { margin: 0; font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
+.lines, .candidates { list-style: none; margin: 0; padding: 0; display: grid; }
+.lines > li, .candidates > li { display: grid; gap: var(--space-1); padding: var(--space-3) 0; border-top: 1px solid var(--border); overflow-wrap: anywhere; }
+.lines > li:first-child, .candidates > li:first-child { border-top: 0; padding-top: 0; }
+.lines p, .candidates p { margin: 0; font-size: 14px; line-height: 20px; color: var(--muted-foreground); }
+.candidates label { display: flex; align-items: flex-start; gap: var(--space-3); min-height: var(--control-h); font-size: 15px; font-weight: 400; }
+.candidates label input { flex: none; width: 20px; height: 20px; margin: 2px 0 0; accent-color: var(--primary); }
+.candidates label span { display: grid; gap: var(--space-1); min-width: 0; }
+.candidates label span span { font-size: 13px; line-height: 20px; color: var(--muted-foreground); }
+.total { display: flex; justify-content: space-between; gap: var(--space-4); padding: var(--space-4); border-radius: var(--radius-control); background: var(--muted); font-size: 16px; font-variant-numeric: tabular-nums; }
+.total strong { overflow-wrap: anywhere; }
+.evidencePreview { display: grid; gap: var(--space-3); padding: var(--space-4); border-radius: var(--radius-control); background: var(--muted); }
+.evidencePreview h3 { margin: 0; overflow-wrap: anywhere; }
+.evidenceImage { position: relative; width: 100%; height: min(65vh, 640px); min-height: 200px; background: var(--card); border-radius: var(--radius-control); overflow: hidden; }
+.correctionPanel { display: grid; gap: var(--space-4); padding-top: var(--space-6); border-top: 1px solid var(--border); }
+.correctionFields, .detailFields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); }
+.correctionField { display: grid; gap: var(--space-2); padding: var(--space-4); background: var(--muted); border-radius: var(--radius-control); min-width: 0; }
+.correctionField label { font-weight: 600; }
+.correctionField p { margin: 0; font-size: 13px; color: var(--muted-foreground); overflow-wrap: anywhere; }
+.correctionField input { margin-top: auto; }
+/* Proposed vs. observed account details side by side (two inset panels in one section). */
+.compare { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); }
+.compare > section, .policy { display: grid; gap: var(--space-2); padding: var(--space-4); border-radius: var(--radius-control); background: var(--muted); min-width: 0; }
+.compare h3, .policy h3, .policy p { margin: 0; }
+.queueMeta { margin: var(--space-1) 0 0; font-size: 13px; line-height: 20px; color: var(--muted-foreground); }
+/* A notice that asks for one step (fresh verification): the warning tone surface, full width, no stripe. */
+.notice { display: grid; gap: var(--space-2); max-width: none; margin: 0; padding: var(--space-4) var(--space-6); border-radius: var(--radius-card); background: var(--tone-warning); color: var(--tone-warning-foreground); overflow-wrap: anywhere; }
+.notice p { margin: 0; }
+.notice a { color: inherit; font-weight: 600; }
+@media (max-width: 639px) {
+  .facts, .correctionFields, .detailFields, .compare { grid-template-columns: minmax(0, 1fr); }
+  .total { flex-direction: column; }
+  .notice { padding: var(--space-4); }
+}

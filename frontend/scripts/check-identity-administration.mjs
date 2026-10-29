@@ -37,6 +37,8 @@ const invitation={id:'9007199254740995',userId:target,intendedEmail:'invite@exam
 const profile={userId:target,displayName:'Operator Cabang',verifiedEmail:'operator@example.test',verifiedAt:new Date().toISOString(),status:'active',securityVersion:'9007199254740997',grantVersion:'1'};
 async function setup(width=1365,height=1000){
  const context=await browser.newContext({viewport:{width,height},locale:'id-ID',timezoneId:'Asia/Jakarta',serviceWorkers:'block'});
+ // A synthetic session cookie so the request guard lets the page render; the API stays mocked.
+ await context.addCookies([{name:'__Host-ut_session',value:'synthetic-check',domain:new URL(base).hostname,path:'/',secure:true,httpOnly:true,sameSite:'Lax'}]);
  const page=await context.newPage(); page.setDefaultTimeout(10000);
  const state={mode:'ok',decision:'ok',proposal:'ok',receipt:'committed',actorId:actor,calls:[],errors:[],reads:0};
  page.on('pageerror',e=>state.errors.push(e.message));
@@ -45,8 +47,7 @@ async function setup(width=1365,height=1000){
   const request=route.request(),url=new URL(request.url());
   if(url.origin!==base)return route.abort();
   const answer=(body,status=200)=>route.fulfill({status,contentType:'application/json',headers:{'Cache-Control':'no-store'},body:JSON.stringify(body)});
-  // The page needs a session cookie to render (the proxy sends cookie-less visits to sign-in); the API stays mocked.
-  if(!url.pathname.startsWith('/api/v1'))return route.continue({headers:{...request.headers(),cookie:'__Host-ut_session=synthetic-check'}});
+  if(!url.pathname.startsWith('/api/v1'))return route.continue();
   if(url.pathname==='/api/v1/identity/csrf')return answer({requestToken:'fixture-csrf'});
   if(url.pathname==='/api/v1/access/current'){
    if(state.mode==='unauthenticated')return answer({code:'unauthenticated'},401);

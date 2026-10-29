@@ -8,9 +8,11 @@ using MongoDB.Bson;
 using MongoDB.Driver;
 using UnitToko.Modules.Catalog;
 using UnitToko.Modules.Identity.Contracts;
+using UnitToko.Platform.Authorization;
 using UnitToko.Platform;
 using UnitToko.Platform.Catalog;
 using UnitToko.Platform.Mongo;
+using UnitToko.Platform.Organizations;
 
 // The integration test below switches the process-wide pilot profile; nothing else may run beside it.
 [assembly: CollectionBehavior(DisableTestParallelization = true)]
@@ -30,6 +32,16 @@ public sealed class PilotSamplesTests
         Assert.All(chosen, sku => Assert.False(string.IsNullOrWhiteSpace(products[sku].Image)));
         Assert.Equal(new long[] { 3, 5 }, PilotSamples.Missing([1, 2, 3, 4, 5], new HashSet<long> { 1, 4 }, new HashSet<long> { 2 }));
         Assert.Empty(PilotSamples.Missing([1, 2], new HashSet<long> { 1, 2 }, new HashSet<long>()));
+    }
+
+    [Fact]
+    public void Only_an_owner_outside_petugas_scope_is_skipped_while_a_missing_propose_grant_fails_the_start()
+    {
+        // scope_denied: the service's refusal for a catalog owner outside petugas's scope; that owner's staff decide.
+        Assert.True(PilotSamples.IsOutsideOwnerScope(new AuthorizationDeniedException("scope_denied")));
+        // permission_denied (and anything else): petugas holds no usable catalog.public.propose at all; the start must fail.
+        Assert.False(PilotSamples.IsOutsideOwnerScope(new AuthorizationDeniedException("permission_denied")));
+        Assert.False(PilotSamples.IsOutsideOwnerScope(new AuthorizationDeniedException("step_up_required")));
     }
 
     [Fact]
@@ -69,6 +81,22 @@ public sealed class PilotSamplesTests
             await PilotBootstrap.InitializeDatabaseAsync(client, database, secrets, CancellationToken.None);
             BsonDocument[] Rows(string table) => [.. database.GetCollection<BsonDocument>(table).Find(FilterDefinition<BsonDocument>.Empty).Sort(new BsonDocument("_id", 1)).ToList()];
             var families = PilotSamples.ChosenSkus().Select(sku => database.GetCollection<BsonDocument>("skus").Find(new BsonDocument("sku", sku)).Single()["familyId"].AsInt64).ToArray();
+
+            // G-034: every organisation profile is named through the application (technical.configure proposes, a different person with
+            // organization.approve approves), so it carries the approval history the first reads require.
+            foreach (var node in new long[] { 10, 11, 12, 100, 101, 102, 103 })
+            {
+                Assert.Single(Rows("organizationProfiles"), row => row["_id"] == node);
+                var named = Assert.Single(Rows("organizationProposals"), row => row["scopeId"] == node);
+                Assert.Equal(("approved", 890001L, 890002L), (named["status"].AsString, named["requestedBy"].AsInt64, named["approvedBy"].AsInt64));
+                Assert.Single(Rows("authorizationHistory"), row => row["operation"] == "organization.approved" && row["after"]["profile"]["_id"] == node);
+            }
+            var store = new AuthorizationStore(database, new MongoUnitOfWork(client), new SystemClock());
+            var addresses = new OrganizationAddressService(database, new MongoUnitOfWork(client), new(database), new SystemClock(),
+                new OrganizationMasterDataService(database, store, new(database), new SystemClock()));
+            var pemohon = new ActorContext(3001, PilotBoundary.Issuer, "local-pilot|3001", 1, DateTimeOffset.UtcNow, FactorAssurance.MultiFactor);
+            var targets = await addresses.TargetsAsync(pemohon, UnitToko.Modules.Organizations.OrganizationAddressPurpose.Delivery);
+            Assert.Contains(targets["items"].AsBsonArray, item => item["target"]["id"].AsInt64 == 11);
 
             // Twelve samples, exactly the chosen products, through one proposal by petugas approved by peninjau.
             var samples = Rows("catalogPublicSamples");
@@ -145,6 +173,67 @@ public sealed class PilotSamplesTests
             Assert.Equal(11, Rows("catalogPublicSamples").Length);
             await PilotBootstrap.InitializeDatabaseAsync(client, database, secrets, CancellationToken.None);
             Assert.Equal(families.Order(), Rows("catalogPublicSamples").Select(row => row["_id"].AsInt64).Order());
+
+            // A staff-chosen extra product inside the cap is left alone.
+            var extra = database.GetCollection<BsonDocument>("skus").Find(new BsonDocument { { "sku", "DEMO-004" }, { "active", true } }).Single()["familyId"].AsInt64;
+            var staff = await service.ProposeAsync(Actor(2001), [extra], [], new("review-ui.staff-extra", "Pilihan staf", "review-ui"));
+            await service.DecideAsync(Actor(2002), staff["proposalId"].AsInt64, CatalogPublicSampleDecision.Approve, new("review-ui.staff-extra-ok", "Diperiksa", "review-ui"));
+            before = Proposals();
+            await PilotBootstrap.InitializeDatabaseAsync(client, database, secrets, CancellationToken.None);
+            Assert.Equal(13, Rows("catalogPublicSamples").Length);
+            Assert.Equal(before, Proposals());
+
+            // Over-cap fixture: what the version 122 conversion of a public assortment wrote (every published product a sample). Only this
+            // fixture writes the collection directly; the pilot narrows it back through the service.
+            var published = database.GetCollection<BsonDocument>("skus").Distinct<long>("familyId",
+                new BsonDocument { { "active", true }, { "catalogListings.assortmentId", 501L } }).ToList();
+            var present = Rows("catalogPublicSamples").Select(row => row["_id"].AsInt64).ToHashSet();
+            var converted = database.GetCollection<BsonDocument>("productFamilies").Find(new BsonDocument("active", true)).ToList()
+                .Where(row => published.Contains(row["_id"].AsInt64) && !present.Contains(row["_id"].AsInt64))
+                .Select(row => new BsonDocument { { "_id", row["_id"] }, { "schemaVersion", 1 }, { "ownerScope", row["authoringOwner"] }, { "revision", 1L },
+                    { "addedAt", DateTime.UtcNow.AddMinutes(-1) }, { "approvedProposalId", BsonNull.Value },
+                    { "migratedFrom", new BsonDocument { { "assortmentId", 501L }, { "showcaseDecisionId", 1L } } } }).ToList();
+            await database.GetCollection<BsonDocument>("catalogPublicSamples").InsertManyAsync(converted);
+            var overCap = Rows("catalogPublicSamples").Length;
+            Assert.True(overCap > 200, "fixture must exceed the cap, has " + overCap);
+            before = Proposals();
+            await PilotBootstrap.InitializeDatabaseAsync(client, database, secrets, CancellationToken.None);
+            // Narrowed to exactly the chosen twelve, through removal proposals by petugas (at most 200 products each) approved by peninjau.
+            Assert.Equal(families.Order(), Rows("catalogPublicSamples").Select(row => row["_id"].AsInt64).Order());
+            var narrowing = Rows("catalogPublicSampleProposals").Skip(before).ToArray();
+            Assert.Equal((overCap - 12 + 199) / 200, narrowing.Length);
+            Assert.All(narrowing, row =>
+            {
+                Assert.Equal(("approved", 2001L, 2002L), (row["state"].AsString, row["proposedBy"].AsInt64, row["decision"]["decidedBy"].AsInt64));
+                Assert.Empty(row["adds"].AsBsonArray);
+                Assert.InRange(row["removes"].AsBsonArray.Count, 1, 200);
+                Assert.DoesNotContain(row["removes"].AsBsonArray, id => families.Contains(id.AsInt64));
+                Assert.StartsWith(PilotSamples.ProposeKeyPrefix, row["requestKey"].AsString);
+            });
+            Assert.Equal(overCap - 12, narrowing.Sum(row => row["removes"].AsBsonArray.Count));
+            // Back inside the cap, a restart changes nothing.
+            before = Proposals();
+            await PilotBootstrap.InitializeDatabaseAsync(client, database, secrets, CancellationToken.None);
+            Assert.Equal(before, Proposals());
+
+            // An interrupted narrowing converges: over the cap again, the pilot's first removal batch was approved and its second left
+            // pending when the start stopped. The set is now under the cap, yet the next start finishes the pilot's own narrowing (approving
+            // the pending batch) instead of keeping the leftovers as if staff had chosen them.
+            await database.GetCollection<BsonDocument>("catalogPublicSamples").InsertManyAsync(converted.Select(row => row.DeepClone().AsBsonDocument));
+            Assert.True(Rows("catalogPublicSamples").Length > 200);
+            var leftovers = converted.Select(row => row["_id"].AsInt64).Order().ToArray();
+            var first = await service.ProposeAsync(Actor(2001), [], [.. leftovers.Take(200)], new(PilotSamples.ProposeKeyPrefix + "interrupted-batch-1", "SYNTHETIC: dipersempit", "local-pilot-samples"));
+            await service.DecideAsync(Actor(2002), first["proposalId"].AsInt64, CatalogPublicSampleDecision.Approve, new("local-pilot.samples-v1.approve.interrupted-batch-1", "SYNTHETIC: diperiksa", "local-pilot-samples"));
+            var second = await service.ProposeAsync(Actor(2001), [], [.. leftovers.Skip(200)], new(PilotSamples.ProposeKeyPrefix + "interrupted-batch-2", "SYNTHETIC: dipersempit", "local-pilot-samples"));
+            Assert.InRange(Rows("catalogPublicSamples").Length, 13, 200);
+            before = Proposals();
+            await PilotBootstrap.InitializeDatabaseAsync(client, database, secrets, CancellationToken.None);
+            Assert.Equal(families.Order(), Rows("catalogPublicSamples").Select(row => row["_id"].AsInt64).Order());
+            var finished = Rows("catalogPublicSampleProposals").Single(row => row["_id"] == second["proposalId"]);
+            Assert.Equal(("approved", 2002L), (finished["state"].AsString, finished["decision"]["decidedBy"].AsInt64));
+            Assert.Equal(before, Proposals());
+            Assert.DoesNotContain(Rows("catalogPublicSampleProposals"), row => row["removes"].AsBsonArray.Any(id => families.Contains(id.AsInt64)) &&
+                row["requestKey"].AsString.StartsWith(PilotSamples.ProposeKeyPrefix, StringComparison.Ordinal));
 
             // Guests see exactly these twelve, and no price anywhere in the answer.
             await using var api = new PublicApi(uri, name);

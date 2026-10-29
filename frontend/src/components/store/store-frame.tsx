@@ -12,7 +12,9 @@ import { ProtectedNavigationForm } from '@/modules/identity/ProtectedNavigationF
 import { isPilotRelease } from '@/lib/release-scope';
 import { createCartGateway } from '@/modules/ordering/cart-client';
 import { CART_CHANGED_EVENT, rememberedCartContext } from '@/modules/ordering/cart-branch';
+import { StoreFrameContext } from './store-frame-context';
 import { catalogTabCurrent, storeLinks, storeMember, type StoreLinks, type StoreViewer } from './store-navigation';
+import { buttonClassName } from '@/components/workspace-kit/button';
 import styles from './store-frame.module.css';
 
 /** Pages where the buyer is deciding or paying: the tab bar steps aside for the page's own action bar. */
@@ -84,39 +86,42 @@ export function StoreFrame({ children }: { children: React.ReactNode }) {
     <input id={className + '-q'} type="search" value={query} maxLength={128} placeholder="Cari barang, merek, atau kode" onChange={event => setQuery(event.target.value)} />
     <button type="submit" aria-label="Cari"><Search size={18} aria-hidden="true" /></button>
   </form>;
-  return <div className={styles.frame} data-store-frame="">
+  // One header landmark (U-029): the 32 px information row scrolls away inside it; the 64 px main bar stays. Header actions share
+  // the tertiary Button look; "Masuk" is the one primary.
+  return <StoreFrameContext.Provider value={true}><div className={styles.frame} data-store-frame="">
+    <header className={styles.header}>
     <div className={styles.utility}><div className={styles.inner}>
       <nav aria-label="Informasi"><Link href="/#layanan">Cara pemesanan cabang</Link>{help && <a href={help} target="_blank" rel="noopener noreferrer">Bantuan · WhatsApp</a>}</nav>
       {links.staffDoor && viewer.kind !== 'loading' && <Link className={styles.staffDoor} href={links.staffDoor}>Ruang kerja petugas</Link>}
     </div></div>
-    <header className={styles.header}><div className={`${styles.inner} ${styles.mainBar}`}>
+    <div className={`${styles.inner} ${styles.mainBar}`}>
       <Brand className={styles.brand} context="Toko kebutuhan cabang" />
       <Link className={styles.mark} href="/" aria-label="Unit Toko — beranda"><BrandMark /></Link>
-      <Link className={styles.categories} href={links.catalog}><LayoutGrid size={18} aria-hidden="true" />Kategori</Link>
+      <Link className={buttonClassName({ variant: 'tertiary', className: styles.categories })} href={links.catalog}><LayoutGrid aria-hidden="true" />Kategori</Link>
       {searchForm(styles.search)}
       <div className={styles.actions}>
-        {member?.staff && <Link className={styles.workspace} href="/workspace"><Briefcase size={17} aria-hidden="true" />Ruang kerja</Link>}
-        {viewer.kind !== 'loading' && <Link className={styles.iconLink} href={links.cart} aria-label={cartName}>
-          <span className={styles.cartIcon}><ShoppingCart size={21} aria-hidden="true" />{badge}</span><span className={styles.iconLabel}>{isPilotRelease ? 'Permintaan' : 'Keranjang'}</span></Link>}
-        {viewer.kind === 'guest' && <Link className={styles.signIn} href={links.signIn}>Masuk</Link>}
-        {member && session && <AccountMenu name={member.name} tasks={member.tasks} staff={member.staff} orders={links.orders} actorId={session.userId} />}
+        {member?.staff && <Link className={buttonClassName({ variant: 'tertiary', className: styles.workspace })} href="/workspace"><Briefcase aria-hidden="true" />Ruang kerja</Link>}
+        {viewer.kind !== 'loading' && links.cart && <Link className={buttonClassName({ variant: 'tertiary', className: styles.iconLink })} href={links.cart} aria-label={cartName}>
+          <span className={styles.cartIcon}><ShoppingCart aria-hidden="true" />{badge}</span><span className={styles.iconLabel}>{isPilotRelease ? 'Permintaan' : 'Keranjang'}</span></Link>}
+        {viewer.kind === 'guest' && <Link className={buttonClassName({ variant: 'primary', className: styles.signIn })} href={links.signIn}>Masuk</Link>}
+        {member && session && <AccountMenu name={member.name} tasks={member.tasks} staff={member.staff} orders={links.orders} requests={member.requests} actorId={session.userId} />}
         {viewer.kind === 'loading' && <span className={styles.pending} aria-hidden="true" />}
       </div>
     </div>
     {searchForm(styles.mobileSearch)}
     </header>
     <div id="konten-utama" tabIndex={-1} className={styles.content}>{children}</div>
-    <StoreFooter links={links} member={member !== null} />
+    <StoreFooter links={links} member={member !== null} requests={member?.requests ?? false} />
     {!focusedPath(pathname) && <nav className={styles.tabs} aria-label="Navigasi toko">
       <Link href={links.catalog} aria-current={catalogTabCurrent(pathname) ? 'page' : undefined}><LayoutGrid size={20} aria-hidden="true" />Katalog</Link>
-      <Link href={links.cart} aria-label={cartName} aria-current={pathname === '/cart' ? 'page' : undefined}><span className={styles.cartIcon}><ShoppingCart size={20} aria-hidden="true" />{badge}</span>{isPilotRelease ? 'Permintaan' : 'Keranjang'}</Link>
+      {links.cart && <Link href={links.cart} aria-label={cartName} aria-current={pathname === '/cart' ? 'page' : undefined}><span className={styles.cartIcon}><ShoppingCart size={20} aria-hidden="true" />{badge}</span>{isPilotRelease ? 'Permintaan' : 'Keranjang'}</Link>}
       {links.orders && <Link href={links.orders} aria-current={pathname.startsWith('/ordering/orders') ? 'page' : undefined}><ClipboardList size={20} aria-hidden="true" />Pesanan</Link>}
       <Link href={links.account} aria-current={pathname === '/identity/account' ? 'page' : undefined}><UserRound size={20} aria-hidden="true" />{member ? 'Akun' : 'Masuk'}</Link>
     </nav>}
-  </div>;
+  </div></StoreFrameContext.Provider>;
 }
 
-function AccountMenu({ name, tasks, staff, orders, actorId }: { name: string; tasks: { href: string; label: string }[]; staff: boolean; orders: string | null; actorId: string }) {
+function AccountMenu({ name, tasks, staff, orders, requests, actorId }: { name: string; tasks: { href: string; label: string }[]; staff: boolean; orders: string | null; requests: boolean; actorId: string }) {
   const [open, setOpen] = useState(false), root = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
@@ -126,12 +131,12 @@ function AccountMenu({ name, tasks, staff, orders, actorId }: { name: string; ta
     return () => { document.removeEventListener('mousedown', away); document.removeEventListener('keydown', escape); };
   }, [open]);
   return <div className={styles.account} ref={root}>
-    <button type="button" className={styles.accountButton} aria-expanded={open} aria-controls="menu-akun" onClick={() => setOpen(value => !value)}>
+    <button type="button" className={buttonClassName({ variant: 'tertiary', className: styles.accountButton })} aria-expanded={open} aria-controls="menu-akun" onClick={() => setOpen(value => !value)}>
       <UserRound size={19} aria-hidden="true" /><span>{name}</span><ChevronDown size={16} aria-hidden="true" /></button>
     {open && <div id="menu-akun" className={styles.menu}>
       <p className={styles.menuName}>{name}</p>
       {orders && <Link href={orders} onClick={() => setOpen(false)}>Pesanan saya</Link>}
-      <Link href="/ordering/requests" onClick={() => setOpen(false)}>Permintaan saya</Link>
+      {requests && <Link href="/ordering/requests" onClick={() => setOpen(false)}>Permintaan saya</Link>}
       {/* The buyer's own tasks outside the storefront pages, each only when the grants open it (G-018); they keep the page's one name (G-019). */}
       {tasks.map(task => <Link key={task.href} href={task.href} onClick={() => setOpen(false)}>{task.label}</Link>)}
       <Link href="/identity/account" onClick={() => setOpen(false)}>Akun saya</Link>
@@ -142,11 +147,11 @@ function AccountMenu({ name, tasks, staff, orders, actorId }: { name: string; ta
 }
 
 /** The footer follows the viewer like the header (G-021): the catalog they can open, sign-in that returns here, the staff door only for staff and guests. */
-function StoreFooter({ links, member }: { links: StoreLinks; member: boolean }) {
+function StoreFooter({ links, member, requests }: { links: StoreLinks; member: boolean; requests: boolean }) {
   return <footer className={styles.footer}><div className={`${styles.inner} ${styles.footerGrid}`}>
     <div><Brand inverse context="Toko kebutuhan cabang" /><p>Kebutuhan kantor, pantry dan kegiatan untuk cabang BNI, dipesan dan dilacak dari satu akun.</p></div>
     <nav aria-label="Belanja"><h2>Belanja</h2><Link href={links.catalog}>Katalog</Link><Link href="/#layanan">Cara pemesanan cabang</Link></nav>
-    <nav aria-label="Akun"><h2>Akun</h2>{member ? <>{links.orders && <Link href={links.orders}>Pesanan saya</Link>}<Link href="/ordering/requests">Permintaan saya</Link><Link href="/identity/account">Akun saya</Link></> :
+    <nav aria-label="Akun"><h2>Akun</h2>{member ? <>{links.orders && <Link href={links.orders}>Pesanan saya</Link>}{requests && <Link href="/ordering/requests">Permintaan saya</Link>}<Link href="/identity/account">Akun saya</Link></> :
       <><Link href={links.signIn}>Masuk</Link><Link href="/#akses">Belum punya akses?</Link></>}</nav>
     <nav aria-label="Koperasi"><h2>Unit Toko</h2><Link href="/">Beranda</Link>{links.staffDoor && <Link href={links.staffDoor}>Ruang kerja petugas</Link>}</nav>
   </div></footer>;

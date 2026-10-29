@@ -7,7 +7,7 @@ import { createAccessGateway } from '../administration/access-client';
 import { AdministrationNavigation } from '../administration/AdministrationNavigation';
 import { OperationRecovery, useOperationRecovery } from '../administration/OperationRecovery';
 import { submitTrackedRequest } from '../administration/operation-journal';
-import { AccessFailure, accessMessage } from '../administration/workflow';
+import { AccessFailure, accessMessage, businessRefusal } from '../administration/workflow';
 import { createIdentityGateway } from '../identity/identity-client';
 import { IdentityFailure, identityMessage, sessionTiming, type IdentitySession } from '../identity/identity-workflow';
 import { createCatalogPriceGateway } from './catalog-price-client';
@@ -16,8 +16,17 @@ import { PriceMutationLedger, priceRecoverySku } from './catalog-price-recovery'
 import { pricePath, preparePriceProposal, preparePriceDecision, priceChange, type PriceAccess, type PriceChoice, type PricePreview,
   type PriceProposal, type PriceCommand, type CatalogPrice } from './catalog-price-workflow';
 import styles from '../administration/access.module.css';
+import editor from './catalog-editor.module.css';
 import { dateTimeFormatter, formatMoney, formatRupiah } from "@/lib/format";
 import { rupiahAmount } from "@/lib/rupiah-input";
+import { Button } from '@/components/workspace-kit/button';
+import { PageHeader } from '@/components/workspace-kit/page-header';
+import { StateView } from '@/components/workspace-kit/state-view';
+import { Section } from '@/components/workspace-kit/section';
+import { DataList } from '@/components/workspace-kit/data-list';
+import { Badge } from '@/components/workspace-kit/badge';
+import { Tabs } from '@/components/workspace-kit/tabs';
+import { Facts } from '@/components/workspace-kit/facts';
 
 const factorHref = '/identity/account?operation=pricing.approve&returnPath=' + encodeURIComponent(pricePath);
 type Loaded = { actorId: string; actions: string[]; session: IdentitySession; observedAt: number; generation: number };
@@ -28,7 +37,7 @@ function message(error: unknown): string {
     if (error.code === 'catalog_price_input_invalid') return 'Lengkapi mata uang, harga per kemasan dan alasan. Tulis harga seperti 12.000 atau 12000,50 (paling banyak dua angka di belakang koma).';
     if (error.code === 'step_up_required') return 'Verifikasi dua langkah terbaru diperlukan untuk meninjau harga dan memeriksa hasil keputusan.';
     if (error.status === 409) return 'Harga atau kemasan telah berubah. Muat ulang dan tinjau kembali sebelum mengirim.';
-    if (error.status === 403) return 'Tindakan tidak diizinkan. Pemeriksa harus orang terverifikasi yang berbeda dari pengaju dan memiliki penugasan yang masih berlaku.';
+    if (error.status === 403 && businessRefusal(error.code)) return 'Tindakan tidak diizinkan. Pemeriksa harus orang terverifikasi yang berbeda dari pengaju dan memiliki penugasan yang masih berlaku.';
     return accessMessage(error);
   }
   return 'Hasil belum dapat dipastikan. Periksa referensi permintaan yang tersimpan sebelum mengirim lagi.';
@@ -43,11 +52,15 @@ function PriceComparison({ base, proposed }: { base: { currency: string; unitPri
   const change = priceChange(base, proposed);
   const moved = change.kind === 'first' ? 'Harga pertama untuk kemasan ini' : change.kind === 'currency' ? 'Mata uang berbeda dari harga berlaku'
     : change.kind === 'same' ? 'Tidak berubah' : (change.kind === 'up' ? 'Naik ' : 'Turun ') + formatMoney(proposed.currency, change.difference!) + (change.percent ? ' (' + (change.kind === 'up' ? '+' : '−') + change.percent + '%)' : '');
-  return <><dl className={styles.facts}><div><dt>Harga berlaku</dt><dd>{amount(base)}</dd></div><div><dt>Harga diajukan</dt><dd><strong>{amount(proposed)}</strong></dd></div>
-    <div><dt>Perubahan</dt><dd>{moved}</dd></div></dl>
-    {change.large && <p className={styles.alert}>Perubahan besar. Periksa kontrak, acuan harga dan alasan sebelum memutuskan.</p>}</>;
+  return <><Facts items={[{ term: 'Harga berlaku', value: amount(base) }, { term: 'Harga diajukan', value: <strong>{amount(proposed)}</strong> }, { term: 'Perubahan', value: moved }]} />
+    {change.large && <div className="ui-notice" data-tone="warning">Perubahan besar. Periksa kontrak, acuan harga dan alasan sebelum memutuskan.</div>}</>;
 }
 const status = (value: PriceProposal['status']) => ({ proposed: 'Menunggu tinjauan', approve: 'Disetujui', reject: 'Ditolak', withdraw: 'Ditarik' })[value];
+/** " · +8%" after a proposal's date when the price moves (empty for a first price, a currency change or no change). */
+function proposalChange(item: PriceProposal) {
+  const change = priceChange(item.basePrice, item.input);
+  return change.percent && change.kind !== 'same' ? ' · ' + (change.kind === 'up' ? '+' : '−') + change.percent + '%' : '';
+}
 
 export function CatalogPriceWorkspace() {
   const [identity] = useState(() => createIdentityGateway()), [access] = useState(() => createAccessGateway()), [gate] = useState(() => new CatalogReadGate());
@@ -71,10 +84,11 @@ export function CatalogPriceWorkspace() {
     window.addEventListener('pageshow', restored); return () => { active = false; gate.cancel(); window.removeEventListener('pageshow', restored); };
   }, [refresh, gate]);
   const failedSession = useCallback((failure: unknown) => { if (lost(failure)) { gate.cancel(); setLoaded(null); setError(failure); setLoading(false); } }, [gate]);
-  return <main className={styles.page}><header className={styles.header}><div><Link href="/identity/account" className={styles.brand}>Unit Toko</Link><h1>Harga kemasan</h1><p>Harga yang jelas untuk setiap kemasan, dengan peninjauan oleh orang yang berbeda.</p></div></header>
+  return <main className={styles.page}><PageHeader title="Harga kemasan" description="Harga yang jelas untuk setiap kemasan, dengan peninjauan oleh orang yang berbeda." />
+    <div className="ui-stack">
     {loaded ? <PriceDesk key={loaded.actorId + ':' + loaded.generation} {...loaded} onRefresh={refresh} onFailure={failedSession} /> :
-      (loading ? <section className={styles.state} aria-busy="true"><h2>Memeriksa sesi dan akses</h2></section>
-        : <SessionAccessState error={error} returnPath={pricePath} onRetry={() => void refresh()} detail={error !== null ? message(error) : undefined} />)}
+      (loading ? <StateView kind="loading" title="Memeriksa sesi dan akses" />
+        : <SessionAccessState error={error} returnPath={pricePath} onRetry={() => void refresh()} detail={error !== null ? message(error) : undefined} />)}</div>
   </main>;
 }
 
@@ -161,60 +175,71 @@ function PriceDesk({ actorId, actions, session, observedAt, onRefresh, onFailure
     finally { if (request.current()) setDetailLoading(false); }
   }
   const fact = staged?.action === 'propose' ? staged.preview : staged ? staged.proposal : null;
+  // View tabs only when there is a choice: a single view needs no switch (§8.1).
+  const views = [...actions.includes('pricing.manage') ? [{ label: 'Ajukan harga', value: 'prepare' }] : [], ...actions.includes('pricing.approve') ? [{ label: 'Tinjau harga', value: 'review' }] : []];
   return <>
     <AdministrationNavigation current="prices" actions={actions} locked={locked} />
-    <section className={styles.accountSection}><h2>Ruang harga sesuai penugasan</h2><p>Setiap harga berlaku untuk satu SKU dan kemasan tertentu. Pengajuan belum mengubah harga yang berlaku.</p>
-      <div className={styles.actions}>{actions.includes('pricing.manage') && <button className={mode === 'prepare' ? styles.primary : styles.secondary} disabled={locked} onClick={() => { clear(); setMode('prepare'); setAfter(null); }}>Ajukan harga</button>}
-        {actions.includes('pricing.approve') && <button className={mode === 'review' ? styles.primary : styles.secondary} disabled={locked} onClick={() => { clear(); setMode('review'); setAfter(null); }}>Tinjau harga</button>}
-        <button className={styles.secondary} disabled={busy || recovering} onClick={() => void onRefresh()}>Muat ulang sesi dan akses</button></div>
-      {(!timing.fresh && actions.includes('pricing.approve') || error instanceof AccessFailure && error.code === 'step_up_required') && <p className={styles.alert}>Verifikasi terbaru diperlukan. <Link href={factorHref}>Verifikasi dua langkah</Link></p>}
+    <Section title="Ruang harga sesuai penugasan" description="Setiap harga berlaku untuk satu SKU dan kemasan tertentu. Pengajuan belum mengubah harga yang berlaku."
+      actions={<Button variant="secondary" disabled={busy || recovering} onClick={() => void onRefresh()}>Muat ulang sesi dan akses</Button>}>
+      {views.length > 1 && <Tabs label="Ruang harga sesuai penugasan" current={mode} disabled={locked} onSelect={value => { clear(); setMode(value === 'review' ? 'review' : 'prepare'); setAfter(null); }}
+        items={views} />}
+      {(!timing.fresh && actions.includes('pricing.approve') || error instanceof AccessFailure && error.code === 'step_up_required') && <p className={editor.notice}>Verifikasi terbaru diperlukan. <Link href={factorHref}>Verifikasi dua langkah</Link></p>}
       {timing.expired && <SessionAccessState error={null} kind="expired" returnPath={pricePath} busy={busy || recovering} onRetry={() => void onRefresh()} />}
-    </section>
-    {error !== null && <p className={styles.alert} role="alert">{message(error)}</p>}{notice && <p className={styles.success} role="status">{notice}</p>}
-    {recovery.error !== null && <p className={styles.alert} role="alert">{accessMessage(recovery.error)}</p>}
+    </Section>
+    {error !== null && <StateView kind="error" title={message(error)} />}{notice && <p className={styles.success} role="status">{notice}</p>}
+    {recovery.error !== null && <StateView kind="error" title={accessMessage(recovery.error)} />}
     <OperationRecovery entries={recovery.entries} journal={recovery.journal} disabled={busy || timing.expired} onBusyChange={setRecovering} onFailure={failed}
       recoveryAdapters={{ 'catalog.price': { lookup: entry => gateway.receipt(entry, priceRecoverySku(entry.key)) } }}
       onResolved={() => { recovery.refresh(); ledger.resetAfterReconciliation(); clear(); setNotice('Hasil permintaan dipastikan. Pilih kembali kemasan untuk melihat riwayat terbaru.'); setRefresh(value => value + 1); }} />
-    {!forbidden && <div className={styles.desk}>
-      <section className={styles.queue} aria-busy={loading}><div className={styles.queueHeader}><h2>Pilih kemasan</h2>
+    {!forbidden && <div className={styles.desk + " " + editor.desk}>
+      <section className="ui-section" aria-busy={loading}><h2>Pilih kemasan</h2>
         <form className={styles.lookup} onSubmit={event => { event.preventDefault(); if (locked) return; clear(); setAfter(null); setQuery(search.trim()); setRefresh(value => value + 1); }}>
-          <label>Cari produk atau kode SKU<input value={search} maxLength={128} disabled={locked} onChange={event => setSearch(event.target.value)} /></label><button className={styles.secondary} disabled={locked || loading}>Cari</button></form></div>
-        {loading ? <p className={styles.empty}>Memuat kemasan…</p> : choices.length === 0 ? <p className={styles.empty}>Tidak ada kemasan dalam penugasan atau pencarian ini.</p> :
-          <ul className={styles.queueList}>{choices.map(item => <li key={item.sku.id}><button className={preview?.sku.id === item.sku.id ? styles.selectedRow : styles.queueRow} disabled={locked || detailLoading} onClick={() => void load(item.sku.id)}>
-            <strong>{item.familyName}</strong><span>{item.sku.code} · {item.definition.packageLabel}</span><span>{item.definition.baseUnitsPerPackage} {item.definition.baseUnitCode} per kemasan{!item.sku.active ? ' · Nonaktif' : ''}</span></button></li>)}</ul>}
-        <div className={styles.pagination}><button className={styles.secondary} disabled={locked || loading || after === null} onClick={() => { clear(); setAfter(null); }}>Awal daftar</button>
-          <button className={styles.secondary} disabled={locked || loading || choices.length < 25} onClick={() => { clear(); setAfter(choices.at(-1)!.sku.id); }}>Berikutnya</button></div>
+          <label>Cari produk atau kode SKU<input value={search} maxLength={128} disabled={locked} onChange={event => setSearch(event.target.value)} /></label><Button type="submit" variant="secondary" disabled={locked || loading}>Cari</Button></form>
+        <DataList label="Pilih kemasan" items={loading ? [] : choices} getKey={item => item.sku.id} loading={loading}
+          empty={error === null ? { title: 'Tidak ada kemasan dalam penugasan atau pencarian ini.' } : undefined}
+          renderTitle={item => item.familyName} renderBadge={item => item.sku.active ? null : <Badge tone="neutral" label="Nonaktif" />}
+          renderMeta={item => <>{item.sku.code} · {item.definition.packageLabel} · {item.definition.baseUnitsPerPackage} {item.definition.baseUnitCode} per kemasan</>}
+          onSelect={item => void load(item.sku.id)} selectedKey={preview?.sku.id ?? null} disabled={locked || detailLoading}
+          openLabel={item => item.familyName + ' ' + item.sku.code + ' · ' + item.definition.packageLabel + ' ' + item.definition.baseUnitsPerPackage + ' ' + item.definition.baseUnitCode + ' per kemasan' + (!item.sku.active ? ' · Nonaktif' : '')} />
+        <div className="ui-actions"><Button variant="secondary" disabled={locked || loading || after === null} onClick={() => { clear(); setAfter(null); }}>Awal daftar</Button>
+          <Button variant="secondary" disabled={locked || loading || choices.length < 25} onClick={() => { clear(); setAfter(choices.at(-1)!.sku.id); }}>Berikutnya</Button></div>
       </section>
-      <section className={styles.detail} aria-busy={detailLoading}><div className={styles.form} ref={formRef} tabIndex={-1}>
-        {!preview ? <p>{detailLoading ? 'Memuat harga dan riwayat…' : 'Pilih kemasan untuk melihat harga dan pengajuannya.'}</p> : <>
+      <section className="ui-section" aria-busy={detailLoading}><div className="ui-stack" ref={formRef} tabIndex={-1}>
+        {!preview ? (detailLoading ? <StateView kind="loading" title="Memuat harga dan riwayat…" /> : <p>Pilih kemasan untuk melihat harga dan pengajuannya.</p>) : <>
           <h2>{preview.sku.code} — {preview.definition.packageLabel}</h2><PackageFacts value={preview} />
-          <dl className={styles.facts}><div><dt>Harga berlaku per kemasan</dt><dd>{amount(preview.currentPrice)}</dd></div><div><dt>Waktu persetujuan</dt><dd>{preview.currentPrice ? date(preview.currentPrice.effectiveAt) : 'Belum tersedia'}</dd></div></dl>
-          <button className={styles.secondary} disabled={locked || detailLoading} onClick={() => void load(preview.sku.id)}>Muat ulang harga dan riwayat</button>
+          <Facts items={[{ term: 'Harga berlaku per kemasan', value: amount(preview.currentPrice) }, { term: 'Waktu persetujuan', value: preview.currentPrice ? date(preview.currentPrice.effectiveAt) : 'Belum tersedia' }]} />
+          <div className="ui-actions"><Button variant="secondary" disabled={locked || detailLoading} onClick={() => void load(preview.sku.id)}>Muat ulang harga dan riwayat</Button></div>
           {mode === 'prepare' && <form onSubmit={event => review(event, 'propose')}><fieldset className={styles.fields} disabled={locked || detailLoading || !preview.sku.active}>
             <legend><h3>Harga baru per kemasan</h3></legend><div className={styles.twoFields}><label>Mata uang<input value={currency} maxLength={3} onChange={event => setCurrency(event.target.value.toUpperCase())} required /></label>
               <label>Harga per kemasan<input inputMode="decimal" value={price} onChange={event => setPrice(event.target.value)} placeholder="Contoh: 12.000" required /></label>{currency === 'IDR' && price.trim() && <small>{rupiahAmount(price) === null ? 'Periksa angka harga, misalnya 12.000 atau 12000,50.' : 'Akan dicatat: ' + formatRupiah(rupiahAmount(price)!, { decimals: 2 })}</small>}</div>
-            <label>Alasan pengajuan<textarea value={reason} maxLength={1000} onChange={event => setReason(event.target.value)} required /></label><button className={styles.primary}>Tinjau pengajuan harga</button>
+            <label>Alasan pengajuan<textarea value={reason} maxLength={1000} onChange={event => setReason(event.target.value)} required /></label><Button type="submit" variant={selected || staged ? 'secondary' : 'primary'}>Tinjau pengajuan harga</Button>
           </fieldset></form>}
-          <section><h3>Pengajuan harga</h3>{proposals.length === 0 ? <p>Belum ada pengajuan pada halaman ini.</p> : <ul className={styles.queueList}>{proposals.map(item => <li key={item.proposalId}><button className={selected?.proposalId === item.proposalId ? styles.selectedRow : styles.queueRow} disabled={locked || detailLoading}
-            onClick={() => { setSelected(item); setReason(''); setReference(''); }}><strong>{amount(item.input)}</strong><span>{status(item.status)} · {date(item.proposedAt)}{(() => { const change = priceChange(item.basePrice, item.input); return change.percent && change.kind !== 'same' ? ' · ' + (change.kind === 'up' ? '+' : '−') + change.percent + '%' : ''; })()}</span></button></li>)}</ul>}
-            <button className={styles.secondary} disabled={locked || detailLoading || proposals.length < 25} onClick={() => void older('proposals')}>Pengajuan lebih lama</button></section>
-          {selected && <section className={styles.review}><h3>Rincian pengajuan</h3><PackageFacts value={selected} /><PriceComparison base={selected.basePrice} proposed={selected.input} />
+          <section className="ui-stack"><h3>Pengajuan harga</h3>
+            <DataList label="Pengajuan harga" items={proposals} getKey={item => item.proposalId} empty={{ title: 'Belum ada pengajuan pada halaman ini.' }}
+              renderTitle={item => amount(item.input)} renderBadge={item => <Badge status={status(item.status)} />}
+              renderMeta={item => <>{date(item.proposedAt)}{proposalChange(item)}</>}
+              onSelect={item => { setSelected(item); setReason(''); setReference(''); }} selectedKey={selected?.proposalId ?? null} disabled={locked || detailLoading}
+              openLabel={item => amount(item.input) + ' ' + status(item.status) + ' · ' + date(item.proposedAt) + proposalChange(item)} />
+            <div className="ui-actions"><Button variant="secondary" disabled={locked || detailLoading || proposals.length < 25} onClick={() => void older('proposals')}>Pengajuan lebih lama</Button></div></section>
+          {selected && <section className={editor.inset}><h3>Rincian pengajuan</h3><PackageFacts value={selected} /><PriceComparison base={selected.basePrice} proposed={selected.input} />
             <p>Diajukan {selected.ownProposal ? 'oleh Anda' : 'oleh rekan lain'} · {date(selected.proposedAt)}</p>
             <p className={styles.preserve}>{selected.reason}</p><p>{status(selected.status)}</p>{selected.decision && <p>{selected.decision.reviewReference} · {selected.decision.reason} · {date(selected.decision.decidedAt)}</p>}
             {selected.status === 'proposed' && mode === 'review' && selected.ownProposal && <p className={styles.help}>Anda yang mengajukan harga ini. Persetujuan atau penolakan harus dilakukan orang lain yang terverifikasi.</p>}
             {selected.status === 'proposed' && !(mode === 'review' && selected.ownProposal) && <form onSubmit={event => review(event, mode === 'review' ? 'approve' : 'withdraw')}><fieldset className={styles.fields} disabled={locked || detailLoading}>
               <label>Acuan pemeriksaan<input value={reference} maxLength={160} onChange={event => setReference(event.target.value)} required /></label><label>Alasan keputusan<textarea value={reason} maxLength={1000} onChange={event => setReason(event.target.value)} required /></label>
               <p className={styles.help}>{mode === 'review' ? 'Persetujuan dan penolakan harus dilakukan orang terverifikasi yang berbeda dari pengaju.' : 'Hanya akun pengaju asli yang dapat menarik pengajuan ini.'}</p>
-              <div className={styles.actions}><button className={styles.primary}>{mode === 'review' ? 'Tinjau persetujuan' : 'Tinjau penarikan'}</button>{mode === 'review' && <button type="button" className={styles.danger} onClick={event => review(event, 'reject')}>Tinjau penolakan</button>}</div>
+              <div className={styles.actions}><Button type="submit" variant={staged ? 'secondary' : 'primary'}>{mode === 'review' ? 'Tinjau persetujuan' : 'Tinjau penarikan'}</Button>{mode === 'review' && <Button variant="danger" onClick={event => review(event, 'reject')}>Tinjau penolakan</Button>}</div>
             </fieldset></form>}</section>}
-          {staged && fact && <div ref={reviewRef} tabIndex={-1} className={styles.preview} role="region" aria-label="Konfirmasi harga"><h3>Periksa sebelum mengirim</h3><PackageFacts value={fact} />
+          {staged && fact && <div ref={reviewRef} tabIndex={-1} className={editor.inset} role="region" aria-label="Konfirmasi harga"><h3>Periksa sebelum mengirim</h3><PackageFacts value={fact} />
             <p>Tindakan: <strong>{{ propose: 'Ajukan harga', approve: 'Setujui harga', reject: 'Tolak pengajuan', withdraw: 'Tarik pengajuan' }[staged.action]}</strong></p>
             <PriceComparison base={staged.action === 'propose' ? staged.preview.currentPrice : staged.proposal.basePrice} proposed={staged.action === 'propose' ? staged.body.input : staged.proposal.input} />
             {staged.action !== 'propose' && <p>Acuan: {staged.body.reviewReference}</p>}<p className={styles.preserve}>Alasan: {staged.body.reason}</p>
-            <div className={styles.actions}><button className={styles.primary} disabled={busy || recovering || recovery.locked} onClick={() => void confirm()}>{busy ? 'Menyimpan…' : 'Konfirmasi dan kirim'}</button>
-              <button className={styles.secondary} disabled={busy || recovering || recovery.locked} onClick={() => { setStaged(null); formRef.current?.focus(); }}>Kembali ke isian</button></div></div>}
-          <section><h3>Riwayat harga disetujui</h3>{history.length === 0 ? <p>Belum ada harga disetujui pada halaman ini.</p> : <ul className={styles.historyList}>{history.map(item => <li key={item.id}><strong>{amount(item)}</strong><p>Versi {item.version} · {date(item.effectiveAt)}</p></li>)}</ul>}
-            <button className={styles.secondary} disabled={locked || detailLoading || history.length < 25} onClick={() => void older('history')}>Harga lebih lama</button></section>
+            <div className={styles.actions}><Button variant="primary" disabled={busy || recovering || recovery.locked} onClick={() => void confirm()}>{busy ? 'Menyimpan…' : 'Konfirmasi dan kirim'}</Button>
+              <Button variant="secondary" disabled={busy || recovering || recovery.locked} onClick={() => { setStaged(null); formRef.current?.focus(); }}>Kembali ke isian</Button></div></div>}
+          <section className="ui-stack"><h3>Riwayat harga disetujui</h3>
+            <DataList label="Riwayat harga disetujui" items={history} getKey={item => item.id} empty={{ title: 'Belum ada harga disetujui pada halaman ini.' }}
+              renderTitle={item => amount(item)} renderMeta={item => <>Versi {item.version} · {date(item.effectiveAt)}</>} />
+            <div className="ui-actions"><Button variant="secondary" disabled={locked || detailLoading || history.length < 25} onClick={() => void older('history')}>Harga lebih lama</Button></div></section>
         </>}
       </div></section>
     </div>}
@@ -222,7 +247,8 @@ function PriceDesk({ actorId, actions, session, observedAt, onRefresh, onFailure
 }
 function PackageFacts({ value }: { value: Pick<PricePreview, 'sku' | 'definition'> }) {
   const d = value.definition;
-  return <dl className={styles.facts}><div><dt>Kode dan kemasan</dt><dd>{value.sku.code} · {d.packageLabel}</dd></div><div><dt>Isi per kemasan</dt><dd>{d.baseUnitsPerPackage} {d.baseUnitCode}</dd></div>
-    <div><dt>Jenis kemasan</dt><dd>{{ sealed: 'Kemasan tersegel', loose: 'Satuan lepas', other: 'Kemasan lain' }[d.packageKind]}</dd></div><div><dt>Pemesanan</dt><dd>Minimum {d.minimumOrderPackages}; kelipatan {d.orderIncrementPackages} kemasan</dd></div>
-    {d.attributes.map(item => <div key={item.key}><dt>{item.key}</dt><dd>{item.value}</dd></div>)}</dl>;
+  return <Facts items={[{ term: 'Kode dan kemasan', value: <>{value.sku.code} · {d.packageLabel}</> }, { term: 'Isi per kemasan', value: <>{d.baseUnitsPerPackage} {d.baseUnitCode}</> },
+    { term: 'Jenis kemasan', value: { sealed: 'Kemasan tersegel', loose: 'Satuan lepas', other: 'Kemasan lain' }[d.packageKind] },
+    { term: 'Pemesanan', value: <>Minimum {d.minimumOrderPackages}; kelipatan {d.orderIncrementPackages} kemasan</> },
+    ...d.attributes.map(item => ({ term: item.key, value: item.value, key: 'attribute:' + item.key }))]} />;
 }

@@ -5,6 +5,9 @@ import { createRequire } from 'node:module';
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 
+// F-026: people read a branch request as PB-000001 (src/lib/document-numbers.ts); the API's PT- number stays an internal key.
+const shownNumber = id => 'PB-' + String(id).padStart(6, '0');
+
 const chunks = []; for await (const chunk of process.stdin) chunks.push(chunk);
 const config = JSON.parse(Buffer.concat(chunks).toString('utf8'));
 assert.ok(['beforeRestart', 'afterRestart'].includes(config.stage));
@@ -50,7 +53,7 @@ async function signedOutStates(page) {
   };
   // A visitor without any session cookie never sees the page shell: the proxy sends them to sign-in with the page as return target (G-012).
   await page.goto(origin + '/ordering/requests'); await page.waitForURL(url => url.pathname === '/identity/login' && url.searchParams.get('returnPath') === '/ordering/requests');
-  // An expired session (a stale cookie the server no longer knows) still meets the page's own sign-in state.
+  // An expired session (a stale cookie the server no longer knows) meets the page's shared ended-session state.
   await page.context().addCookies([{ name: '__Host-ut_session', value: 'expiredSyntheticSessionToken0000000000000000', domain: new URL(origin).hostname, path: '/', secure: true, httpOnly: true, sameSite: 'Lax' }]);
   await page.route(sessionPath, hold);
   try {
@@ -118,12 +121,12 @@ async function emptyHistory(outsider) {
   await history.getByText('Belum ada permintaan pada halaman ini.', { exact: true }).waitFor();
   const actual = await read(outsider, '/api/v1/ordering/requests/query', { purpose: 'branch-request-history', view: 'mine', beforeRequestId: null });
   assert.equal(actual.status, 200); assert.deepEqual(actual.body.items, []);
-  assert.equal(await history.getByRole('button', { name: /^Lihat PT-/u }).count(), 0);
+  assert.equal(await history.getByRole('button', { name: /^Lihat (PB|PT)-/u }).count(), 0);
   await cleanViewport(outsider.page); await outsider.page.screenshot({ path: resolve(directory, 'pilot-other-branch-empty-history.png'), fullPage: true });
 }
 async function decision(staff, request, action) {
   await staff.page.goto(origin + '/ordering/requests/incoming');
-  await staff.page.getByRole('button', { name: 'Lihat ' + request.number, exact: true }).click();
+  await staff.page.getByRole('button', { name: 'Lihat ' + shownNumber(request.id), exact: true }).click();
   const detail = staff.page.getByRole('region', { name: 'Rincian permintaan' });
   await detail.getByLabel('Catatan peninjauan', { exact: true }).fill(action === 'accept' ? 'SINTETIS: kebutuhan diterima untuk tindak lanjut pilot.' : 'SINTETIS: permintaan ditolak untuk pengujian riwayat pilot.');
   await detail.getByRole('button', { name: action === 'accept' ? 'Terima permintaan' : 'Tolak permintaan', exact: true }).click();
@@ -220,7 +223,7 @@ try {
     const actorChanged = await read(requester, '/api/v1/ordering/requests/' + first.id + '/query', { purpose: 'branch-request-history' }, '1002'); assert.equal(actorChanged.status, 409);
     const forbidden = await requester.page.evaluate(async () => (await fetch('/api/v1/billing/invoices/query', { cache: 'no-store' })).status); assert.equal(forbidden, 404);
     await requester.page.goto(origin + '/ordering/requests'); await requester.page.getByRole('button', { name: 'Riwayat permintaan', exact: true }).click();
-    await requester.page.getByRole('button', { name: 'Lihat ' + first.number, exact: true }).click(); await requester.page.getByRole('region', { name: 'Rincian permintaan' }).getByText('Diterima untuk diproses', { exact: true }).waitFor();
+    await requester.page.getByRole('button', { name: 'Lihat ' + shownNumber(first.id), exact: true }).click(); await requester.page.getByRole('region', { name: 'Rincian permintaan' }).getByText('Diterima untuk diproses', { exact: true }).waitFor();
     await cleanViewport(requester.page); await requester.page.screenshot({ path: resolve(directory, 'pilot-request-history-mobile.png'), fullPage: true });
     const ownersResponse = staff.page.waitForResponse(response => response.url() === origin + '/api/v1/catalog/administration/owners/query' && response.status() === 200);
     await staff.page.goto(origin + '/administration/catalog'); await ownersResponse;
@@ -244,13 +247,13 @@ try {
     const receipt = JSON.parse(readFileSync(output, 'utf8')); assert.equal(receipt.version, 1); assert.equal(receipt.requests.length, 2);
     await requester.page.goto(origin + '/ordering/requests'); await requester.page.getByRole('button', { name: 'Riwayat permintaan', exact: true }).click();
     for (const item of receipt.requests) {
-      await requester.page.getByRole('button', { name: 'Lihat ' + item.number, exact: true }).click();
+      await requester.page.getByRole('button', { name: 'Lihat ' + shownNumber(item.id), exact: true }).click();
       await requester.page.getByRole('region', { name: 'Rincian permintaan' }).getByText(item.state === 'accepted' ? 'Diterima untuk diproses' : 'Ditolak toko', { exact: true }).waitFor();
       const saved = await read(requester, '/api/v1/ordering/requests/' + item.id + '/query', { purpose: 'branch-request-history' }); assert.equal(saved.status, 200); assert.equal(saved.body.state, item.state);
       const denied = await read(outsider, '/api/v1/ordering/requests/' + item.id + '/query', { purpose: 'branch-request-history' }); assert.equal(denied.status, 403);
       await cleanViewport(requester.page); await requester.page.screenshot({ path: resolve(directory, 'pilot-persisted-' + item.state + '-mobile.png'), fullPage: true });
     }
-    await staff.page.goto(origin + '/ordering/requests/incoming'); for (const item of receipt.requests) await staff.page.getByRole('button', { name: 'Lihat ' + item.number, exact: true }).waitFor();
+    await staff.page.goto(origin + '/ordering/requests/incoming'); for (const item of receipt.requests) await staff.page.getByRole('button', { name: 'Lihat ' + shownNumber(item.id), exact: true }).waitFor();
     await cleanViewport(staff.page); await staff.page.screenshot({ path: resolve(directory, 'pilot-persisted-incoming-desktop.png'), fullPage: true });
     await requester.page.goto(origin + '/shop'); await requester.page.getByRole('button', { name: /Rincian SYN-PENCIL-12/u }).click(); await requester.page.getByRole('dialog').getByText(receipt.catalogDescription, { exact: true }).waitFor();
     await requester.page.screenshot({ path: resolve(directory, 'pilot-persisted-catalog-description-mobile.png'), fullPage: true });

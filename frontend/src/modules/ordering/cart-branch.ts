@@ -12,6 +12,13 @@ export function cartBranch(actorId: string, options: readonly OrderContextOption
   return options.find(option => orderContextKey(option.context) === remembered) ?? null;
 }
 
+/** The branch whose keranjang /cart opens (U-026): the buyer's last explicit choice, else the only branch they may order for, so a
+ *  one-branch buyer never meets an empty page behind a select. Viewing records nothing: adding to the cart still needs the buyer to
+ *  name the branch (cartBranch above), and only that choice is remembered. With several branches the buyer still chooses. */
+export function cartViewBranch(actorId: string, options: readonly OrderContextOption[], store: Store | undefined = browserStore()): OrderContextOption | null {
+  return cartBranch(actorId, options, store) ?? (options.length === 1 ? options[0] : null);
+}
+
 /** The branch the buyer last chose on this device, read without asking the server for the branch list (the header's cart count).
  *  Null before a first choice or when the stored reference is not a well-formed branch. The server still checks access on every read. */
 export function rememberedCartContext(actorId: string, store: Store | undefined = browserStore()): OrderContext | null {

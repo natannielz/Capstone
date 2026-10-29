@@ -27,6 +27,7 @@ public sealed partial class AccessHttpTests {
         Assert.Equal(new[] { Permissions.BranchOrderRequestRead, Permissions.BranchOrderRequestSubmit }.Order(), await Actions(buyer));
         Assert.Equal(new[] { Permissions.BranchOrderRequestRead, Permissions.BranchOrderRequestDecide }.Order(), await Actions(staff));
         Assert.Equal(new[] { Permissions.BranchOrderRequestRead }, await Actions(branchReader));
-        Assert.Equal(new[] { Permissions.CatalogRead }, await Actions(unrelated));
+        // catalog.read is offered only to accounts the buyer catalog admits (G-032); this one holds no catalog entitlement.
+        Assert.Empty(await Actions(unrelated));
     }
 }
