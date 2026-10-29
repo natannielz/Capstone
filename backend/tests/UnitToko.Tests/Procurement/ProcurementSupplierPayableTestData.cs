@@ -69,6 +69,8 @@ internal sealed class ProcurementSupplierPayableTestData(ProcurementStockValuati
             includeCustomerMappings: includeCustomerMappings);
         var data = new ProcurementSupplierPayableTestData(valuation, fixture.Client, diagnostics);
         try {
+            // The valuation fixture ran supplier OCR under a ten-second private-read lease; the disbursement evidence below is read under the production five seconds.
+            await SupplierDocumentOcrTestData.EndNativeReadBudgetAsync(valuation.Documents);
             data.ApprovedValuation = await valuation.DecideAsync((await valuation.ProposeAsync("payable-source-valuation"))["proposalId"].AsInt64, "payable-source-valuation-approved");
             var scope = ProcurementRequestTestData.Scope;
             data.Maker = await data.Base.AddActorAsync(750, scope, Permissions.ProcurementRead, Permissions.ProcurementPayableRead, Permissions.ProcurementPayablePropose);

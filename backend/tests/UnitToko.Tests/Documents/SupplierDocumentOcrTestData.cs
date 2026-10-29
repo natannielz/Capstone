@@ -32,6 +32,13 @@ internal static class SupplierDocumentOcrTestData
         Assert.Equal(1, (await data.Rows("evidenceReadPolicies").UpdateOneAsync(new BsonDocument("storeId", data.Registration.StoreId),
             new BsonDocument("$set", new BsonDocument { { "maximumBytes", maximum }, { "leaseDurationMs", 10000L }, { "revision", 2L } }))).ModifiedCount);
     }
+    /// <summary>
+    /// The ten-second private-read lease above is the synthetic approval for the native OCR run only. Once OCR has completed the store goes back to the
+    /// production five-second lease, so later private-original reads in the same fixture (disbursement evidence) are specified against the program rule.
+    /// </summary>
+    internal static async Task EndNativeReadBudgetAsync(D data) =>
+        Assert.Equal(1, (await data.Rows("evidenceReadPolicies").UpdateOneAsync(new BsonDocument("storeId", data.Registration.StoreId),
+            new BsonDocument("$set", new BsonDocument { { "leaseDurationMs", 5000L }, { "revision", 3L } }))).ModifiedCount);
     internal static SupplierDocumentOcrRuntime CreateRuntime(D data) => SupplierDocumentOcrRuntime.Create(data.Database, data.Unit, new(data.Database), data.Clock,
         new(data.Files.Path, data.Registration.StoreId, StorageRoot.TrustedOperators, Consumer, HostReference, ModelReference, LocalOcrTests.Options()));
     internal static Task ApproveAsync(D data, string pipelineId) => data.Rows("supplierDocumentProcessingPolicies").InsertOneAsync(new BsonDocument {

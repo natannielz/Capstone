@@ -1,6 +1,8 @@
 // Real production Next/HTTPS/Kestrel/Mongo, retained private original, and actual imported bank debit. Inputs are synthetic local evidence.
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { resolve } from 'node:path';
+import { displayDate } from './workspace-rehearsal.mjs';
 
 export async function verifyProcurementSettlementBrowser({ config, verifier, user, origin, directory, settlementWrites, settlementRecoveries, originalReads, dropNext, dropped }) {
   const { page, context } = verifier, path = '/procurement/settlements', api = '/api/v1/procurement/settlements', purpose = 'settlement-review';
@@ -84,19 +86,22 @@ export async function verifyProcurementSettlementBrowser({ config, verifier, use
   const originalPath = '/api/v1/procurement/disbursements/drafts/' + source.original.draftId + '/evidence/' + source.original.reservationId + '/original/query', originalDeadline = performance.now() + 60000;
   const [originalResponse] = await Promise.all([page.waitForResponse(response => new URL(response.url()).pathname === originalPath && response.request().method() === 'POST', { timeout: remaining(originalDeadline) }), page.getByRole('button', { name: 'Lihat bukti asli untuk verifikasi pemasok', exact: true }).click({ timeout: remaining(originalDeadline) })]);
   assert.equal(originalResponse.status(), 200); const image = page.getByRole('img', { name: 'Bukti transfer pemasok asli untuk dibandingkan dengan mutasi bank', exact: true }); await image.waitFor({ timeout: remaining(originalDeadline) });
+  // The page's security policy (connect-src 'self') rightly forbids reading a blob: URL back, so the bytes are hashed from the
+  // original response this page received, the one it checked against the reference and turned into the shown blob; the image must decode to its size.
+  const shownBytes = await originalResponse.body();
   const viewed = await image.evaluate(async element => {
     if (!element.complete) await new Promise(resolve => { element.addEventListener('load', resolve, { once: true }); element.addEventListener('error', resolve, { once: true }); });
     if (!element.src.startsWith('blob:')) throw new Error('Private original must remain in a local object URL');
-    const response = await fetch(element.src), bytes = await response.arrayBuffer();
-    return { width: element.naturalWidth, height: element.naturalHeight, hash: Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), value => value.toString(16).padStart(2, '0')).join('') };
+    return { width: element.naturalWidth, height: element.naturalHeight };
   });
+  viewed.hash = createHash('sha256').update(shownBytes).digest('hex');
   assert.equal(viewed.width, config.originalWidth); assert.equal(viewed.height, config.originalHeight); assert.equal(viewed.hash, config.originalSha256);
   assert.equal(originalReads.length, 1); assert.equal(originalReads[0].actor, config.verifierId); assert.equal(originalReads[0].version, '"1"'); assert.deepEqual(originalReads[0].body, { purpose: 'procurement-disbursement-evidence-view', reference: source.original.reference });
   await page.getByRole('button', { name: 'Tutup bukti asli pemasok', exact: true }).click();
   await page.getByRole('button', { name: 'Tinjau verifikasi debit pemasok', exact: true }).click();
   const review = page.getByRole('region', { name: 'Konfirmasi verifikasi debit pemasok', exact: true }); await review.getByRole('heading', { name: 'Pastikan verifikasi debit pemasok', exact: true }).waitFor({ timeout: 60000 });
   assert.equal(await review.getByRole('heading', { name: 'Pastikan verifikasi debit pemasok', exact: true }).evaluate(element => element === document.activeElement), true); assert.equal(await review.getByRole('textbox').count(), 0); assert.equal(await review.getByRole('combobox').count(), 0);
-  const reviewText = await review.innerText(); for (const fact of [config.supplierName, config.supplierSubject, config.transferReference, config.transferDate, config.policyApprovalReference, config.trustedBankChannelReference, config.importFilename, config.importProfileName, config.transactionId, config.bookedDate, config.observedBankCode, config.observedAccountNumber, config.observedHolderName, config.beneficiaryVerificationReference, config.transferVerificationReference, config.supplierAdvanceAccountCode, config.cashAccountCode, reason]) assert.ok(reviewText.includes(fact), fact);
+  const reviewText = await review.innerText(); for (const fact of [config.supplierName, config.supplierSubject, config.transferReference, displayDate(config.transferDate), config.policyApprovalReference, config.trustedBankChannelReference, config.importFilename, config.importProfileName, config.transactionId, displayDate(config.bookedDate), config.observedBankCode, config.observedAccountNumber, config.observedHolderName, config.beneficiaryVerificationReference, config.transferVerificationReference, config.supplierAdvanceAccountCode, config.cashAccountCode, reason]) assert.ok(reviewText.includes(fact), fact);
   const save = review.getByRole('button', { name: 'Simpan verifikasi debit pemasok', exact: true }); assert.equal(await save.isDisabled(), true);
   const actualPreview = await query(page, config.verifierId, ownerPath + '/preview/query', previewBody, readHeaders); assert.equal(actualPreview.status, 200); assert.equal(actualPreview.body.debit.amount, config.amount); assert.equal(actualPreview.body.debit.transactionId, config.transactionId);
   const missingKey = 'browser-settlement-missing-version'; assert.equal((await query(page, config.verifierId, ownerPath + '/verify', { input, binding: actualPreview.body.binding, attested: true, reason }, { headers: { 'Idempotency-Key': missingKey } })).status, 400);

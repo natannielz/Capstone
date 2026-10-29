@@ -1,6 +1,7 @@
 // Production Next/HTTPS/API/Mongo with genuine source commands and explicitly local synthetic operator inputs.
 import assert from 'node:assert/strict';
 import { resolve } from 'node:path';
+import { displayDate, openAccountFromFrame, returnToWorkspacePage } from './workspace-rehearsal.mjs';
 const rupiah = amount => { const [whole, fraction = '00'] = String(amount).split('.'); return 'Rp' + whole.replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ',' + fraction.padEnd(2, '0').slice(0, 2); };
 
 export async function verifyProcurementAdvanceReturnBrowser({ config, maker, user, origin, directory, advanceReturnWrites, advanceReturnRecoveries, dropNext, dropped }) {
@@ -34,7 +35,7 @@ export async function verifyProcurementAdvanceReturnBrowser({ config, maker, use
       assert.ok(Date.parse(before.freshFactorUntil) < Date.parse(before.serverTime));
       const link = current.getByRole('link', { name: 'Verifikasi untuk pengajuan', exact: true }), target = new URL(await link.getAttribute('href'), origin);
       assert.equal(target.searchParams.get('operation'), operation); assert.equal(target.searchParams.get('returnPath'), path); await link.click();
-    } else await current.getByRole('link', { name: 'Akun saya', exact: true }).click();
+    } else await openAccountFromFrame(current);
     await current.getByRole('heading', { name: 'Verifikasi tindakan penting', exact: true }).waitFor({ timeout: 60000 });
     const actions = combo(current, 'Tindakan'); await actions.locator(`option[value="${operation}"]`).waitFor({ state: 'attached', timeout: 60000 }); await actions.selectOption(operation);
     const callback = current.waitForResponse(response => new URL(response.url()).pathname === '/auth/callback', { timeout: 60000 });
@@ -44,7 +45,7 @@ export async function verifyProcurementAdvanceReturnBrowser({ config, maker, use
     const after = await session(), renewed = (await participant.context.cookies(origin.origin)).find(cookie => cookie.name === '__Host-ut_session');
     assert.equal(after.account.userId, actorId); assert.equal(after.absoluteExpiresAt, before.absoluteExpiresAt);
     assert.ok(Date.parse(after.factorCompletedAt) > Date.parse(before.factorCompletedAt)); assert.ok(Date.parse(after.freshFactorUntil) > Date.parse(after.serverTime)); assert.notEqual(renewed.value, original.value);
-    if (!expiredLink) { const link = current.locator('a[href="/procurement/advance-returns"]'); await link.waitFor({ timeout: 60000 }); assert.equal(await link.count(), 1); await link.click(); }
+    if (!expiredLink) await returnToWorkspacePage(current, '/procurement/advance-returns');
     step(operation + '_real_oidc_rotation');
   }
   async function value(region, label, expected) {
@@ -54,7 +55,7 @@ export async function verifyProcurementAdvanceReturnBrowser({ config, maker, use
   async function facts(current, outer) {
     const region = outer.locator('[aria-label="Fakta pengembalian yang ditinjau"]'), summary = region.getByText('Sumber dan kebijakan pembukuan', { exact: true });
     if (!(await summary.locator('..').evaluate(node => node.open))) await summary.click();
-    await value(region, 'Seluruh kredit bank', 'Rp7.000,00'); await value(region, 'Tanggal pembukuan', input.postingDate); await value(region, 'Alasan pengajuan', input.reason);
+    await value(region, 'Seluruh kredit bank', 'Rp7.000,00'); await value(region, 'Tanggal pembukuan', displayDate(input.postingDate)); await value(region, 'Alasan pengajuan', input.reason);
     for (const label of ['Pemasok', 'Referensi pesanan pembelian', 'Referensi bank', 'Persetujuan kebijakan', 'Penanggung jawab', 'Akun penerimaan belum dialokasikan', 'Akun uang muka pemasok']) {
       const term = region.getByText(label, { exact: true }); assert.equal(await term.evaluate(node => node.tagName), 'DT'); assert.ok((await term.locator('..').locator(':scope > dd').innerText()).trim());
     }

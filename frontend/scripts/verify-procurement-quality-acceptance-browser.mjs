@@ -1,6 +1,7 @@
 // Actual production Next/HTTPS/API/Mongo; finite operator policy and identities are local rehearsal inputs.
 import assert from 'node:assert/strict';
 import { resolve } from 'node:path';
+import { displayDate, openAccountFromFrame, returnToWorkspacePage } from './workspace-rehearsal.mjs';
 
 export function qualityObservationLocalValue(instant) {
   // datetime-local normalizes redundant fraction zeros and zero seconds; Playwright fill requires that exact form.
@@ -28,11 +29,11 @@ export async function verifyProcurementQualityAcceptanceBrowser({ config, maker,
   async function renew(participant, actorId, operation, expiredLink) {
     const current = participant.page, session = () => current.evaluate(async () => { const response = await fetch('/api/v1/identity/session', { credentials: 'same-origin', cache: 'no-store' }); if (!response.ok) throw new Error('Actual session missing'); return response.json(); });
     const before = await session(), cookie = (await participant.context.cookies(origin.origin)).find(item => item.name === '__Host-ut_session'); assert.equal(before.account.userId, actorId); assert.ok(cookie); assert.equal((await pending(current)).length, 0);
-    if (expiredLink) { assert.ok(Date.parse(before.freshFactorUntil) < Date.parse(before.serverTime)); const link = current.getByRole('link', { name: 'Verifikasi untuk pengajuan', exact: true }), target = new URL(await link.getAttribute('href'), origin); assert.equal(target.searchParams.get('operation'), operation); assert.equal(target.searchParams.get('returnPath'), path); await link.click(); } else await current.getByRole('link', { name: 'Akun saya', exact: true }).click();
+    if (expiredLink) { assert.ok(Date.parse(before.freshFactorUntil) < Date.parse(before.serverTime)); const link = current.getByRole('link', { name: 'Verifikasi untuk pengajuan', exact: true }), target = new URL(await link.getAttribute('href'), origin); assert.equal(target.searchParams.get('operation'), operation); assert.equal(target.searchParams.get('returnPath'), path); await link.click(); } else await openAccountFromFrame(current);
     await current.getByRole('heading', { name: 'Verifikasi tindakan penting', exact: true }).waitFor({ timeout: 60000 }); const actions = combo(current, 'Tindakan'); await actions.locator(`option[value="${operation}"]`).waitFor({ state: 'attached', timeout: 60000 }); await actions.selectOption(operation);
     const callback = current.waitForResponse(response => new URL(response.url()).pathname === '/auth/callback', { timeout: 60000 }), navigation = current.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 60000 }); await current.getByRole('button', { name: 'Verifikasi dua langkah', exact: true }).click(); assert.ok([302, 303].includes((await callback).status())); await navigation;
     assert.equal(new URL(current.url()).pathname, expiredLink ? path : '/identity/account'); const after = await session(), renewed = (await participant.context.cookies(origin.origin)).find(item => item.name === '__Host-ut_session'); assert.equal(after.account.userId, actorId); assert.equal(after.absoluteExpiresAt, before.absoluteExpiresAt); assert.ok(Date.parse(after.factorCompletedAt) > Date.parse(before.factorCompletedAt)); assert.ok(Date.parse(after.freshFactorUntil) > Date.parse(after.serverTime)); assert.notEqual(renewed.value, cookie.value);
-    if (!expiredLink) { const link = current.locator('a[href="/procurement/quality-acceptances"]'); await link.waitFor({ timeout: 60000 }); assert.equal(await link.count(), 1); await link.click(); } step(operation + '_real_oidc_rotation');
+    if (!expiredLink) await returnToWorkspacePage(current, '/procurement/quality-acceptances'); step(operation + '_real_oidc_rotation');
   }
   async function value(region, label, expected) { const term = region.getByText(label, { exact: true }); assert.equal(await term.count(), 1); assert.equal(await term.evaluate(node => node.tagName), 'DT'); assert.equal((await term.locator('..').locator(':scope > dd').innerText()).trim(), expected); }
   function noFinancialDetails(receipt) {

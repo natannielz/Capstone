@@ -1,6 +1,7 @@
 // Actual production Next/HTTPS/API/Mongo; approved source and Finance facts are explicitly local synthetic inputs.
 import assert from 'node:assert/strict';
 import { resolve } from 'node:path';
+import { displayDate, openAccountFromFrame, returnToWorkspacePage } from './workspace-rehearsal.mjs';
 const rupiah = amount => { const [whole, fraction = '00'] = String(amount).split('.'); return 'Rp' + whole.replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ',' + fraction.padEnd(2, '0').slice(0, 2); };
 
 export async function verifyProcurementSupplierPayableBrowser({ config, maker, user, origin, directory, payableWrites, payableRecoveries, dropNext, dropped }) {
@@ -41,7 +42,7 @@ export async function verifyProcurementSupplierPayableBrowser({ config, maker, u
       const destination = new URL(await link.getAttribute('href'), origin);
       assert.equal(destination.pathname, '/identity/account'); assert.equal(destination.searchParams.get('operation'), operation); assert.equal(destination.searchParams.get('returnPath'), path);
       await link.click();
-    } else await current.getByRole('link', { name: 'Akun saya', exact: true }).click();
+    } else await openAccountFromFrame(current);
     await current.getByRole('heading', { name: 'Verifikasi tindakan penting', exact: true }).waitFor({ timeout: 60000 });
     const select = combo(current, 'Tindakan'); await select.locator(`option[value="${operation}"]`).waitFor({ state: 'attached', timeout: 60000 });
     await select.selectOption(operation);
@@ -55,8 +56,7 @@ export async function verifyProcurementSupplierPayableBrowser({ config, maker, u
     assert.ok(Date.parse(after.factorCompletedAt) > Date.parse(before.factorCompletedAt)); assert.ok(Date.parse(after.freshFactorUntil) > Date.parse(after.serverTime));
     assert.ok(renewedCookie); assert.notEqual(renewedCookie.value, originalCookie.value); assert.equal(payableWrites.length, writesBefore);
     if (!expiredLink) {
-      const workspace = current.locator('a[href="/procurement/supplier-payables"]');
-      await workspace.waitFor({ timeout: 60000 }); assert.equal(await workspace.count(), 1); await workspace.click();
+      await returnToWorkspacePage(current, '/procurement/supplier-payables');
     }
     await current.getByRole('heading', { name: 'Utang pemasok', exact: true }).waitFor({ timeout: 60000 });
     step(operation + '_real_oidc_rotation_same_actor_and_absolute_expiry');
@@ -70,7 +70,7 @@ export async function verifyProcurementSupplierPayableBrowser({ config, maker, u
     const summary = region.getByText('Sumber dan kebijakan pembukuan', { exact: true }); assert.equal(await summary.evaluate(node => node.tagName), 'SUMMARY');
     const details = summary.locator('..'); assert.equal(await details.evaluate(node => node.tagName), 'DETAILS'); if (!(await details.evaluate(node => node.open))) await summary.click();
     await value(region, 'Tindakan', kind === 'recognize' ? 'Pengakuan utang' : 'Penerapan uang muka');
-    await value(region, 'Nilai pembukuan', rupiah(amount)); await value(region, 'Tanggal pembukuan', input.postingDate); await value(region, 'Alasan pengajuan', input.reason);
+    await value(region, 'Nilai pembukuan', rupiah(amount)); await value(region, 'Tanggal pembukuan', displayDate(input.postingDate)); await value(region, 'Alasan pengajuan', input.reason);
     for (const label of ['Pemasok', 'Referensi pesanan pembelian', 'Invoice pemasok', 'Persetujuan kebijakan', 'Penanggung jawab', 'Akun akrual penerimaan', 'Akun utang pemasok', 'Akun uang muka pemasok']) {
       const term = region.getByText(label, { exact: true }); assert.equal(await term.evaluate(node => node.tagName), 'DT'); assert.ok((await term.locator('..').locator(':scope > dd').innerText()).trim().length > 0);
     }
