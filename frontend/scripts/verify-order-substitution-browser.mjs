@@ -26,7 +26,13 @@ export async function verifyOrderSubstitutionBrowser({ config, maker, user, rest
   async function capture(page, name) {
     const original = page.viewportSize();
     for (const viewport of [{ width: 1280, height: 960 }, { width: 360, height: 800 }]) {
-      await page.setViewportSize(viewport); assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, name + ' overflow');
+      await page.setViewportSize(viewport);
+      // The check itself is unchanged; a failure names the elements that stick out so the layout can be fixed, not the check.
+      const wide = await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth ? [] : [...document.querySelectorAll('body *')]
+        .filter(element => element.getBoundingClientRect().right > innerWidth + 0.5 && getComputedStyle(element).position !== 'fixed')
+        .slice(0, 12).map(element => element.tagName.toLowerCase() + '.' + String(element.className).slice(0, 60) + ' "' + (element.textContent ?? '').trim().slice(0, 50) + '" right=' + Math.round(element.getBoundingClientRect().right) + ' of ' + innerWidth));
+      assert.deepEqual(wide, [], name + ' overflow at ' + viewport.width + ': elements wider than the viewport');
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, name + ' overflow');
       const file = resolve(directory, config.proofPrefix + '-' + name + '-' + viewport.width + '.png');
       const bytes = await page.screenshot({ path: file, fullPage: true }); captures.push({ name, width: viewport.width, file, sha256: createHash('sha256').update(bytes).digest('hex') });
     } await page.setViewportSize(original);

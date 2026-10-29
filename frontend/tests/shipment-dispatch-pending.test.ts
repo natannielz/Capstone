@@ -153,7 +153,7 @@ function mountDispatch() {
   }
   async function settle() {for (let tick = 0; tick < 60; tick++) {if (dirty) render(); await new Promise<void>(resolve => setImmediate(resolve));} assert.equal(dirty, false, 'Mounted effects did not settle');}
   function find(predicate: (node: Node) => boolean) {const found = nodes(tree).find(predicate); assert.ok(found, 'Expected mounted dispatch control'); return found;}
-  function button(label: string) {return find(node => node.type === 'button' && text(node.props.children) === label);}
+  function button(label: string) {return find(node => node.type === 'button' && (text(node.props.children) === label || node.props['aria-label'] === label));}
   async function click(label: string) {const control = button(label); assert.notEqual(control.props.disabled, true); (control.props.onClick as () => void)(); await settle();}
   async function fill() {
     await settle(); await click(`Periksa keberangkatan pesanan ${documentNumbers.orderNumber(source.orderId)}`);
