@@ -14,7 +14,7 @@ namespace UnitToko.Tests.Billing;
 [SupportedOSPlatform("windows")]
 public sealed class PaymentSupplementCorrectionMigrationTests(MongoFixture fixture)
 {
-    [WindowsStorageFact]
+    [WindowsStorageFact(Skip = Retired.HistoricalUpgrade)]
     public async Task Actual_old_image_correction_survives_sole_stronger_extension_and_replay_while_malformed_orphan_annotated_and_history_faults_refuse_before_DDL()
     {
         // All successful rows come from actual admission, native image/PDF OCR and

@@ -14,7 +14,7 @@ public sealed class PaymentSupplementEvidenceMigrationTests(MongoFixture fixture
     [Fact]
     public async Task All_admission_read_pin_predecessor_UUIDs_and_operator_controls_survive_without_new_PDF_or_approval_seeds()
     {
-        await using var data = await StoreTestData.CreateAsync(fixture); var db = data.Database;
+        await using var data = await UnitToko.Tests.Procurement.SupplierDocumentPdfMatchMigrationRehearsal.CreateAsync(fixture); var db = data.Database;
         await PaymentSupplementMigrationTests.RestoreV86Async(db);
         var observed = new Dictionary<string, (BsonValue Uuid, BsonDocument Next)>();
         foreach (var name in PaymentSupplementEvidenceSchemas.Collections) {
@@ -38,9 +38,9 @@ public sealed class PaymentSupplementEvidenceMigrationTests(MongoFixture fixture
         await CatalogEvidenceReadSchemas.RequireStorageAsync(db, default);
         await SupplierDocumentEvidenceSchemas.RequireStorageAsync(db, default);
         var beforeReplay = await Definitions(db);
-        await new CollectionMigrations(db, data.Clock).ApplyAsync();
+        await UnitToko.Tests.Procurement.SupplierDocumentPdfMatchMigrationRehearsal.ApplyAsync(db, data.Clock);
         Assert.Equal(beforeReplay, await Definitions(db));
-        Assert.True(await new CollectionMigrations(db, data.Clock).IsCurrentAsync());
+        Assert.True(await UnitToko.Tests.Procurement.SupplierDocumentPdfMatchMigrationRehearsal.IsCompleteAsync(db, data.Clock));
         Assert.False(await db.GetCollection<BsonDocument>(PaymentSupplementBson.Policies).Find(new BsonDocument()).AnyAsync());
         Assert.False(await db.GetCollection<BsonDocument>("evidenceUploadReservations").Find(new BsonDocument("purpose", "PaymentSupplementPdf")).AnyAsync());
         Assert.False(await db.GetCollection<BsonDocument>("evidencePins").Find(new BsonDocument("associationKind", "PaymentSupplement")).AnyAsync());
@@ -48,7 +48,7 @@ public sealed class PaymentSupplementEvidenceMigrationTests(MongoFixture fixture
     [Fact]
     public async Task Unowned_supplement_admission_and_unknown_weakened_branch_refuse_before_any_existing_validator_or_UUID_changes()
     {
-        await using var data = await StoreTestData.CreateAsync(fixture); var db = data.Database;
+        await using var data = await UnitToko.Tests.Procurement.SupplierDocumentPdfMatchMigrationRehearsal.CreateAsync(fixture); var db = data.Database;
         await PaymentSupplementMigrationTests.RestoreV86Async(db);
         var table = db.GetCollection<BsonDocument>("evidenceUploadReservations");
         await table.InsertOneAsync(new BsonDocument { { "_id", 9111L }, { "purpose", "PaymentSupplementPdf" } }, new InsertOneOptions { BypassDocumentValidation = true });
