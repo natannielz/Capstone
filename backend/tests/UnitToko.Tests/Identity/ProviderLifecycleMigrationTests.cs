@@ -12,6 +12,8 @@ namespace UnitToko.Tests.Identity;
 public sealed class ProviderLifecycleMigrationTests(MongoFixture fixture)
 {
     private readonly IClock clock = new SystemClock();
+    /// <summary>StockSourcePolicyMigration, the last registry step whose collections the interrupted-resume DDL allow-list names.</summary>
+    private const int OperatingPolicyVersion = 19;
 
     [Fact]
     public async Task V4_upgrade_preserves_history_existing_documents_and_validators_without_retroactive_holds_or_counters()
@@ -185,13 +187,15 @@ public sealed class ProviderLifecycleMigrationTests(MongoFixture fixture)
                 builder.Subscribe<CommandSucceededEvent>(item => { if (item.CommandName == "collMod") stop.Cancel(); });
             };
             var observed = new MongoClient(settings).GetDatabase(db.DatabaseNamespace.DatabaseName);
-            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => new CollectionMigrations(observed, clock).ApplyAsync(stop.Token));
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => UnitToko.Tests.Authorization.StoreTestData.ApplyRegisteredThroughAsync(observed, clock, OperatingPolicyVersion, stop.Token));
             Assert.Equal(before, (await History(db)).Take(4));
             var pending = await db.GetCollection<BsonDocument>("schemaMigrations").Find(new BsonDocument("_id", 5)).SingleAsync();
             Assert.Equal("applying", pending["state"].AsString);
             Assert.True(pending["leaseUntil"].ToUniversalTime() <= clock.UtcNow.UtcDateTime);
             var firstRules = await Validator(db, "identitySecurityEvents");
-            await new CollectionMigrations(observed, clock).ApplyAsync();
+            // Bounded to the chain this assertion enumerates: the allow-list below names exactly the collections of registry
+            // versions 1..19, so a later migration's DDL is outside the claim rather than a violation of it.
+            await UnitToko.Tests.Authorization.StoreTestData.ApplyRegisteredThroughAsync(observed, clock, OperatingPolicyVersion);
             Assert.Equal(firstRules, await Validator(db, "identitySecurityEvents"));
             Assert.Equal(before, (await History(db)).Take(4));
             Assert.Equal(historical.ToBson(), (await db.GetCollection<BsonDocument>("identitySecurityEvents").Find(new BsonDocument("_id", historical["_id"])).SingleAsync()).ToBson());
