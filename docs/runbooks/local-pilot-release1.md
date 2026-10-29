@@ -53,7 +53,7 @@ Actual Auth0 requires the reviewed provider and hosting inputs in `identity-host
 
 1. Open the generated browser shortcut and sign in as `pemohon-a` using its private generated values. The account page shows only the authorized synthetic branch.
 2. Open **Katalog kemasan**, inspect the name, package contents, unit, minimum and increment, then choose **Pilih untuk permintaan**. Select the branch, add packages and quantities, and review the shop and notes before confirming.
-3. Keep the **PT-…** reference. The request initially says **Menunggu peninjauan**. Refreshing reads the saved request; an uncertain submission is checked through **Periksa hasil** with its original key.
+3. Keep the **PB-…** reference (the API's own PT- number is an internal key and is not shown). The request initially says **Menunggu peninjauan**. Refreshing reads the saved request; an uncertain submission is checked through **Periksa hasil** with its original key.
 4. Sign out and sign in as `petugas`. Open **Permintaan masuk**, inspect the request and its packaging, then accept for processing or reject with a reason. Confirm the decision. Acceptance creates no reservation, price, payment or invoice.
 5. Sign in as `pemohon-a` again to see the result and decision history. `pemohon-b` belongs to a separate synthetic branch and cannot read that request.
 6. As `petugas`, use **Katalog toko** to maintain the pilot's product groups, package definitions and publishing state. Photos remain unavailable until the existing evidence/asset workflow is approved for that use; placeholders state this honestly.
@@ -194,3 +194,7 @@ FIX-RULES owns template changes. Until then, the drops keep each checker persona
   - Keep `peninjau` (2002, `catalog.public.approve`) covering every catalog owner that `petugas` (2001) covers. Otherwise a pilot proposal stays pending, and its approval fails every restart.
   - Conflicts with a changed sample state are logged and skipped, so they never stop the start.
 - Release1 has no guest samples.
+
+Full-release note (F-030): a keranjang whose draft already became an order before database version 123 still shows that draft once. The buyer discards it once from **Draf** (Buang draf); every later keranjang starts a fresh draft.
+
+Closed drafts (F-030): a draft that became an order stays stored with its link row in orderDraftSubmissions, readable by id for the checkout that placed it. OrderDraftPurge removes only discarded drafts, so it does not touch closed ones; a link row left behind if a draft is ever purged is harmless (it only points at a draft that no longer exists). What was not ordered from a draft continues in a new successor draft of the same buyer, branch and delivery.

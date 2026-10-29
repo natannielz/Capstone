@@ -1,0 +1,86 @@
+/* One storefront catalogue for guests (/katalog) and signed-in buyers (/shop): the same container, breadcrumb, toolbar, chips,
+   grid, card, pager and product layout (ui-standard §3.3, U-024, U-025, U-031). Signing in only adds prices and buying. */
+.page { width: min(var(--content-wide), 100% - 2 * var(--gutter)); min-height: 60vh; margin-inline: auto; padding: var(--space-8) 0 var(--space-12); color: var(--foreground); }
+/* /catalog/browse shows the same catalogue inside the staff workspace frame, on its left edge. */
+:global([data-workspace-frame]) .page { width: auto; max-width: calc(var(--content-wide) + 2 * var(--gutter)); margin: 0; padding: var(--space-8) var(--gutter) var(--space-12); }
+
+.crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 0 var(--space-1); }
+.crumbs a { color: var(--muted-foreground); text-decoration: none; }
+.crumbs a:hover { color: var(--foreground); text-decoration: underline; }
+.crumbs > span:last-child { color: var(--foreground); }
+.crumbs svg { flex-shrink: 0; color: var(--muted-foreground); }
+
+/* Toolbar content: the search term and category chips on the left, sort and view on the right (one row at 1280). */
+.chips { display: flex; gap: var(--space-2); min-width: 0; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.chips::-webkit-scrollbar { display: none; }
+.chips button { display: inline-flex; align-items: center; gap: var(--space-2); flex-shrink: 0; height: var(--control-h); padding: 0 var(--space-4); border: 1px solid var(--border);
+  border-radius: var(--radius-pill); background: var(--card); color: var(--foreground); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+.chips button:hover:not(:disabled) { background: var(--secondary); }
+.chips button span { font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--muted-foreground); }
+.chips button[aria-pressed="true"] { border-color: var(--primary); background: var(--primary); color: var(--primary-foreground); }
+.chips button[aria-pressed="true"] span { color: var(--primary-foreground); }
+.chips button:disabled { cursor: wait; }
+.searchTerm { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin: 0; font-size: 15px; }
+/* Sort and view never shrink below their own labels ("Terbaru ditambahkan" is never clipped). */
+.sort { flex: none; }
+/* Kisi / Daftar: one segmented control. Both segments carry the same border; the selected one differs by fill only. */
+.view { display: inline-flex; flex: none; gap: 0; }
+.view button { display: inline-flex; align-items: center; gap: var(--space-2); height: var(--control-h); padding: 0 var(--space-4); border: 1px solid var(--control-border);
+  border-radius: 0; background: var(--card); color: var(--foreground); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+.view button:first-child { border-radius: var(--radius-control) 0 0 var(--radius-control); }
+.view button:last-child { border-radius: 0 var(--radius-control) var(--radius-control) 0; }
+.view button + button { margin-left: -1px; }
+.view button:hover { background: var(--muted); }
+.view button[aria-pressed="true"] { background: var(--secondary); color: var(--secondary-foreground); }
+.view svg { width: 16px; height: 16px; }
+
+/* Five across at 1280, two on a phone, for guests and buyers alike. */
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: var(--space-4); margin: var(--space-4) 0 0; padding: 0; list-style: none; }
+.card { display: flex; flex-direction: column; min-width: 0; border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--card); overflow: hidden; overflow-wrap: anywhere; }
+.card:hover { border-color: color-mix(in oklab, var(--primary) 45%, var(--border)); }
+.cardBody { display: grid; flex: 1; align-content: start; gap: var(--space-1); padding: var(--space-3) var(--space-4) var(--space-4); }
+.media { display: grid; place-items: center; aspect-ratio: 1; background: var(--secondary); color: var(--muted-foreground); }
+.category { font-size: 12px; line-height: 16px; font-weight: 600; color: var(--primary); text-decoration: none; }
+.name { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin: 0; font-size: 15px; line-height: 24px; font-weight: 600; }
+.meta { margin: 0; font-size: 13px; line-height: 20px; color: var(--muted-foreground); }
+.price { margin: var(--space-1) 0 0; font-size: 15px; line-height: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.price span { font-size: 13px; font-weight: 400; color: var(--muted-foreground); }
+.cardActions { display: grid; gap: var(--space-2); margin-top: auto; padding: var(--space-3) var(--space-4) var(--space-4); }
+.cardActions > * { width: 100%; }
+
+.skeleton { display: grid; gap: var(--space-2); padding: 0 0 var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--card); overflow: hidden; }
+.skeleton span { display: block; height: 16px; margin: 0 var(--space-4); border-radius: var(--radius-badge); background: var(--muted); }
+.skeleton span:first-child { height: auto; aspect-ratio: 1; margin: 0 0 var(--space-2); border-radius: 0; }
+.skeleton span:last-child { width: 60%; }
+
+.pagination { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: var(--space-3); margin-top: var(--space-6); font-size: 14px; color: var(--muted-foreground); }
+.more { display: grid; justify-items: center; gap: var(--space-2); margin-top: var(--space-6); font-size: 14px; color: var(--muted-foreground); }
+.more p { margin: 0; }
+
+/* Product page: photo 5 / name, facts and buy box 7; specifications and description underneath. One level of boxing. */
+.product { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: var(--space-6) var(--space-8); align-items: start; }
+.productMedia { min-width: 0; }
+.productTile { display: grid; place-items: center; aspect-ratio: 1; border-radius: var(--radius-card); background: var(--secondary); color: var(--muted-foreground); }
+.productInfo { display: grid; gap: var(--space-2); min-width: 0; }
+.productInfo > p { margin: 0; }
+.productInfo h1 { margin: 0; overflow-wrap: anywhere; }
+.productPrice { margin: var(--space-2) 0; font-size: 24px; line-height: 32px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.productPrice span { font-size: 15px; font-weight: 400; color: var(--muted-foreground); }
+.productWide { grid-column: 1 / -1; max-width: 72ch; }
+.productWide h2 { margin: 0 0 var(--space-2); }
+.productWide p { margin: 0; white-space: pre-line; }
+/* The buy box (price gate for guests, order controls for buyers): a surface without a border on the canvas, never a card inside a card. */
+.buyPanel { display: grid; gap: var(--space-3); margin: var(--space-2) 0; padding: var(--space-6); border-radius: var(--radius-card); background: var(--card); }
+.buyPanel p { margin: 0; }
+.help { margin: 0; font-size: 13px; line-height: 20px; color: var(--muted-foreground); }
+.help a { color: var(--primary); font-weight: 600; }
+
+@media (max-width: 860px) {
+  .product { grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
+}
+@media (max-width: 639px) {
+  .page { padding-top: var(--space-6); }
+  .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
+  .cardBody { padding: var(--space-3); }
+  .cardActions { padding: 0 var(--space-3) var(--space-3); }
+}

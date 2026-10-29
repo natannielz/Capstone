@@ -63,16 +63,18 @@ export function parseCheckoutGroups(value: unknown, expected: DraftInput) {
 }
 export type CheckoutGroup = ReturnType<typeof parseCheckoutGroups>['items'][number];
 export const orderSubmitOperation = 'ordering.order.submit';
-/** Stable for a saved draft and authenticated channel; edits require recovery of its original attempt. */
-export async function checkoutGroupRequestKey(actorId: string, draftId: string, groupKey: string) {
-  const actor = priceId(actorId), draft = priceId(draftId), identity = groupIdentity(groupKey);
-  const bytes = new TextEncoder().encode(stableContent({ actorId: actor, draftId: draft, groupKey: identity.groupKey }));
+/** One checkout: a saved draft at one saved revision, one channel group. Replaying that checkout (a lost answer) reuses the key
+ *  and gets the original order back; a keranjang changed since, or a fresh draft, is a new checkout with its own key (F-030).
+ *  The server also closes a draft once it has become an order, so the same draft is never checked out as a new order again. */
+export async function checkoutGroupRequestKey(actorId: string, draftId: string, draftRevision: string, groupKey: string) {
+  const actor = priceId(actorId), draft = priceId(draftId), revision = priceId(draftRevision), identity = groupIdentity(groupKey);
+  const bytes = new TextEncoder().encode(stableContent({ actorId: actor, draftId: draft, draftRevision: revision, groupKey: identity.groupKey }));
   const digest = await crypto.subtle.digest('SHA-256', bytes);
   return `${orderSubmitOperation}:${actor}:${Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('')}`;
 }
-export async function readCheckoutGroupAttempt(actorId: string, draftId: string, groupKey: string,
+export async function readCheckoutGroupAttempt(actorId: string, draftId: string, draftRevision: string, groupKey: string,
   journal: { list: (actorId: string) => OperationReference[] }, lookup: (key: string) => Promise<{ state: 'committed'; result: OrderSubmitResult } | null>) {
-  const requestKey = await checkoutGroupRequestKey(actorId, draftId, groupKey);
+  const requestKey = await checkoutGroupRequestKey(actorId, draftId, draftRevision, groupKey);
   const pending = journal.list(actorId).some(entry => entry.operation === orderSubmitOperation && entry.key === requestKey);
   const receipt = await lookup(requestKey);
   return { requestKey, result: receipt?.result ?? null, uncertain: pending && receipt === null };
@@ -123,10 +125,11 @@ export function createOrderSubmitGateway(client: ReturnType<typeof createUnitTok
       const frozen = parseDraftInput(input);
       return parseCheckoutReview(data(await client.POST('/api/v1/ordering/orders/preview/query', { body: { purpose: 'order-preparation', input: frozen }, params: { header: headers(actorId) }, signal })), frozen);
     },
-    async submit(actorId: string, review: CheckoutReview, requestKey: string, isCurrent: () => boolean) {
-      const input = parseDraftInput(review.input), expected = hash(review.review);
+    /** `draftId` is the saved draft this checkout came from; the server closes it so it is never the keranjang again. */
+    async submit(actorId: string, review: CheckoutReview, requestKey: string, isCurrent: () => boolean, draftId: string) {
+      const input = parseDraftInput(review.input), expected = hash(review.review), source = priceId(draftId);
       if (!isCurrent()) throw new RequestNotSentError(409, 'order_view_stale');
-      const result = parseOrderSubmitResult(data(await client.POST('/api/v1/ordering/orders', { body: { input, review: expected, reason: 'Pemesan mengonfirmasi kemasan, tujuan, dan jumlah biaya pesanan' },
+      const result = parseOrderSubmitResult(data(await client.POST('/api/v1/ordering/orders', { body: { input, review: expected, draftId: source, reason: 'Pemesan mengonfirmasi kemasan, tujuan, dan jumlah biaya pesanan' },
         params: { header: { ...headers(actorId), 'Idempotency-Key': key(requestKey), 'If-Match': '"0"' } } })));
       if (!isCurrent()) throw new AccessFailure(503, 'commit_outcome_unknown');
       return result;

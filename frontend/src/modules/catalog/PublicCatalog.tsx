@@ -12,6 +12,12 @@ import { createPublicCatalogGateway, publicCatalogPageSize, publicCatalogUrl, re
   type PublicCatalogCategory, type PublicCatalogItem, type PublicCatalogQuery } from './public-catalog-client';
 import { GuestProductCard, GuestSampleBanner, GuestSampleEmpty, GuestUnavailable, MemberCatalogNote, guestSignInHref, memberRedirect, packLine, signedInEquivalent } from './PublicCatalogParts';
 import styles from './public-catalog.module.css';
+import catalog from './storefront-catalog.module.css';
+import { Button, buttonClassName } from '@/components/workspace-kit/button';
+import { Field } from '@/components/workspace-kit/field';
+import { PageHeader } from '@/components/workspace-kit/page-header';
+import { StateView } from '@/components/workspace-kit/state-view';
+import { Toolbar } from '@/components/workspace-kit/toolbar';
 
 type Visitor = 'guest' | 'member' | 'no-catalog';
 function useVisitor(): Visitor {
@@ -68,37 +74,34 @@ export function PublicCatalog() {
   const categoryName = current.category ? categories.find(item => item.code === current.category)?.name ?? current.category : null;
   const everything = categories.reduce((sum, item) => sum + item.count, 0);
   const title = current.search ? `Hasil untuk “${current.search}”` : categoryName ?? 'Katalog';
-  return <main className={styles.page}>
-    <nav className={styles.breadcrumb} aria-label="Jejak halaman"><Link href="/">Beranda</Link><ChevronRight size={14} aria-hidden="true" />
-      {current.search || categoryName ? <><Link href="/katalog" onClick={event => { event.preventDefault(); navigate({}); }}>Katalog</Link><ChevronRight size={14} aria-hidden="true" /><span>{title}</span></> : <span>Katalog</span>}</nav>
-    <header className={styles.heading}>
-      <div><h1>{title}</h1><p aria-live="polite">{state === 'loading' ? 'Memuat produk…' : `${formatNumber(total)} produk`}</p></div>
-      {visitor === 'no-catalog' ? <MemberCatalogNote /> : <GuestSampleBanner target={target} />}
-    </header>
-    <div className={styles.toolbar}>
-      <div className={styles.chips} role="group" aria-label="Kategori">
-        <button type="button" aria-pressed={!current.category} onClick={() => navigate({ ...current, category: undefined, offset: undefined })}>Semua<span>{everything}</span></button>
-        {categories.map(item => <button key={item.code} type="button" aria-pressed={current.category === item.code}
-          onClick={() => navigate({ ...current, category: item.code, offset: undefined })}>{item.name}<span>{item.count}</span></button>)}
-      </div>
-      <label className={styles.sort}>Urutkan<select value={current.sort ?? 'added'} onChange={event => navigate({ ...current, sort: event.target.value === 'name' ? 'name' : undefined, offset: undefined })}>
-        <option value="added">Terbaru</option><option value="name">Nama A–Z</option></select></label>
-    </div>
-    {current.search && <p className={styles.searchTerm}>Pencarian: <strong>{current.search}</strong><button type="button" onClick={() => navigate({ ...current, search: undefined, offset: undefined })}>Hapus pencarian</button></p>}
-    {state === 'error' ? <section className={styles.state}><h2>Katalog belum dapat dimuat</h2><p>Periksa koneksi, lalu coba lagi.</p>
-      <button type="button" className={styles.primary} onClick={() => query && void load(query, false)}>Coba lagi</button></section>
+  return <main className={catalog.page}>
+    <PageHeader breadcrumb={<span className={catalog.crumbs}><Link href="/">Beranda</Link><ChevronRight size={14} aria-hidden="true" />
+      {current.search || categoryName ? <><Link href="/katalog" onClick={event => { event.preventDefault(); navigate({}); }}>Katalog</Link><ChevronRight size={14} aria-hidden="true" /><span>{title}</span></> : <span>Katalog</span>}</span>}
+      title={title} description={<span aria-live="polite">{state === 'loading' ? 'Memuat produk…' : `${formatNumber(total)} produk`}</span>}
+      secondaryAction={visitor === 'no-catalog' ? <MemberCatalogNote /> : <GuestSampleBanner target={target} />} />
+    <Toolbar label="Saring katalog"
+      filters={<>{current.search && <p className={catalog.searchTerm}>Pencarian: <strong>{current.search}</strong><Button onClick={() => navigate({ ...current, search: undefined, offset: undefined })}>Hapus pencarian</Button></p>}
+        <div className={catalog.chips} role="group" aria-label="Kategori">
+          <button type="button" aria-pressed={!current.category} onClick={() => navigate({ ...current, category: undefined, offset: undefined })}>Semua<span>{everything}</span></button>
+          {categories.map(item => <button key={item.code} type="button" aria-pressed={current.category === item.code}
+            onClick={() => navigate({ ...current, category: item.code, offset: undefined })}>{item.name}<span>{item.count}</span></button>)}
+        </div></>}
+      sort={<div className={catalog.sort}><Field id="katalog-urutan" label="Urutkan"><select value={current.sort ?? 'added'} onChange={event => navigate({ ...current, sort: event.target.value === 'name' ? 'name' : undefined, offset: undefined })}>
+        <option value="added">Terbaru</option><option value="name">Nama A–Z</option></select></Field></div>} />
+    {state === 'error' ? <StateView kind="error" title="Katalog belum dapat dimuat" message="Periksa koneksi, lalu coba lagi."
+      action={<Button onClick={() => query && void load(query, false)}>Coba lagi</Button>} />
       : state !== 'loading' && items.length === 0 ? current.search || current.category
-        ? <section className={styles.state}><SearchX size={34} aria-hidden="true" /><h2>Barang tidak ditemukan</h2><p>Coba kata lain, periksa ejaan, atau lihat semua kategori.</p>
-          <button type="button" className={styles.primary} onClick={() => navigate({})}>Lihat semua produk</button></section>
+        ? <StateView kind="empty" align="center" icon={SearchX} title="Barang tidak ditemukan" message="Coba kata lain, periksa ejaan, atau lihat semua kategori."
+          action={<Button variant="primary" onClick={() => navigate({})}>Lihat semua produk</Button>} />
         : <GuestSampleEmpty target={target} />
-      : <ul className={styles.grid} aria-busy={state === 'loading'}>
-        {state === 'loading' ? Array.from({ length: 10 }, (_, index) => <li key={index} className={styles.skeleton} aria-hidden="true"><span /><span /><span /></li>)
+      : <ul className={catalog.grid} aria-busy={state === 'loading'}>
+        {state === 'loading' ? Array.from({ length: 10 }, (_, index) => <li key={index} className={catalog.skeleton} aria-hidden="true"><span /><span /><span /></li>)
           : items.map(item => <GuestProductCard key={item.publicId} item={item} />)}
       </ul>}
-    {state !== 'loading' && items.length > 0 && items.length < total && <div className={styles.more}>
+    {state !== 'loading' && items.length > 0 && items.length < total && <div className={catalog.more}>
       <p>{items.length} dari {total} produk</p>
-      <button type="button" className={styles.secondary} disabled={state === 'more'} onClick={() => query && void load({ ...query, offset: items.length }, true)}>
-        {state === 'more' ? 'Memuat…' : `Muat lebih banyak (${Math.min(publicCatalogPageSize, total - items.length)})`}</button></div>}
+      <Button disabled={state === 'more'} onClick={() => query && void load({ ...query, offset: items.length }, true)}>
+        {state === 'more' ? 'Memuat…' : `Muat lebih banyak (${Math.min(publicCatalogPageSize, total - items.length)})`}</Button></div>}
   </main>;
 }
 
@@ -116,35 +119,34 @@ export function PublicProduct({ publicId }: { publicId: string }) {
     return () => abort.abort();
   }, [gateway, publicId, attempt]);
   const help = whatsappLink(process.env.NEXT_PUBLIC_UNIT_TOKO_HELP_WHATSAPP, 'Halo, cabang kami ingin mendapat akses pemesanan Unit Toko.');
-  if (state === 'loading') return <main className={styles.page}><p role="status">Memuat produk…</p></main>;
-  if (state === 'error') return <main className={styles.page}><section className={styles.state}><h2>Produk belum dapat dimuat</h2><p>Periksa koneksi, lalu coba lagi.</p>
-    <button type="button" className={styles.primary} onClick={() => { setState('loading'); setAttempt(value => value + 1); }}>Coba lagi</button></section></main>;
-  if (state === 'absent' || !item) return <main className={styles.page}><GuestUnavailable publicId={publicId} /></main>;
+  if (state === 'loading') return <main className={catalog.page}><StateView kind="loading" title="Memuat produk…" /></main>;
+  if (state === 'error') return <main className={catalog.page}><StateView kind="error" title="Produk belum dapat dimuat" message="Periksa koneksi, lalu coba lagi."
+    action={<Button onClick={() => { setState('loading'); setAttempt(value => value + 1); }}>Coba lagi</Button>} /></main>;
+  if (state === 'absent' || !item) return <main className={catalog.page}><GuestUnavailable publicId={publicId} /></main>;
   const signIn = guestSignInHref(signedInEquivalent(item, publicId));
-  return <main className={styles.page}>
-    <nav className={styles.breadcrumb} aria-label="Jejak halaman"><Link href="/">Beranda</Link><ChevronRight size={14} aria-hidden="true" />
+  return <main className={catalog.page}>
+    <PageHeader breadcrumb={<span className={catalog.crumbs}><Link href="/">Beranda</Link><ChevronRight size={14} aria-hidden="true" />
       <Link href="/katalog">Katalog</Link><ChevronRight size={14} aria-hidden="true" />
-      <Link href={publicCatalogUrl({ category: item.categoryCode })}>{item.categoryName}</Link><ChevronRight size={14} aria-hidden="true" /><span>{item.name}</span></nav>
-    {visitor === 'no-catalog' && <MemberCatalogNote />}
-    <article className={styles.product}>
-      <div className={styles.productMedia}><PackageOpen size={72} strokeWidth={1} aria-hidden="true" /></div>
-      <div className={styles.productInfo}>
-        <Link className={styles.category} href={publicCatalogUrl({ category: item.categoryCode })}>{item.categoryName}</Link>
-        <h1>{item.name}</h1>
-        <p className={styles.code}>Contoh barang · {formatNumber(item.packages.length)} kemasan</p>
-        <section className={styles.priceBox} aria-label="Harga dan pemesanan">
+      <Link href={publicCatalogUrl({ category: item.categoryCode })}>{item.categoryName}</Link><ChevronRight size={14} aria-hidden="true" /><span>{item.name}</span></span>}
+      title={item.name} description={`Contoh barang · ${formatNumber(item.packages.length)} kemasan`}
+      secondaryAction={visitor === 'no-catalog' ? <MemberCatalogNote /> : undefined} />
+    <article className={catalog.product}>
+      <div className={catalog.productMedia}><div className={catalog.productTile}><PackageOpen size={72} strokeWidth={1} aria-hidden="true" /></div></div>
+      <div className={catalog.productInfo}>
+        <Link className={catalog.category} href={publicCatalogUrl({ category: item.categoryCode })}>{item.categoryName}</Link>
+        <section className={catalog.buyPanel} aria-label="Harga dan pemesanan">
           <p>Harga mengikuti kontrak cabang Anda dan tampil setelah masuk.</p>
-          <Link className={styles.priceButton} href={signIn}><LogIn size={18} aria-hidden="true" />Masuk untuk lihat harga dan memesan</Link>
-          <p className={styles.access}>Belum punya akses? {help ? <a href={help} target="_blank" rel="noopener noreferrer">Hubungi koperasi lewat WhatsApp</a> : 'Hubungi petugas koperasi di unit Anda.'}</p>
+          <Link className={buttonClassName({ variant: 'primary' })} href={signIn}><LogIn aria-hidden="true" />Masuk untuk lihat harga dan memesan</Link>
+          <p className={catalog.help}>Belum punya akses? {help ? <a href={help} target="_blank" rel="noopener noreferrer">Hubungi koperasi lewat WhatsApp</a> : 'Hubungi petugas koperasi di unit Anda.'}</p>
         </section>
-        <h2 className={styles.code}>Kemasan</h2>
-        <dl className={styles.facts}>
+        <h2>Kemasan</h2>
+        <dl className={styles.packages}>
           {item.packages.map(entry => <div key={entry.publicId}><dt>{entry.code}</dt><dd>{packLine(entry)}
             {'. '}Minimal {entry.minimumOrderPackages} kemasan{entry.orderIncrementPackages > 1 ? `, kelipatan ${entry.orderIncrementPackages}` : ''}
             {entry.attributes.length > 0 && <>{'. '}{entry.attributes.map(pair => `${pair.key}: ${pair.value}`).join(', ')}</>}</dd></div>)}
         </dl>
       </div>
+      {item.description && <section className={catalog.productWide} aria-labelledby="deskripsi-produk"><h2 id="deskripsi-produk">Deskripsi</h2><p>{item.description}</p></section>}
     </article>
-    {item.description && <section className={styles.description} aria-labelledby="deskripsi-produk"><h2 id="deskripsi-produk">Deskripsi</h2><p>{item.description}</p></section>}
   </main>;
 }

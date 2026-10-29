@@ -69,7 +69,7 @@ Counting rule: a persona's functions are its own rows plus the shared blocks it 
 | ALL-01 | `/identity/login` | Masuk through the identity provider and return to the page | session | R62, R66, R69, R70 (sign-in at `/identity/login`) | covered | |
 | ALL-02 | `/identity/account` | Session state, "Verifikasi dua langkah" step-up for listed operations | session | R04, R46, R51 (step-up before decisions) | covered | |
 | ALL-03 | `/identity/account` | "Simpan kontak pribadi", contact history | session | R01 | covered | |
-| ALL-04 | `/workspace` | "Pekerjaan saya": directory of allowed destinations, WorkSummary counts | session | R76 (runs inside R47 for the procurement maker only) | uncovered (only one persona's directory is asserted) | |
+| ALL-04 | `/workspace` | "Pekerjaan saya": directory of allowed destinations, WorkSummary counts | session | R76 (runs inside R47 for the procurement maker only) | covered | R77/R79 assert the directory or buyer menu for 9 personas; review stack directories captured for 15 (F-027) |
 | ALL-05 | `/administration/delegations` | See temporary delegations involving the account | session (always listed) | R75 (finance maker/approver create one) | uncovered for every persona except the delegation maker/approver | |
 | ALL-06 | any workspace page | "Pastikan hasil dan tutup" / "Periksa hasil" recovery of an unconfirmed command | session | most rehearsals (lost-reply recovery is in nearly every script) | covered | |
 
@@ -79,28 +79,28 @@ Counting rule: a persona's functions are its own rows plus the shared blocks it 
 |---|---|---|---|---|---|---|
 | BUY-01 | `/` | Landing, "Lihat katalog" | none | R11 | covered | |
 | BUY-02 | `/shop` | Browse, search, page, open package details with price and photo | `catalog.read` | R11, R09 (buyer reads current photo), R07 | covered | |
-| BUY-03 | `/shop/[product]` | "Tambah ke keranjang" (branch, quantity stepper, subtotal) | `order.submit` | R11 | covered | |
-| BUY-04 | `/cart` | "Lihat keranjang": lines and "Ringkasan belanja" | `order.submit` | R11 | covered | |
-| BUY-05 | `/cart` | Change quantity, "Hapus" a line, empty the cart | `order.submit` | none | uncovered | |
-| BUY-06 | `/cart` | "Pakai harga terbaru" / "Pakai kemasan terbaru" after a price or package change | `order.submit` | none | uncovered | |
-| BUY-07 | `/cart` → `/ordering/checkout?draft=` | "Lanjut ke pengajuan", delivery, approved branch address, "Tinjau pesanan dan biaya", "Ajukan untuk persetujuan"; result heading "Pesanan PSN-… tercatat" | `order.submit` | R27, R04 (R04 currently fails at dispatch, F-003) | covered | |
+| BUY-03 | `/shop/[product]` | "Tambah ke keranjang" (branch, quantity stepper, subtotal) | `order.submit` | R11 | covered | pass R77, R80 (22 Okt) |
+| BUY-04 | `/cart` | "Lihat keranjang": lines and "Ringkasan belanja" | `order.submit` | R11 | covered | pass R77, R80 |
+| BUY-05 | `/cart` | Change quantity, "Hapus" a line, empty the cart | `order.submit` | none | covered | pass R80 K1, K3 (phase B) |
+| BUY-06 | `/cart` | "Pakai harga terbaru" / "Pakai kemasan terbaru" after a price or package change | `order.submit` | none | covered | pass R80 K2 (phase B) |
+| BUY-07 | `/cart` → `/ordering/checkout?draft=` | "Lanjut ke pengajuan", delivery, approved branch address, "Tinjau pesanan dan biaya", "Ajukan untuk persetujuan"; result heading "Pesanan PSN-… tercatat" | `order.submit` | R27, R04 (R04 currently fails at dispatch, F-003) | covered | pass R77 A2 |
 | BUY-08 | `/ordering/drafts` | Reopen draft, edit quantities, "Cari kemasan", approved address | `order.submit` | R11, R24, R07 | covered | |
 | BUY-09 | `/ordering/drafts` | "Terapkan daftar ke draf" (bulk entry by code) | `order.submit` | R24, R07 | covered | |
-| BUY-10 | `/ordering/drafts` | Discard a draft (restorable 30 days) | `order.submit` | none | uncovered | |
+| BUY-10 | `/ordering/drafts` | Discard a draft (restorable 30 days) | `order.submit` | none | covered | pass R80 K4 (phase B) |
 | BUY-11 | `/ordering/orders` | List and detail of own orders by PSN | `order.read` | R04, R25 | covered | |
 | BUY-12 | `/ordering/orders` | Saved views: save, share, rename, remove filters | `order.read` | R30 | covered | |
 | BUY-13 | `/ordering/orders` | "Pesan lagi" into the branch cart | `order.read` + `order.submit` | R25 | covered | |
 | BUY-14 | `/ordering/orders` | Order timeline: delivery, invoice, payment, return outcomes | `order.read` (+ shipment/invoice/payment/case reads) | R29 — always skipped `Pending.TransactionLatency` | uncovered (F-005) | |
-| BUY-15 | `/ordering/reviews` | "Pembatalan pesanan": cancel own outstanding order | `order.cancel` | none | uncovered | |
+| BUY-15 | `/ordering/reviews` | "Pembatalan pesanan": cancel own outstanding order | `order.cancel` | none | covered | pass R80 K5 by address; no menu entry for buyers (F-029) |
 | BUY-16 | `/fulfillment/shipments` | See own shipments ("Lihat kiriman E/C/Y/N") | `shipment.read` | R04, R61 | covered | |
-| BUY-17 | `/fulfillment/receive` | Open courier QR link, "Hitung barang yang tiba", "Tinjau jumlah", "Konfirmasi penerimaan" | `receipt.accept` | R61, R13 | covered | |
+| BUY-17 | `/fulfillment/receive` | Open courier QR link, "Hitung barang yang tiba", "Tinjau jumlah", "Konfirmasi penerimaan" | `receipt.accept` | R61, R13 | covered | pass R77 A9 |
 | BUY-18 | `/billing/invoices` | Open invoice, "Unduh invoice" | `invoice.read` | R15a, R07 | covered | |
 | BUY-19 | `/billing/payments` | "Simpan draf pembayaran", "Unggah bukti asli", "Ajukan untuk verifikasi" | `payment.evidence` + `invoice.read` | R35, R39 | covered | |
 | BUY-20 | `/billing/payments` | Supplementary PDF pages for a payment | `payment.evidence` | R37, R38 | covered | |
 | BUY-21 | `/billing/payments` | Follow-up from reviewer, "Siapkan bukti pengganti", "Buat draf pengganti" | `payment.evidence` | R39 | covered | |
 | BUY-22 | `/fulfillment/cases` | "Laporkan masalah barang", "Kirim keluhan" (KLH-…) | `case.request` | R15b | covered | |
 | BUY-23 | `/fulfillment/cases` | Follow own complaint and the private decision explanation | `case.read` | R15c | covered | |
-| BUY-24 | storefront | Header "Ruang kerja petugas" / account menu links | display | none | uncovered (F-002) | |
+| BUY-24 | storefront | Header "Ruang kerja petugas" / account menu links | display | none | covered | review stack: buyer menu lists own tasks (F-002 fixed); always lists Permintaan saya (F-025) |
 
 ### 2.2 Shared block SH (`store-head` template: peninjau-toko, petugas-katalog, peninjau-katalog, penyetuju-pengadaan)
 
@@ -114,9 +114,9 @@ Counting rule: a persona's functions are its own rows plus the shared blocks it 
 | SH-06 | `/fulfillment/courier-assignments` | "Tinjau penyerahan tugas": courier handover | `shipment.assign` | R13 | covered | |
 | SH-07 | `/fulfillment/shipments` | Store shipments, "Tinjau Surat Jalan" | `shipment.read` | R60 | covered | |
 | SH-08 | `/fulfillment/cases` | "Tinjau keputusan keluhan", "Izinkan pengembalian barang", return receipt | `case.manage` + `case.read` | R15c, R15d | covered | |
-| SH-09 | `/procurement/requests` | "Tinjau persetujuan", "Setujui permintaan" (PP-…) | `procurement.approve` | R48 | covered | |
-| SH-10 | `/procurement/requests` | Reject a procurement request | `procurement.approve` | none | uncovered | |
-| SH-11 | `/procurement/purchase-orders` | "Tinjau persetujuan pesanan", "Setujui pesanan secara internal" (SP-…) | `procurement.approve` | R54, R56 | covered | |
+| SH-09 | `/procurement/requests` | "Tinjau persetujuan", "Setujui permintaan" (PP-…) | `procurement.approve` | R48 | covered | pass R79 B2 |
+| SH-10 | `/procurement/requests` | Reject a procurement request | `procurement.approve` | none | uncovered | review stack: procurement pages 409 on first read (blocked by G-034) |
+| SH-11 | `/procurement/purchase-orders` | "Tinjau persetujuan pesanan", "Setujui pesanan secara internal" (SP-…) | `procurement.approve` | R54, R56 | covered | pass R79 B4; PO page never shows SP- (F-021) |
 | SH-12 | `/procurement/purchase-orders` | Review supplier arrival schedule | `procurement.approve` | R55 | covered | |
 | SH-13 | `/procurement/funding` | "Periksa permintaan uang muka": request advance | `funding.request` | R44 | covered | |
 | SH-14 | `/procurement/supplier-claims` | "Periksa klaim pemasok": claim damaged goods | `supplier.claim` | R72 | covered | |
@@ -130,10 +130,10 @@ Counting rule: a persona's functions are its own rows plus the shared blocks it 
 | ID | Page | Action | Permission | Rehearsal | Status | Run |
 |---|---|---|---|---|---|---|
 | SS-01 | `/shop` | Browse catalog with prices | `catalog.read` | R11 | covered | |
-| SS-02 | `/fulfillment/preparations` | Choose packages and quantities, "Tinjau persiapan", "Konfirmasi persiapan" | `shipment.prepare` | R04, R22, R27, R28 | covered | |
-| SS-03 | `/fulfillment/shipments` | Shipments, "Tinjau Surat Jalan" | `shipment.read` + `shipment.prepare` | R60 | covered | |
-| SS-04 | `/procurement/requests` | "Buat permintaan", "Tambahkan kemasan", "Kirim permintaan" (PP-…) | `procurement.prepare` | R48, R58 | covered | |
-| SS-05 | `/procurement/purchase-orders` | "Buat pesanan pembelian", "Tambahkan barang", "Kirim usulan pesanan" (SP-…) | `procurement.prepare` | R54 | covered | |
+| SS-02 | `/fulfillment/preparations` | Choose packages and quantities, "Tinjau persiapan", "Konfirmasi persiapan" | `shipment.prepare` | R04, R22, R27, R28 | covered | pass R77 A5 |
+| SS-03 | `/fulfillment/shipments` | Shipments, "Tinjau Surat Jalan" | `shipment.read` + `shipment.prepare` | R60 | covered | pass R77 A7 (Surat Jalan) |
+| SS-04 | `/procurement/requests` | "Buat permintaan", "Tambahkan kemasan", "Kirim permintaan" (PP-…) | `procurement.prepare` | R48, R58 | covered | pass R79 B1 (phase B) |
+| SS-05 | `/procurement/purchase-orders` | "Buat pesanan pembelian", "Tambahkan barang", "Kirim usulan pesanan" (SP-…) | `procurement.prepare` | R54 | covered | pass R79 B3 |
 | SS-06 | `/procurement/purchase-orders` | Arrival schedule proposal, inbound receiving pool plan | `procurement.prepare` | R55, R56 | covered | |
 | SS-07 | `/procurement/receiving`, `/procurement/inspections`, `/procurement/supplier-documents`, `/procurement/supplier-claims` | Read-only review | `procurement.read` | R47, R45, R73, R72 | covered | |
 | SS-08 | `/procurement/stock-receipts` | "Catat stok ditahan", "Simpan penerimaan stok ditahan" | `procurement.read` + `stock.read` + `stock.receive` | R50, R23 | covered | |
@@ -148,8 +148,8 @@ Counting rule: a persona's functions are its own rows plus the shared blocks it 
 | ID | Page | Action | Permission | Rehearsal | Status | Run |
 |---|---|---|---|---|---|---|
 | TAM-01 | `/` | Landing, "Lihat katalog" | none | R11 | covered | |
-| TAM-02 | `/katalog` | Sample products without prices, search | none | none | uncovered (being rebuilt by Task 3.1) | |
-| TAM-03 | `/katalog/[publicId]` | Sample product page, "Masuk" call to action | none | none | uncovered | |
+| TAM-02 | `/katalog` | Sample products without prices, search | none | none | uncovered | failing on review stack ded1d524: /api/v1/public/catalog 403, Katalog belum dapat dimuat (F-032) |
+| TAM-03 | `/katalog/[publicId]` | Sample product page, "Masuk" call to action | none | none | uncovered | blocked by TAM-02 (F-032) |
 | TAM-04 | storefront | Keranjang / Pesanan / Akun / Ruang kerja petugas links go to sign-in with the right `returnPath` | none | none | uncovered | |
 | TAM-05 | `/shop`, staff pages | Guest is sent to sign-in; never sees prices, private photos, staff pages | none | none (GAP probes) | uncovered | |
 
@@ -157,8 +157,8 @@ Counting rule: a persona's functions are its own rows plus the shared blocks it 
 
 | ID | Page | Action | Permission | Rehearsal | Status | Run |
 |---|---|---|---|---|---|---|
-| PMH-01 | `/ordering/requests` | Compose and send a branch request ("Cari kemasan", review, send) | `order.request.submit` | R20 only (home.arpa pilot script, no xUnit driver, off-limits) | uncovered | |
-| PMH-02 | `/ordering/requests` | Follow store decisions on own requests | `order.request.read` | none | uncovered | |
+| PMH-01 | `/ordering/requests` | Compose and send a branch request ("Cari kemasan", review, send) | `order.request.submit` | R20 only (home.arpa pilot script, no xUnit driver, off-limits) | covered | pass R81 (phase B) |
+| PMH-02 | `/ordering/requests` | Follow store decisions on own requests | `order.request.read` | none | covered | pass R81 |
 | PMH-03 | `/ordering/substitutions` | Review replacement, decline or consent | `substitution.accept` | R28 | covered | |
 | PMH-04 | `/administration/organizations/addresses` | Read approved organization addresses | `organization.address.read` | R31 (reader scope) | covered | |
 
@@ -166,18 +166,18 @@ Counting rule: a persona's functions are its own rows plus the shared blocks it 
 
 | ID | Page | Action | Permission | Rehearsal | Status | Run |
 |---|---|---|---|---|---|---|
-| PYC-01 | `/ordering/reviews` | "Tinjau pesanan PSN-…", "Setujui belanja", "Konfirmasi persetujuan belanja" (fresh MFA, different person) | `order.spend.approve` | R04, R27 | covered | |
+| PYC-01 | `/ordering/reviews` | "Tinjau pesanan PSN-…", "Setujui belanja", "Konfirmasi persetujuan belanja" (fresh MFA, different person) | `order.spend.approve` | R04, R27 | covered | pass R77 A3 |
 | PYC-02 | `/ordering/reviews` | "Tolak belanja" | `order.spend.approve` | R27 | covered | |
-| PYC-03 | storefront account menu | "Persetujuan belanja" link | display | none | uncovered | |
+| PYC-03 | storefront account menu | "Persetujuan belanja" link | display | none | covered | review stack: menu shows Peninjauan pesanan |
 
 #### peninjau-toko — ALL + SH + rows below
 
 | ID | Page | Action | Permission | Rehearsal | Status | Run |
 |---|---|---|---|---|---|---|
-| PTK-01 | `/ordering/reviews` | "Terima pesanan toko", "Konfirmasi penerimaan toko" | `order.accept` | R04 | covered | |
-| PTK-02 | `/ordering/reviews` | Store rejection of its part of an order | `order.accept` | none | uncovered | |
-| PTK-03 | `/ordering/requests/incoming` | Inspect a branch request and give the store decision | `order.request.decide` | R20 only (no driver) | uncovered | |
-| PTK-04 | `/ordering/requests` | Read branch requests | `order.request.read` | none | uncovered | |
+| PTK-01 | `/ordering/reviews` | "Terima pesanan toko", "Konfirmasi penerimaan toko" | `order.accept` | R04 | covered | pass R77 A4 |
+| PTK-02 | `/ordering/reviews` | Store rejection of its part of an order | `order.accept` | none | uncovered | R82 red: blocked by F-030 before the store decision |
+| PTK-03 | `/ordering/requests/incoming` | Inspect a branch request and give the store decision | `order.request.decide` | R20 only (no driver) | covered | pass R81 |
+| PTK-04 | `/ordering/requests` | Read branch requests | `order.request.read` | none | covered | pass R81 |
 
 #### petugas-katalog — ALL + SH + rows below
 
@@ -196,7 +196,7 @@ Counting rule: a persona's functions are its own rows plus the shared blocks it 
 
 | ID | Page | Action | Permission | Rehearsal | Status | Run |
 |---|---|---|---|---|---|---|
-| GDG-01 | `/procurement/receiving` | "Catat pemberitahuan pemasok", "Catat penerimaan fisik koli" | `procurement.container.receive` | R47 | covered | |
+| GDG-01 | `/procurement/receiving` | "Catat pemberitahuan pemasok", "Catat penerimaan fisik koli" | `procurement.container.receive` | R47 | covered | R79 B5/B6 (see report) |
 | GDG-02 | `/procurement/inspections` | "Buat draf pemeriksaan", "Unggah video asli", "Ajukan hasil dalam karantina" | `procurement.inspection.record` | R45 | covered | |
 | GDG-03 | `/procurement/quality-acceptances` | "Ajukan penerimaan mutu" | `procurement.qualityacceptance.propose` | R46 | covered | |
 | GDG-04 | `/inventory/stock-releases` | Propose release of held stock | `stock.release.propose` | R63 | covered | |
@@ -209,7 +209,7 @@ Counting rule: a persona's functions are its own rows plus the shared blocks it 
 
 | ID | Page | Action | Permission | Rehearsal | Status | Run |
 |---|---|---|---|---|---|---|
-| KRM-01 | `/fulfillment/dispatches` | "Periksa keberangkatan pesanan PSN-…", choose lot and courier, "Tinjau keberangkatan", "Konfirmasi keberangkatan" | `shipment.dispatch` + `shipment.assign` | R60, R22, R28; R04 fails here (F-003) | covered | |
+| KRM-01 | `/fulfillment/dispatches` | "Periksa keberangkatan pesanan PSN-…", choose lot and courier, "Tinjau keberangkatan", "Konfirmasi keberangkatan" | `shipment.dispatch` + `shipment.assign` | R60, R22, R28; R04 fails here (F-003) | covered | pass R77 A6 |
 | KRM-02 | `/fulfillment/dispatches` | Scan-assisted picking and dispatch | `shipment.dispatch` + `shipment.assign` | R22 | covered | |
 | KRM-03 | `/fulfillment/courier-assignments` | "Tinjau penyerahan tugas" | `shipment.assign` | R13 | covered | |
 
@@ -217,9 +217,9 @@ Counting rule: a persona's functions are its own rows plus the shared blocks it 
 
 | ID | Page | Action | Permission | Rehearsal | Status | Run |
 |---|---|---|---|---|---|---|
-| KUR-01 | `/fulfillment/shipments` | Assigned shipments only | `shipment.read` | R61, R13 | covered | |
+| KUR-01 | `/fulfillment/shipments` | Assigned shipments only | `shipment.read` | R61, R13 | covered | pass R77 A8 |
 | KUR-02 | `/fulfillment/shipments` | "Upaya pengiriman": "Tinjau upaya pengiriman", "Simpan upaya pengiriman" | `delivery.attempt` | R61 | covered | |
-| KUR-03 | `/fulfillment/shipments` | "Tinjau penerima", "Buat QR penerimaan", "Buka tautan penerimaan" | `delivery.evidence` | R61, R13 | covered | |
+| KUR-03 | `/fulfillment/shipments` | "Tinjau penerima", "Buat QR penerimaan", "Buka tautan penerimaan" | `delivery.evidence` | R61, R13 | covered | pass R77 A8 |
 | KUR-04 | `/fulfillment/shipments` | "Tinjau bukti penerimaan" | `delivery.evidence` | R61 | covered | |
 | KUR-05 | none | Record goods returned (`delivery.return`) | `delivery.return` | none; permission never emitted and no page offers it | uncovered | |
 
@@ -227,7 +227,7 @@ Counting rule: a persona's functions are its own rows plus the shared blocks it 
 
 | ID | Page | Action | Permission | Rehearsal | Status | Run |
 |---|---|---|---|---|---|---|
-| KEU-01 | `/billing/invoice-releases` | Propose issuing approval (source, fees, format, books) | `invoice.release.propose` | R19 — always skipped `Pending.BrowserLatency` | uncovered (F-004) | |
+| KEU-01 | `/billing/invoice-releases` | Propose issuing approval (source, fees, format, books) | `invoice.release.propose` | R19 — always skipped `Pending.BrowserLatency` | uncovered | review stack: page loads, no receipts yet; release blocked by F-004 |
 | KEU-02 | `/billing/invoices` | "Tinjau invoice", "Tinjau penerbitan invoice", "Terbitkan invoice" | `invoice.issue` | R15a (issues through a fixture admission, not a real release) | covered (fixture path only, F-004) | |
 | KEU-03 | `/billing/invoices` | Open and "Unduh invoice" | `invoice.read` | R15a | covered | |
 | KEU-04 | `/billing/receiving-accounts` | Read receiving accounts | `receiving.account.read` | R57 | covered | |
@@ -244,7 +244,7 @@ Counting rule: a persona's functions are its own rows plus the shared blocks it 
 | PMB-03 | `/billing/payment-reviews` | "Periksa koreksi" of payment reading | `payment.review.correct` | R37, R38 | covered | |
 | PMB-04 | `/billing/payment-reviews` | "Periksa alokasi", "Periksa koreksi alokasi" | `payment.allocate` | R34 | covered | |
 | PMB-05 | `/billing/payment-reviews` | Claim a delegated review after handover | `payment.review.read` | R36 | covered | |
-| PMB-06 | `/billing/invoice-releases` | Review and approve the issuing approval | `invoice.release.approve` | R19 — always skipped | uncovered (F-004) | |
+| PMB-06 | `/billing/invoice-releases` | Review and approve the issuing approval | `invoice.release.approve` | R19 — always skipped | uncovered | same as KEU-01 |
 | PMB-07 | `/billing/bank-receipts` | "Tinjau keputusan bank": confirm one cash event | `bank.receipt.confirm` | R05 | covered | |
 | PMB-08 | `/procurement/stock-valuations` | Decide valuation (step-up) | `procurement.stockvaluation.decide` | R51, R52 | covered | |
 | PMB-09 | `/inventory/stock-releases` | "Tinjau keputusan": approve release (step-up) | `stock.release.approve` | R63 | covered | |
@@ -269,9 +269,9 @@ Counting rule: a persona's functions are its own rows plus the shared blocks it 
 
 | ID | Page | Action | Permission | Rehearsal | Status | Run |
 |---|---|---|---|---|---|---|
-| ADM-01 | `/administration/accounts` | Search accounts, open an account | `access.audit.read` | none | uncovered | |
-| ADM-02 | `/administration/accounts` | "Kirim usulan undangan" (invitation proposal) | `invite.manage` + `membership.propose` | none — form never renders (F-001) | uncovered | |
-| ADM-03 | `/administration/accounts` | Initiate account recovery | `recovery.initiate` | none — never offered (F-001) | uncovered | |
+| ADM-01 | `/administration/accounts` | Search accounts, open an account | `access.audit.read` | none | uncovered | failing on review stack: directory/invitation reads 400 invalid_read_purpose (F-024) |
+| ADM-02 | `/administration/accounts` | "Kirim usulan undangan" (invitation proposal) | `invite.manage` + `membership.propose` | none — form never renders (F-001) | uncovered | failing on review stack: no invitation form (F-001 still open) |
+| ADM-03 | `/administration/accounts` | Initiate account recovery | `recovery.initiate` | none — never offered (F-001) | uncovered | failing: recovery never offered (F-001) |
 | ADM-04 | `/administration/access` | "Tampilkan akun", compose grant/membership, server preview, "Ajukan untuk persetujuan" | `access.propose` / `membership.propose` | none | uncovered | |
 | ADM-05 | `/administration/access` | Second admin: "Tinjau dan setujui", reject, requester withdraw, revoke | `access.approve` / `membership.approve` / `access.revoke` | none | uncovered | |
 | ADM-06 | `/administration/access` | Suspend an identity and deny its sessions | `access.*` | R14 | covered | |
@@ -424,6 +424,12 @@ All drivers use `[LocalStockBrowserFact]` (opt-in, `UNITTOKO_STOCK_BROWSER=1`) o
 | R74 | verify-suppliers-browser | Procurement/SupplierBrowserTests | Browser_proposes_real_supplier_mapping_and_independently_observes_and_approves_with_original_key_recovery | hub `suppliers` |
 | R75 | verify-temporary-delegation-browser | Authorization/TemporaryDelegationBrowserTests | Browser_independently_approves_finite_delegation_and_recovers_all_original_operations_after_real_restart | hub `temporaryDelegation` |
 | R76 | verify-workspace-directory-browser (imported by verify-procurement-receiving-browser) | Procurement/ProcurementReceivingBrowserTests | Browser_records_actual_supplier_notice_and_partial_container_custody_with_separate_key_recovery | asserts the directory for one procurement actor |
+| R77 | verify-golden-journey-browser (stage `order-to-receipt`) | Journeys/GoldenJourneyBrowserTests | Golden_order_to_receipt_across_personas_shows_each_result_and_order_number | phase B; one persona per step (A0–A9); each staff persona first finds its page in its own workspace directory, buyers in the storefront account menu |
+| R78 | verify-golden-journey-browser (stage `invoice-to-payment`) | Journeys/GoldenJourneyBrowserTests | Golden_invoice_release_to_verified_payment_across_personas_shows_each_result_and_invoice_number | phase B; **always skipped** `Pending.BrowserLatency` (F-004) |
+| R79 | verify-golden-journey-browser (stage `procurement-to-receipt`) | Journeys/GoldenJourneyBrowserTests | Golden_procurement_request_to_received_goods_across_personas_shows_each_result_and_number | phase B; B1–B6 |
+| R80 | verify-golden-journey-browser (stage `cart-and-cancellation`) | Journeys/FunctionGapBrowserTests | Cart_changes_draft_discard_and_buyer_cancellation_work_in_the_browser | phase B; F-018, F-017 (buyer cancellation) |
+| R82 | verify-golden-journey-browser (stage `second-order-store-rejection`) | Journeys/FunctionGapBrowserTests | Second_order_from_the_keranjang_is_new_and_the_store_can_reject_its_part | phase B; F-030 (red until fixed), F-017 (store rejection) |
+| R81 | verify-golden-journey-browser (stage `branch-requests`) | Journeys/FunctionGapBrowserTests | Branch_request_is_sent_by_the_buyer_and_accepted_or_rejected_by_the_store_in_the_browser | phase B; F-013, full release |
 
 Script accounting: 80 files. Each R-ID is one file, except R07, R13, R19 and R23 (harness plus its browser module, two files each) and R15a–e (five test methods sharing the hub `verify-invoice-browser.mjs`). Every file has a driver except `verify-local-pilot-browser.mjs` (R20). Two drivers are permanently skipped (R19, R29). 67 driver files, 66 classes, 83 test methods.
 
@@ -447,6 +453,14 @@ Script accounting: 80 files. Each R-ID is one file, except R07, R13, R19 and R23
 
 ---
 
+## Phase B status (22 Okt 2026)
+
+- Golden journey written as `frontend/scripts/verify-golden-journey-browser.mjs` with drivers in `backend/tests/UnitToko.Tests/Journeys/` (R77–R82, section 3). A1 order to receipt (R77) **passes** with one persona per step; A2 (R78) is skipped pending F-004; B (R79) runs B1–B6 (see the phase B report for the final result).
+- New rehearsals: R80 keranjang/draft/cancellation **passes**; R81 branch requests **passes**; R82 second keranjang order + store rejection is **red** on F-030.
+- Exploratory pass on the review stack: evidence in `tmp/website-ready/screens/func-b/`; findings F-021–F-032 in `findings-func.md` (phase B rows).
+- Rows changed in this phase carry a phase-B note in their Run column. Counts in 2.6 are the phase A baseline.
+
+---
 ## 5. Golden journey design
 
 Deliverables (phase B, after ENV Task 0.3 merges): `frontend/scripts/verify-golden-journey-browser.mjs` and `backend/tests/UnitToko.Tests/Journeys/GoldenJourneyBrowserTests.cs`.

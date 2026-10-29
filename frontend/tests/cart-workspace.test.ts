@@ -33,5 +33,6 @@ test('cart messages tell the buyer the next step', () => {
   assert.match(addToCartMessage(new CartOutcomeUnknown({} as never, 'k')), /tidak akan masuk dua kali/);
   assert.match(addToCartMessage(new AccessFailure(409, 'order_selection_changed')), /Buka keranjang/);
   assert.match(addToCartMessage(new AccessFailure(400, 'cart_full')), /100 barang/);
+  assert.match(addToCartMessage(new AccessFailure(409, 'order_draft_submitted')), /^Draf ini sudah diajukan menjadi pesanan/);
   assert.match(addToCartMessage(new AccessFailure(401, 'unauthenticated')), /Masuk kembali/);
 });
