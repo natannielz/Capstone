@@ -28,8 +28,8 @@ export async function verifyWorkspaceDirectoryBrowser({ page, origin, directory,
     await page.setViewportSize({ width: 360, height: 800 }); assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true); await page.screenshot({ path: resolve(directory, 'workspace-directory-mobile.png'), fullPage: true });
     await page.setViewportSize({ width: 1440, height: 1000 }); await page.screenshot({ path: resolve(directory, 'workspace-directory-desktop.png'), fullPage: true });
     // The home page reads the signed-in actor's identity and live access, and its "Pekerjaan saya" panel reads the work summary (a POST
-    // query: it counts waiting work from each owner's own authorised queue and changes nothing). Any other request is a failure.
-    const reads = [['GET', '/api/v1/identity/session'], ['GET', '/api/v1/access/current'], ['POST', '/api/v1/work/summary/query']];
+    // query, sent with the request token read first from identity/csrf: it counts waiting work from each owner's own authorised queue and changes nothing). Any other request is a failure.
+    const reads = [['GET', '/api/v1/identity/session'], ['GET', '/api/v1/access/current'], ['GET', '/api/v1/identity/csrf'], ['POST', '/api/v1/work/summary/query']];
     assert.ok(requests.length >= 2); assert.ok(requests.every(request => reads.some(([method, path]) => request.method === method && request.path === path)), 'Unexpected request from /workspace: ' + JSON.stringify(requests));
     console.log('REAL_WORKSPACE_DIRECTORY_BROWSER_PASS ' + JSON.stringify({ actualActor: true, livePermissions: true, canonicalEntry: true, localSearch: true, keyboard: true, mobile: true, desktop: true, mutations: 0 }));
   } finally { page.off('request', observe); }
