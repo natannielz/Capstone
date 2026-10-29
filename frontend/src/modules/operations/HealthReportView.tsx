@@ -29,7 +29,7 @@ export function HealthReportView({ report }: { report: OperatorHealth }) {
       <Section title="Antrean latar" id="health-queues" variant="plain">
         <DataTable caption="Jumlah pekerjaan per antrean" rows={queues} getKey={row => row.name}
           columns={[
-            { key: 'name', header: 'Antrean', render: row => row.name },
+            { key: 'name', header: 'Antrean', rowHeader: true, render: row => row.name },
             { key: 'pending', header: 'Menunggu', align: 'end', render: row => formatNumber(row.queue.pending) },
             { key: 'retrying', header: 'Dicoba ulang', align: 'end', render: row => formatNumber(row.queue.retrying) },
             { key: 'leased', header: 'Sedang diproses', align: 'end', render: row => formatNumber(row.queue.leased) },

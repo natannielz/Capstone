@@ -12,7 +12,7 @@ import styles from './workspace-home.module.css';
 export function WorkspaceDirectory({ actions, accessState }: { actions: readonly string[]; accessState: 'denied' | 'unavailable' | null }) {
   const [query, setQuery] = useState('');
   const available = accessState === null ? workspaceDirectory(actions) : [], groups = accessState === null ? workspaceDirectory(actions, query) : [];
-  return <Section title="Ruang kerja tersedia" id="workspace-heading" variant="plain"
+  return <Section title="Ruang kerja tersedia" id="workspace-heading" variant="plain" focusable
     description="Pilih tugas sesuai penugasan akun Anda. Cakupan dan tindakan diperiksa kembali di setiap ruang kerja."
     actions={<a href="/identity/account#profile-heading" className={buttonClassName({ variant: 'secondary' })}>Sesi dan verifikasi akun</a>}>
     {accessState !== null ? <StateView kind={accessState === 'denied' ? 'denied' : 'error'}

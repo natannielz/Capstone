@@ -35,7 +35,7 @@ export function WorkSummary({ actorId, actions, heading = 'Pekerjaan saya' }: { 
   const items = state.kind === 'ready' ? visibleWorkItems(state.summary.items, actions) : [];
   const reload = () => setRefresh(value => value + 1);
   const copy = (kind: OutcomeKind) => outcomeCopy(kind);
-  return <Section title={heading} id="work-heading" variant="plain" busy={state.kind === 'loading'}
+  return <Section title={heading} id="work-heading" variant="plain" focusable busy={state.kind === 'loading'}
     description="Pekerjaan yang menunggu Anda, dari yang paling lama. Jumlah dihitung dari antrean yang dapat Anda buka."
     actions={<Button onClick={reload} disabled={state.kind === 'loading'}>Muat ulang</Button>}>
     {state.kind === 'loading' && <StateView kind="loading" title={copy('loading').title} />}

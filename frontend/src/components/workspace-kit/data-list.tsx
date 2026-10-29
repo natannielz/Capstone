@@ -10,12 +10,14 @@ import type { TablePagination } from "./list-table";
  * With `onSelect` the title block is one button (the whole row opens the record; no separate "Lihat …" button) and the
  * selected row carries the sidebar's inset marker. Error, first load and empty each replace the list (exactly one state).
  */
-export function DataList<Item>({ label, items, getKey, renderTitle, renderMeta, renderBadge, renderContent, renderActions, onSelect, openLabel, selectedKey, disabled = false, loading = false, error, empty, pagination }: {
+export function DataList<Item>({ label, items, getKey, renderTitle, renderMeta, renderBadge, renderContent, renderActions, onSelect, openLabel, toggle = false, selectedKey, disabled = false, loading = false, error, empty, pagination }: {
   label: string; items: readonly Item[]; getKey: (item: Item) => string; renderTitle: (item: Item) => ReactNode;
   renderMeta?: (item: Item) => ReactNode; renderBadge?: (item: Item) => ReactNode; renderContent?: (item: Item) => ReactNode; renderActions?: (item: Item) => ReactNode;
   onSelect?: (item: Item) => void;
   /** Names the whole-row open button when the record already has a known name ("Tinjau pesanan PSN-…"), so rehearsals and screen readers keep it. */
   openLabel?: (item: Item) => string;
+  /** The rows are choices in a picker: the row button exposes aria-pressed, so a screen reader hears which one is chosen. */
+  toggle?: boolean;
   selectedKey?: string | null; disabled?: boolean;
   loading?: boolean; error?: { title?: string; message: ReactNode; detail?: ReactNode; onRetry?: () => void };
   empty?: { title: string; message?: ReactNode; action?: ReactNode }; pagination?: TablePagination;
@@ -32,7 +34,7 @@ export function DataList<Item>({ label, items, getKey, renderTitle, renderMeta, 
         // Spans only: the head may sit inside a <button>, which allows phrasing content alone.
         const head = <><span className="data-list-head"><span className="data-list-title">{renderTitle(item)}</span>{badge}</span>{meta && <span className="data-list-meta">{meta}</span>}</>;
         return <li key={key} className="data-list-row" aria-current={selectedKey === key ? "true" : undefined}>
-          {onSelect ? <button type="button" className="data-list-open" aria-label={openLabel?.(item)} disabled={disabled} onClick={() => onSelect(item)}>{head}</button> : head}
+          {onSelect ? <button type="button" className="data-list-open" aria-label={openLabel?.(item)} aria-pressed={toggle ? selectedKey === key : undefined} disabled={disabled} onClick={() => onSelect(item)}>{head}</button> : head}
           {content && <div className="data-list-content">{content}</div>}
           {actions && <div className="data-list-actions ui-actions">{actions}</div>}
         </li>;
