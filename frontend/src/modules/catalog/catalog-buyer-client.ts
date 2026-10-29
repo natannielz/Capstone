@@ -8,6 +8,14 @@ import { normalizeCatalogCategory } from './catalog-history';
 /** One category chip from the server: visible packages matching the current search in that category. */
 export type BuyerCategoryCount = { code: string; name: string; count: number };
 export type BuyerCatalogBrowse = { category?: string; sort?: 'name' };
+/** A category by name (U-025): the server's name from the chips when known, otherwise the code in sentence case ("PANTRY" →
+ *  "Pantry", "AIR-MINUMAN" → "Air minuman"), never a raw upper-case code. */
+export function buyerCategoryLabel(code: string, categories: readonly BuyerCategoryCount[] = []): string {
+  const named = categories.find(item => item.code === code)?.name;
+  if (named) return named;
+  const words = code.replace(/[-_]+/g, ' ').trim().toLowerCase();
+  return words ? words[0].toUpperCase() + words.slice(1) : code;
+}
 function parseCategories(value: unknown): BuyerCategoryCount[] {
   // Servers before category browsing send no chips; anything else must be a bounded list of distinct, positive counts.
   if (value === undefined) return [];
