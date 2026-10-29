@@ -7,14 +7,12 @@ Scored against `docs/quality/website-ready/ui-standard.md` §14 with `tmp/websit
 
 The metrics are in `tmp/website-ready/ux/pages-c/metrics-{after,real}/`. The audit metrics are in `tmp/website-ready/ux/metrics/`.
 
-Procurement (the other half of U-040) is not in this document: it waits for FIX-FLOW D's merge.
-
 Acceptance (no horizontal scroll; h1 28/700, or 24 at 390, at x = 264 + gutter; controls 44 px; radii 8/12; no bordered box inside another; at most one primary Button per region; axe with 0 serious or critical and 0 color-contrast, target-size or region):
 
 | Run | Result |
 |---|---|
-| after (mocked, 23 screens × 2 widths) | **46/46** |
-| real data (18 pages × 2 widths) | **36/36** |
+| after (mocked, 39 screens × 2 widths, procurement included) | **78/78** |
+| real data (34 pages × 2 widths, procurement included) | **68/68** |
 | first mocked run, before the fixes below | 32/36 (health and workspace) |
 
 Fixed after the first run: a table inside a card Section (nested boxes), and the skip link on `/workspace` (48 px, radius 0).
@@ -25,8 +23,8 @@ Fixed after the first run: a table inside a card Section (nested boxes), and the
 | U-037 administration (6 pages): two-column desk, queue at least 320 px, refresh in the header, no pager when empty, no glued controls, one state body per error | fixed | `before-mock/adm-delegations@1280.png` (155 px queue, 38 px buttons, refresh touching the card), `orgs@1280.png` (banner + button + card for one error) | `pages-c/real/adm-delegations@1280.png`, `pages-c/real/adm-access@1280.png`, `pages-c/after/orgs-detail@1280.png`, `pages-c/after/orgs-proposal@1280.png`; desk columns 320+ px, top-aligned; one StateView per error; pagers hidden when the list fits |
 | U-038 workspace home: KPI tiles 16 px, no stripe; header actions; h1 28/700 at the staff left edge; off `identity.module.css` fields | fixed | `before-mock/workspace@1280.png`: h1 43.52 px at x = 328; "Muat ulang" 50 px floating; 64 px number column and a 4 px ink stripe; 155 px tiles (45 of them); 6 px radii (64) | `pages-c/real/workspace@{1280,390}.png`: h1 28/700 at x = 296; `Section` actions; tiles with a 28/700 number 16 px from the label; search through `Field`; axe `region` 1 → 0; `landmark-unique` ×6 → ×5, all in the workspace frame's sidebar groups, not in this page (moderate, not scored by §14; leftover) |
 | U-039 operations: severity as Badge, health queue as DataTable that stacks on phones, facts through Facts, 44 px buttons | fixed | `before-mock/health@1280.png`, `health@390.png` (horizontal scroll with clipped headers), `ops-anomalies@1280.png` (52 px buttons, 46 px fields) | `pages-c/after/health@{1280,390}.png` (Badge beside each finding; stacked cards at 390, 0 horizontal scroll), `pages-c/after/anomaly-result@1280.png` (44 px buttons, Badge per signal) |
-| U-040 accounting and reporting (procurement pending) | fixed for `/accounting/books` and `/reporting/accounts` | `before-mock/books@1280.png`, `rep-accounts@1280.png` (48 px ink buttons, 360 px selectors, tables scrolling sideways) | `pages-c/after/books-detail@{1280,390}.png`, `pages-c/after/rep-result@{1280,390}.png` (DataTable, Field selectors, header refresh) |
-| U-003 one PageHeader | fixed on all 17 pages | | `pages-c/after/*`, `pages-c/real/*` |
+| U-040 accounting, reporting and procurement (16 workspaces) | fixed | `before-mock/books@1280.png`, `rep-accounts@1280.png` (48 px ink buttons, 360 px selectors, tables scrolling sideways) | `pages-c/after/books-detail@{1280,390}.png`, `pages-c/after/rep-result@{1280,390}.png` (DataTable, Field selectors, header refresh); procurement: `pages-c/after/pro-*@{1280,390}.png`, `pages-c/real/pro-*@{1280,390}.png` (PageHeader, location Section with the refresh as its header action, DataList queue in the shared desk, StateView). Procurement `before-mock/pro-*@1280.png`: 48 px ink buttons, error banner above an empty section |
+| U-003 one PageHeader | fixed on all 33 pages | | `pages-c/after/*`, `pages-c/real/*` |
 | §8 one primary per region | fixed and pinned: the test scans every module of these pages for two primaries in one row, and `measure.cjs` counts primaries per rendered region (0 regions with two) | | |
 | §9 warnings vs errors | warnings keep `role="status"` or no role; only errors are alerts | | |
 | U-004 / U-021 one Button; mobile action rows | fixed: every legacy `.primary/.secondary/.danger` on the 17 pages is the kit Button; command Buttons show `busy` | | |
@@ -39,4 +37,4 @@ Fixed after the first run: a table inside a card Section (nested boxes), and the
 
 - Real rows: the review stack has few rows for these personas. Billing, accounting, reporting and operations are mostly denied or empty there; the mocked run supplies rows for organizations, books, the report and the anomaly review.
 - `/identity/account` is UI-PAGES-A's.
-- Procurement (U-040).
+- Procurement rows: on the review stack the procurement personas get server answers that the desks show as their error or denied state, and the mocked run has no procurement data, so the procurement queue, detail and form layouts are scored on their states and verified by source tests and the shared primitives, not seen with rows.
