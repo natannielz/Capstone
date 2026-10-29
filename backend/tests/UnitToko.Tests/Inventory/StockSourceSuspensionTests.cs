@@ -51,6 +51,35 @@ public sealed partial class StockSourceSuspensionTests(MongoFixture fixture)
         return (maker, reviewer, operatorActor, pool);
     }
 
+    /// <summary>Activates the (empty) pool through the real operating-policy and activation commands, independently reviewed.
+    /// Stock is installed only afterwards, so the activation handoff stays truthful.</summary>
+    private async Task Activate(StoreTestData data, long pool, bool linked = false)
+    {
+        var maker = await data.AddActorAsync(4100, Owner.ToScope(), Permissions.StockSourcePropose, Permissions.StockSourcePolicyPropose, Permissions.StockSourceRead);
+        var checker = await data.AddActorAsync(4200, Owner.ToScope(), Permissions.StockSourceApprove, Permissions.StockSourcePolicyApprove, Permissions.StockSourceRead);
+        await PersonTestData.SeedDistinctPeopleAsync(data.Database, data.Clock, maker.UserId, checker.UserId);
+        if (linked)
+        {
+            await data.AddGrantAsync(maker, 4101, Linked.ToScope(), [Permissions.StockSourcePropose, Permissions.StockSourcePolicyPropose, Permissions.StockSourceRead]);
+            await data.AddGrantAsync(checker, 4201, Linked.ToScope(), [Permissions.StockSourceApprove, Permissions.StockSourcePolicyApprove, Permissions.StockSourceRead]);
+        }
+        var sources = Service(data);
+        var policyPreview = await sources.PreviewOperatingPolicyAsync(maker, pool);
+        var policy = await sources.ProposeOperatingPolicyAsync(maker, pool, new(policyPreview["poolRevision"].AsInt64, policyPreview["suspensionRevision"].AsInt64,
+            policyPreview["policyRevision"].AsInt64, policyPreview["configurationHash"].AsString),
+            new(StockMovementWriter.UnitToko, null, 0, "Synthetic zero-stock reconciliation", "Synthetic suspend before outage"), Meta("activate-policy"));
+        await sources.DecideOperatingPolicyAsync(checker, policy["proposalId"].AsInt64, 1, StockSourceSetupDecision.Approve,
+            "Independent synthetic operating policy review", Meta("activate-policy-approved"));
+        var preview = await sources.PreviewActivationAsync(maker, pool);
+        var handoff = new StockSourceEmptyHandoff(Input().HandoffReference, data.Clock.UtcNow, 0, 0, true, true, true);
+        var proposal = await sources.ProposeActivationAsync(maker, pool, StockSourceActivationBson.ReadExpected(preview["expected"].AsBsonDocument), handoff, Meta("activate"));
+        var review = await sources.PreviewActivationDecisionAsync(checker, proposal["proposalId"].AsInt64, StockSourceSetupDecision.Approve, handoff);
+        var committed = await sources.DecideActivationAsync(checker, proposal["proposalId"].AsInt64, 1, StockSourceSetupDecision.Approve, handoff,
+            StockSourceActivationBson.ReadExpected(review["expected"].AsBsonDocument), review["binding"].AsString, Meta("activate-approved"));
+        Assert.Equal("activated", committed["status"].AsString);
+        Assert.True((await Pool(data, pool))["active"].AsBoolean);
+    }
+
     [Fact]
     public void Suspension_is_an_explicit_fresh_operational_capability_without_automatic_role_rights()
     {
@@ -69,8 +98,9 @@ public sealed partial class StockSourceSuspensionTests(MongoFixture fixture)
     {
         await using var data = await StoreTestData.CreateAsync(fixture);
         var (_, _, actor, pool) = await Setup(data, true); var service = Service(data);
-        // A synthetic active flag exercises suspension; it is deliberately not handoff/activation evidence.
-        await Rows(data, "inventoryPools").UpdateOneAsync(new BsonDocument("_id", pool), Builders<BsonDocument>.Update.Set("active", active));
+        // An active Boolean is never accepted as source authority: an active pool needs its complete activation
+        // provenance, so the active case is activated through the real owning commands while the pool is empty.
+        if (active) await Activate(data, pool, linked: true);
         await InventoryGraphTests.InstallBalances(data);
         await Rows(data, "lots").InsertOneAsync(InventoryGraphTests.Lot());
         var stock = InventoryBson.Balance(new InventoryBalanceDocument(7000, pool,

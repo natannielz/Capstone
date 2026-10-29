@@ -13,6 +13,7 @@ import styles from '../administration/access.module.css';
 import invoice from './invoice.module.css';
 import { dateTimeFormatter } from '@/lib/format';
 import { autoLoadEndsSession } from './payment-review-session';
+import { Button } from '@/components/workspace-kit/button';
 
 const labels: Record<string, string> = { amount: 'Nominal', currency: 'Mata uang', transfer_date: 'Tanggal transfer dan pembukuan', transfer_time: 'Waktu dan zona transfer', recipient: 'Nama penerima', account: 'Rekening tujuan', bank: 'Nama atau kode bank', reference: 'Referensi transfer' };
 function message(error: unknown) {
@@ -65,7 +66,7 @@ export function PaymentVerificationPanel({ actorId, owner, allowed, allocationAl
   const disabled = locked || busy, canVerify = allowed && fresh && !disabled;
   return <section className={invoice.correctionPanel} aria-label="Verifikasi pembayaran"><h3>Verifikasi pembayaran</h3>
     <p>Hubungkan pengajuan dan bukti asli dengan dana yang telah dikonfirmasi melalui bank. Pembayar harus diverifikasi melalui prosedur Finance yang disetujui.</p>
-    <button className={styles.secondary} disabled={disabled} onClick={() => void work(read)}>Muat ulang hasil verifikasi</button>
+    <Button variant="secondary" disabled={disabled} onClick={() => void work(read)}>Muat ulang hasil verifikasi</Button>
     {busy && <p role="status">Memeriksa verifikasi…</p>}{error !== null && <p role="alert" className={styles.alert}>{message(error)}</p>}
     {allowed && (!fresh || error instanceof AccessFailure && error.code === 'step_up_required') && <p className={styles.alert}>Verifikasi dua langkah terbaru diperlukan. <Link href="/identity/account?operation=payment.verify&returnPath=%2Fbilling%2Fpayment-reviews">Verifikasi dua langkah untuk pembayaran</Link></p>}
     {checked && !saved && <p>Belum ada verifikasi pembayaran yang tersimpan.</p>}
@@ -84,12 +85,12 @@ export function PaymentVerificationPanel({ actorId, owner, allowed, allocationAl
         setShown(null); setConfirm(null); setPayerReference(''); setReason(''); setImage(false); setBankChecked(false); setPayer(false); setResolutions({}); setError(null);
       }}><option value="">Pemeriksaan terkini</option><option value="ocr">Hasil OCR dan koreksi petugas</option><option value="manual">Pengecualian manual yang tersimpan</option></select>
       <p>Jika OCR pulih setelah pengecualian, pilih hasil OCR lalu periksa penerimaan kembali. Pilihan ini mempertahankan riwayat manual dan memerlukan keputusan baru sebelum pengaitan dana.</p>
-      <button className={styles.secondary} disabled={!canVerify || !checked} onClick={() => void work(() => receipts(null))}>Pilih penerimaan bank</button>
+      <Button variant="secondary" disabled={!canVerify || !checked} onClick={() => void work(() => receipts(null))}>Pilih penerimaan bank</Button>
       <p>Jika dana belum dikonfirmasi, buka <Link href="/billing/bank-receipts">penerimaan bank</Link>. Nama atau referensi yang mirip bukan bukti identitas transfer.</p>
       {page && <><ul className={invoice.candidates}>{page.items.map(item => <li key={item.receiptId}><strong>Penerimaan {item.receiptId} · {orderAmount('IDR', item.amount)}</strong>
-        <p>{item.bookedDate} · Identitas bank {item.transactionId}</p><button className={styles.secondary} disabled={!canVerify || confirm !== null} onClick={() => void work(() => choose(item.receiptId))}>Periksa penerimaan {item.receiptId}</button></li>)}</ul>
+        <p>{item.bookedDate} · Identitas bank {item.transactionId}</p><Button variant="secondary" disabled={!canVerify || confirm !== null} onClick={() => void work(() => choose(item.receiptId))}>Periksa penerimaan {item.receiptId}</Button></li>)}</ul>
         {page.items.length === 0 && <p>Tidak ada penerimaan yang sesuai pada halaman ini. Penerimaan untuk pemasok atau pembayar lain tidak ditampilkan.</p>}
-        {page.nextAfterId !== null && <button className={styles.secondary} disabled={!canVerify || confirm !== null} onClick={() => void work(() => receipts(page.nextAfterId))}>Penerimaan berikutnya</button>}</>}
+        {page.nextAfterId !== null && <Button variant="secondary" disabled={!canVerify || confirm !== null} onClick={() => void work(() => receipts(page.nextAfterId))}>Penerimaan berikutnya</Button>}</>}
       {shown && <form onSubmit={event => { event.preventDefault(); if (!canVerify) return; setError(null); try {
         setConfirm(preparePaymentVerification(actorId, shown, payerReference.trim(), image, bankChecked, payer,
           shown.discrepancies.map(item => ({ field: item.field, reason: resolutions[item.field]?.trim() ?? '' })), reason.trim()));
@@ -110,14 +111,14 @@ export function PaymentVerificationPanel({ actorId, owner, allowed, allocationAl
         <label><input type="checkbox" checked={bankChecked} disabled={disabled || !!confirm} onChange={event => setBankChecked(event.target.checked)} /> Saya telah memeriksa sumber bank dan penerimaan yang dipilih.</label>
         <label><input type="checkbox" checked={payer} disabled={disabled || !!confirm} onChange={event => setPayer(event.target.checked)} /> Kepemilikan dana untuk organisasi pembeli telah diverifikasi melalui prosedur yang disetujui.</label>
         <label htmlFor="verification-reason">Alasan verifikasi</label><textarea id="verification-reason" required maxLength={1000} value={reason} disabled={disabled || !!confirm} onChange={event => setReason(event.target.value)} />
-        {!confirm ? <button className={styles.primary} disabled={!canVerify}>Periksa keputusan verifikasi</button> : <section className={styles.state} aria-label="Konfirmasi verifikasi pembayaran">
+        {!confirm ? <Button variant="primary" type="submit" disabled={!canVerify}>Periksa keputusan verifikasi</Button> : <section className={styles.state} aria-label="Konfirmasi verifikasi pembayaran">
           <h4 ref={reviewHeading} tabIndex={-1}>Konfirmasi pengaitan yang ditinjau</h4><p>Pengajuan {owner.id} akan dikaitkan dengan penerimaan {shown.receiptId}, sebesar {orderAmount('IDR', shown.amount)} untuk {shown.buyerName}.</p>
           <p>{confirm.body.reason}</p><p>Kas tidak ditambahkan lagi. Saldo invoice belum berkurang. Koreksi bukti yang diterima akan dikunci sebagai riwayat keputusan.</p>
-          <button type="button" className={styles.primary} disabled={!canVerify} onClick={() => void work(async () => {
+          <Button variant="primary" type="button" disabled={!canVerify} onClick={() => void work(async () => {
             if (journal.list(actorId).length) throw new AccessFailure(400, 'resolve_previous_attempt');
             const ledger = new MutationLedger(() => 'pv.' + confirm.declarationId + '.' + confirm.body.receiptId + '.' + crypto.randomUUID());
             await submitTrackedRequest(ledger, journal, actorId, 'billing.payment.verify', 'billing.payment.verify', confirm, key => gateway.send(confirm, key, active)); await read();
-          })}>Simpan verifikasi pembayaran</button><button type="button" className={styles.secondary} disabled={disabled} onClick={() => { setConfirm(null); heading.current?.focus(); }}>Kembali ke pemeriksaan</button>
+          })} busy={busy}>Simpan verifikasi pembayaran</Button><Button variant="secondary" type="button" disabled={disabled} onClick={() => { setConfirm(null); heading.current?.focus(); }}>Kembali ke pemeriksaan</Button>
         </section>}
         <p>Sumber isian: {shown.reviewSource === 'manual' ? 'Pemeriksaan manual melalui pengecualian OCR yang tercatat' : 'Hasil OCR dan koreksi petugas'}</p>
       </form>}

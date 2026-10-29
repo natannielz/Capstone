@@ -125,6 +125,12 @@ button:disabled{cursor:not-allowed}
 .state-view[data-kind="empty"]{gap:var(--space-1);padding:var(--space-6) 0;border-radius:0;background:transparent}
 .state-view[data-kind="empty"] .state-view-icon{width:24px;height:24px;color:var(--muted-foreground)}
 .state-view[data-kind="empty"] .state-view-title{font-size:16px}
+/* Storefront full-page state (empty cart, nothing found): a centred block, 48 px block padding, 40 px icon, the next action centred. */
+.state-view[data-align="center"]{justify-items:center;gap:var(--space-2);padding:var(--space-12) var(--space-4);text-align:center}
+.state-view[data-align="center"] .state-view-head{flex-direction:column;gap:var(--space-3)}
+.state-view[data-align="center"] .state-view-icon{width:40px;height:40px;color:var(--muted-foreground)}
+.state-view[data-align="center"] .state-view-title{font-size:20px;line-height:28px}
+.state-view[data-align="center"] .ui-actions{justify-content:center}
 .outcome-action{justify-self:start;height:var(--control-h);padding:0 var(--space-4);border-radius:var(--radius-control);border:1px solid var(--control-border);background:var(--card);color:var(--foreground);font-size:14px;font-weight:600;white-space:nowrap}
 .outcome-action:hover{background:var(--secondary)}
 .outcome-loading,.state-view[data-kind="loading"]{gap:var(--space-3);padding:var(--space-4) 0;background:transparent}
@@ -144,6 +150,8 @@ button:disabled{cursor:not-allowed}
 .list-table[data-density="compact"] tbody tr{height:var(--row-h-compact)}
 .list-table[data-density="compact"] td{padding:var(--space-1) var(--space-3)}
 .list-table[data-density="compact"] th{padding:var(--space-2) var(--space-3)}
+.list-table tbody th[scope="row"]{position:static;background:transparent;color:var(--foreground);font-size:14px;line-height:20px;font-weight:400;padding:var(--space-3) var(--space-4);border-bottom:1px solid var(--border)}
+.list-table tbody tr:last-child th[scope="row"]{border-bottom:0}
 .list-table tbody tr:hover,.list-table tbody tr[aria-current="true"]{background:var(--secondary)}
 .list-table-open{display:inline-flex;align-items:center;justify-content:center;height:var(--control-h-compact);padding:0 var(--space-3);border-radius:var(--radius-control);border:1px solid var(--control-border);background:var(--card);color:var(--primary);font-size:14px;font-weight:600;white-space:nowrap}
 .list-table-open:hover:not(:disabled){background:var(--secondary)}
@@ -152,12 +160,13 @@ button:disabled{cursor:not-allowed}
 .list-table-pagination{display:flex;align-items:center;justify-content:flex-end;gap:var(--space-2);padding:var(--space-3) var(--space-4);border-top:1px solid var(--border);font-size:13px;color:var(--muted-foreground)}
 @media (max-width:639px){
   .list-table thead{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
-  .list-table,.list-table tbody,.list-table tr,.list-table td{display:block;width:100%}
+  .list-table,.list-table tbody,.list-table tr,.list-table td,.list-table tbody th[scope="row"]{display:block;width:100%}
   .list-table tbody tr,.list-table[data-density="compact"] tbody tr{height:auto;padding:var(--space-4);border-bottom:1px solid var(--border)}
-  .list-table td,.list-table[data-density="compact"] td{display:flex;justify-content:space-between;gap:var(--space-3);padding:var(--space-1) 0;border:0;text-align:right}
-  .list-table td::before{content:attr(data-label);color:var(--muted-foreground);font-size:12px;text-align:left}
-  .list-table td:first-child{font-weight:600;font-size:15px}
+  .list-table td,.list-table[data-density="compact"] td,.list-table tbody th[scope="row"]{display:flex;justify-content:space-between;gap:var(--space-3);padding:var(--space-1) 0;border:0;text-align:right}
+  .list-table td::before,.list-table tbody th[scope="row"]::before{content:attr(data-label);color:var(--muted-foreground);font-size:12px;text-align:left}
+  .list-table td:first-child,.list-table tbody th[scope="row"]:first-child{font-weight:600;font-size:15px}
   .list-table td:last-child{justify-content:flex-end;padding-top:var(--space-2)}
+  .list-table-caption{display:block;width:100%}
 }
 /* Facts (U-022): one description list — two columns from 640 px, 13 px muted term, 15/600 value. */
 .facts-list,.review-panel dl{display:grid;grid-template-columns:minmax(0,1fr);gap:var(--space-4) var(--space-6);margin:0;font-variant-numeric:tabular-nums}
@@ -209,7 +218,7 @@ button:disabled{cursor:not-allowed}
 @layer components{
 .quantity-stepper{display:grid;gap:var(--space-2)}
 .quantity-stepper-controls{display:flex;align-items:stretch;gap:var(--space-2);max-width:240px}
-.quantity-stepper-controls input{flex:1;min-width:0;height:var(--control-h);text-align:center;font-variant-numeric:tabular-nums}
+.quantity-stepper-controls input{flex:1;min-width:0;height:var(--control-h);padding:0 var(--space-2);border:1px solid var(--control-border);border-radius:var(--radius-control);background:var(--card);color:var(--foreground);font:inherit;text-align:center;font-variant-numeric:tabular-nums}
 .quantity-stepper-controls button{width:var(--control-h);height:var(--control-h);border:1px solid var(--control-border);border-radius:var(--radius-control);background:var(--card);color:var(--foreground);font-size:20px;font-weight:700}
 .quantity-stepper-controls button:hover:not(:disabled){background:var(--secondary)}
 .quantity-stepper-controls button:disabled,.quantity-stepper-controls button[aria-disabled="true"]{background:var(--muted);color:var(--muted-foreground);cursor:not-allowed}
@@ -231,6 +240,8 @@ button:disabled{cursor:not-allowed}
 .ui-button--icon{width:var(--control-h);padding:0}
 .ui-button--icon.ui-button--compact{width:var(--control-h-compact)}
 .ui-button--large{height:48px}
+/* A label that may wrap in a narrow column (two catalogue cards per phone row): still at least 44 px, never clipped. */
+.ui-button--wrap{height:auto;min-height:var(--control-h);padding-block:var(--space-2);white-space:normal;text-align:center}
 .ui-button:disabled{background:var(--muted);border-color:transparent;color:var(--muted-foreground);cursor:not-allowed}
 .ui-button--secondary:disabled,.ui-button--danger:disabled{background:var(--card);border-color:var(--border)}
 .ui-button--tertiary:disabled{background:transparent}
@@ -258,6 +269,31 @@ button:disabled{cursor:not-allowed}
 .ui-section-description{margin:0;max-width:72ch;font-size:14px;line-height:20px;color:var(--muted-foreground)}
 .ui-section-body{display:grid;gap:var(--space-4);min-width:0}
 @media (max-width:639px){.ui-section{padding:var(--space-4)}}
+/* Page body under PageHeader: regions, states and notices 24 px apart, whatever mix of primitives and legacy blocks they are. */
+.ui-stack{display:grid;gap:var(--space-6);min-width:0}
+.ui-stack>.ui-section+.ui-section{margin-top:0}
+/* A lone button in a grid region (section body, stack) keeps its own width on desktop; on phones it spans the row (§11.5). */
+.ui-section-body>.ui-button,.ui-section>.ui-button,.ui-stack>.ui-button{justify-self:start}
+@media (max-width:639px){.ui-section-body>.ui-button,.ui-section>.ui-button,.ui-stack>.ui-button{justify-self:stretch}}
+/* Form column (§7): 720 px, fields 16 px apart, groups (fieldset) on the same rhythm, the action row 24 px below the last field. */
+.ui-form{display:grid;gap:var(--space-4);min-width:0;max-width:var(--content-narrow)}
+.ui-form fieldset{display:grid;gap:var(--space-4);min-width:0;margin:0;padding:0;border:0}
+.ui-form legend{padding:0;margin-bottom:var(--space-2);font-size:16px;line-height:24px;font-weight:600}
+.ui-form>:is(.ui-actions,.ui-button),.ui-form fieldset>:is(.ui-actions,.ui-button){margin-top:var(--space-2)}
+.ui-form .ui-button{justify-self:start}
+@media (max-width:639px){.ui-form .ui-button{justify-self:stretch}}
+/* Two-column work desk (§5): queue column at least 320 px, detail 1fr, 24 px gap; one column below 1024 px (queue first). */
+.ui-desk{display:grid;grid-template-columns:minmax(320px,.8fr) minmax(0,1.5fr);align-items:start;gap:var(--space-6);min-width:0}
+.ui-desk>*{min-width:0}
+.ui-desk>.ui-stack>.ui-section+.ui-section{margin-top:0}
+.ui-desk>.ui-section+.ui-section{margin-top:0}
+@media (max-width:1023px){.ui-desk{grid-template-columns:minmax(0,1fr)}}
+
+/* An inline notice (§9): the state panel's geometry without its role, for warnings that are not errors (a stale base, a large
+   change). Pages give it role="status" only where the notice announces a change; errors stay StateView (role="alert"). */
+.ui-notice{display:grid;gap:var(--space-2);max-width:none;margin:0;padding:var(--space-4) var(--space-6);border-radius:var(--radius-card);background:var(--tone-neutral);color:var(--foreground);font-size:15px;line-height:24px;font-weight:600;overflow-wrap:anywhere}
+.ui-notice[data-tone="warning"]{background:var(--tone-warning);color:var(--tone-warning-foreground)}
+.ui-notice p{margin:0}
 
 .ui-toolbar{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:var(--space-3)}
 .ui-toolbar-main,.ui-toolbar-side{display:flex;flex-wrap:wrap;align-items:flex-end;gap:var(--space-3);min-width:0}
@@ -285,11 +321,12 @@ button:disabled{cursor:not-allowed}
 .data-list-row{display:grid;gap:var(--space-1);padding:var(--space-4) 0;border-top:1px solid var(--border)}
 .data-list-row:first-child{padding-top:0;border-top:0}
 .data-list-row[aria-current="true"]{margin-inline:calc(-1 * var(--space-4));padding:var(--space-4);background:var(--secondary);box-shadow:inset 3px 0 0 var(--primary)}
-.data-list-open{display:grid;gap:var(--space-1);width:100%;padding:0;border:0;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.data-list-open{display:grid;grid-template-columns:minmax(0,1fr);gap:var(--space-1);width:100%;padding:0;border:0;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
 .data-list-open:hover .data-list-title{text-decoration:underline;text-underline-offset:4px}
-.data-list-head{display:flex;align-items:flex-start;justify-content:space-between;gap:var(--space-3)}
+.data-list-head{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:var(--space-1) var(--space-3);min-width:0}
 .data-list-title{margin:0;font-size:15px;line-height:24px;font-weight:600;overflow-wrap:anywhere}
-.data-list-meta{margin:0;font-size:13px;line-height:20px;color:var(--muted-foreground)}
+.data-list-head>.status-badge{flex:none;max-width:100%}.data-list-title{flex:1 1 8ch;min-width:0}
+.data-list-meta small{font-size:inherit}.data-list-meta{margin:0;font-size:13px;line-height:20px;color:var(--muted-foreground);overflow-wrap:anywhere}
 .data-list-content{display:grid;gap:var(--space-2);margin-top:var(--space-2)}
 .data-list-actions{margin-top:var(--space-3);justify-content:flex-end}
 
@@ -297,4 +334,5 @@ button:disabled{cursor:not-allowed}
 .ui-tab{display:inline-flex;align-items:center;height:var(--control-h);padding:0;border:0;border-bottom:2px solid transparent;margin-bottom:-1px;background:transparent;color:var(--muted-foreground);font-family:inherit;font-size:15px;font-weight:600;white-space:nowrap;text-decoration:none;cursor:pointer}
 .ui-tab:hover{color:var(--foreground)}
 .ui-tab[aria-current="page"],.ui-tab[aria-pressed="true"]{border-bottom-color:var(--primary);color:var(--foreground)}
+.ui-tab:disabled{cursor:not-allowed}
 }

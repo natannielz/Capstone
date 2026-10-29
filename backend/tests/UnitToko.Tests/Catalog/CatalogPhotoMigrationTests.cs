@@ -134,10 +134,10 @@ public sealed class CatalogPhotoMigrationTests(MongoFixture fixture)
         Assert.Equal(result, await photo.LookupAsync(data.Actor, "photo-migration-owner"));
     }
 
-    [Fact(Skip = Retired.HistoricalUpgrade)]
+    [Fact]
     public async Task Unsafe_photo_candidate_definition_or_predecessor_refuses_before_any_DDL()
     {
-        await using var data = await StoreTestData.CreateAsync(fixture);
+        await using var data = await UnitToko.Tests.Procurement.SupplierDocumentPdfMatchMigrationRehearsal.CreateAsync(fixture);
         await RestoreV79Async(data.Database);
         var definition = await DefinitionAsync(data.Database, CatalogPhotoRecords.Heads);
         await data.Database.RunCommandAsync<BsonDocument>(new BsonDocument { { "collMod", CatalogPhotoRecords.Heads },
@@ -199,7 +199,7 @@ public sealed class CatalogPhotoMigrationTests(MongoFixture fixture)
         string expected = "Catalog primary-photo migration found incompatible retained storage")
     {
         var before = await SnapshotAsync(db);
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => new CollectionMigrations(db, clock).ApplyAsync());
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => UnitToko.Tests.Procurement.SupplierDocumentPdfMatchMigrationRehearsal.ApplyAsync(db, clock));
         Assert.Equal(expected, error.Message);
         AssertExact(before, await SnapshotAsync(db));
         Assert.False(await db.GetCollection<BsonDocument>("schemaMigrations").Find(new BsonDocument { { "_id", 80 }, { "state", "applied" } }).AnyAsync());

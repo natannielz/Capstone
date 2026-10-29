@@ -19,7 +19,7 @@ public sealed class PaymentSupplementMigrationTests(MongoFixture fixture)
     [Fact]
     public async Task Empty_interrupted_owner_keeps_UUIDs_stronger_controls_indexes_counters_and_applied_predecessor_history_without_seeds()
     {
-        await using var data = await StoreTestData.CreateAsync(fixture); var db = data.Database; await RestoreV86Async(db);
+        await using var data = await UnitToko.Tests.Procurement.SupplierDocumentPdfMatchMigrationRehearsal.CreateAsync(fixture); var db = data.Database; await RestoreV86Async(db);
         await EnsureOwnersAsync(db);
         foreach (var name in PaymentSupplementSchemas.Collections) {
             var current = (await DefinitionAsync(db, name))["options"]["validator"];
@@ -53,7 +53,7 @@ public sealed class PaymentSupplementMigrationTests(MongoFixture fixture)
     [Fact]
     public async Task Unowned_rows_consumed_allocators_and_hidden_or_weak_new_controls_refuse_before_DDL_without_repairs()
     {
-        await using var data = await StoreTestData.CreateAsync(fixture); var db = data.Database; await RestoreV86Async(db); await EnsureOwnersAsync(db);
+        await using var data = await UnitToko.Tests.Procurement.SupplierDocumentPdfMatchMigrationRehearsal.CreateAsync(fixture); var db = data.Database; await RestoreV86Async(db); await EnsureOwnersAsync(db);
         foreach (var name in PaymentSupplementSchemas.Collections) {
             var rows = db.GetCollection<BsonDocument>(name);
             await rows.InsertOneAsync(new BsonDocument("_id", 9001L), new InsertOneOptions { BypassDocumentValidation = true });
@@ -70,7 +70,7 @@ public sealed class PaymentSupplementMigrationTests(MongoFixture fixture)
         await HideAsync(db, PaymentSupplementBson.Policies, index.Name, true);
         try { await RefusesAsync(db, data.Clock); } finally { await HideAsync(db, PaymentSupplementBson.Policies, index.Name, false); }
     }
-    [WindowsStorageFact]
+    [WindowsStorageFact(Skip = Retired.HistoricalUpgrade)]
     [SupportedOSPlatform("windows")]
     public async Task Actual_complete_supplier_pages_and_receipt_survive_but_corrupt_result_or_orphan_read_refuses_adoption()
     {
@@ -98,7 +98,7 @@ public sealed class PaymentSupplementMigrationTests(MongoFixture fixture)
     [Fact]
     public async Task Actual_M86_history_and_global_counters_are_required_and_primary_payment_PDF_kind_remains_rejected()
     {
-        await using var data = await StoreTestData.CreateAsync(fixture); var db = data.Database; await RestoreV86Async(db);
+        await using var data = await UnitToko.Tests.Procurement.SupplierDocumentPdfMatchMigrationRehearsal.CreateAsync(fixture); var db = data.Database; await RestoreV86Async(db);
         var marker = await db.GetCollection<BsonDocument>("schemaMigrations").Find(new BsonDocument("_id", 86)).SingleAsync();
         await db.GetCollection<BsonDocument>("schemaMigrations").UpdateOneAsync(new BsonDocument("_id", 86), new BsonDocument("$set", new BsonDocument("state", "applying")));
         var before = await SnapshotAsync(db);

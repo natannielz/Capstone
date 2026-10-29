@@ -24,6 +24,16 @@ test('records without a printed document get their own typed prefix, so a return
   assert.throws(() => recordNumber('return', '0'));
 });
 
+test('F-026: a branch request reads PB- with six digits like the others; the server PT- reference still finds it', () => {
+  assert.equal(recordNumber('branchRequest', '1'), 'PB-000001');
+  assert.equal(recordNumber('branchRequest', '88'), 'PB-000088');
+  assert.equal(recordNumber('branchRequest', '1234567'), 'PB-1234567');
+  for (const typed of ['PB-000088', 'pb 88', '88', 'PT-00000088', 'pt00000088']) assert.equal(matchesRecordNumber('branchRequest', typed), '88', typed);
+  for (const typed of ['PSN-000088', 'PP-000088', 'PB-', 'PB-0']) assert.equal(matchesRecordNumber('branchRequest', typed), null, typed);
+  // The PT- reference belongs to branch requests only.
+  assert.equal(matchesRecordNumber('order', 'PT-00000088'), null);
+});
+
 test('a typed number matches only its own record type; a bare number matches any type', () => {
   assert.equal(matchesRecordNumber('return', 'rtr-000003'), '3');
   assert.equal(matchesRecordNumber('return', '3'), '3');

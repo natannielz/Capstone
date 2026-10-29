@@ -91,8 +91,15 @@ function mountDispatch() {
       if (!previous || changed(previous.dependencies, dependencies)) active.slots[index] = {value: callback, dependencies}; return (active.slots[index] as {value: unknown}).value;},
     useEffect(effect: () => void | (() => void), dependencies?: readonly unknown[]) {effects.push({frame: active, index: position++, effect, dependencies});}};
   const runtimeRequire = createRequire(resolve('package.json')), ts = runtimeRequire('typescript') as typeof import('typescript'), marker = () => null;
-  let sessionStateKit: Record<string, unknown> | undefined;
+  let sessionStateKit: Record<string, unknown> | undefined, statusDictionary: Record<string, unknown> | undefined;
+  const kit: Record<string, Record<string, unknown>> = {};
   const imports = (name: string): unknown => {
+    // The page renders through the shared workspace kit (UI-PAGES-B): load the real primitives, not stand-ins.
+    const kitModule = name.startsWith('@/components/workspace-kit/') && name !== '@/components/workspace-kit/session-access-state' ? name.slice('@/components/workspace-kit/'.length)
+      : /^\.\/(button|pagination|state-view|list-table)$/.test(name) ? name.slice(2) : null;
+    if (kitModule) return kit[kitModule] ??= load('src/components/workspace-kit/' + kitModule + '.tsx');
+    if (name === 'lucide-react') return runtimeRequire(name);
+    if (name === '@/lib/status/dictionary') return statusDictionary ??= load('src/lib/status/dictionary.ts');
     if (name === 'react') return react; if (name === 'react/jsx-runtime') return runtimeRequire(name);
     if (name === 'next/link') return {__esModule: true, default: 'a'};
     if (name.endsWith('.module.css')) return {__esModule: true, default: new Proxy({}, {get: (_target, key) => String(key)})};
@@ -146,7 +153,7 @@ function mountDispatch() {
   }
   async function settle() {for (let tick = 0; tick < 60; tick++) {if (dirty) render(); await new Promise<void>(resolve => setImmediate(resolve));} assert.equal(dirty, false, 'Mounted effects did not settle');}
   function find(predicate: (node: Node) => boolean) {const found = nodes(tree).find(predicate); assert.ok(found, 'Expected mounted dispatch control'); return found;}
-  function button(label: string) {return find(node => node.type === 'button' && text(node.props.children) === label);}
+  function button(label: string) {return find(node => node.type === 'button' && (text(node.props.children) === label || node.props['aria-label'] === label));}
   async function click(label: string) {const control = button(label); assert.notEqual(control.props.disabled, true); (control.props.onClick as () => void)(); await settle();}
   async function fill() {
     await settle(); await click(`Periksa keberangkatan pesanan ${documentNumbers.orderNumber(source.orderId)}`);

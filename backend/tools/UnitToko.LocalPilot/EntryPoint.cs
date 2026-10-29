@@ -72,7 +72,7 @@ internal static class EntryPoint
     {
         var review = PilotBoundary.Profile == "review";
         var database = client.GetDatabase(PilotBoundary.DatabaseName);
-        await PilotBootstrap.InitializeAsync(client, state.Secrets, stop.Token);
+        await PilotBootstrap.InitializeAsync(client, state.Secrets, stop.Token, directory);
         using var signing = state.Certificate.GetRSAPrivateKey() ?? throw new InvalidOperationException("Missing pilot signing key.");
         using var provider = new SyntheticOidcProvider(state.Secrets, signing);
         await using var photos = PilotBoundary.IsFullRelease
@@ -138,6 +138,7 @@ internal static class EntryPoint
             }
             Console.WriteLine("Ctrl+C (or start-local-pilot.ps1 -Profile " + PilotBoundary.Profile + " -Stop) stops API and Next. " +
                 (review ? "The review MongoDB stops too; its data persists." : "MongoDB remains loopback-only; its data, keys and accounts persist."));
+            if (PilotBootstrap.UpgradeWarning is { } warning) Console.WriteLine(warning);
             var photoWork = photos?.RunAsync(stop.Token) ?? Task.CompletedTask;
             var refresh = sessions is null ? Task.CompletedTask : RefreshAsync(sessions, stop.Token);
             try { await Task.Delay(Timeout.InfiniteTimeSpan, stop.Token); } catch (OperationCanceledException) when (stop.IsCancellationRequested) { }

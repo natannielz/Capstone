@@ -32,8 +32,13 @@ export async function verifyOrderViewsBrowser({config, buyer, user, origin, dire
     });
     try {await Promise.all([completed, submit()]);} finally {clearTimeout(timer); writeObservers.delete(notify);}
   }
+  // The filters sit in a collapsed "Filter dan urutan" disclosure on the order page, so a person opens it first; closed content is not in the accessibility tree.
+  async function openFilters(page) {
+    const summary = page.locator('details > summary', {hasText: 'Filter dan urutan'}); await summary.waitFor();
+    if (!(await summary.evaluate(element => element.parentElement.open))) await summary.click();
+  }
   async function ready(page) {
-    await page.getByRole('heading', {name: 'Pesanan saya', exact: true}).waitFor();
+    await page.getByRole('heading', {name: 'Pesanan saya', exact: true}).waitFor(); await openFilters(page);
     await page.getByRole('combobox', {name: 'Cabang atau divisi pesanan', exact: true}).locator('option[value="' + contextKey + '"]').waitFor({state: 'attached'});
     await page.getByRole('button', {name: 'Terapkan filter', exact: true}).click({trial: true});
   }
@@ -86,9 +91,9 @@ export async function verifyOrderViewsBrowser({config, buyer, user, origin, dire
     assert.deepEqual(await pending(second), [reference]);
     const old = current; current = await restartUser(config.financeToken, await current.context.storageState());
     assert.equal(old.page.isClosed(), true); assert.equal(second.isClosed(), true); observe(current.page); await intercept(current.context);
-    await current.page.goto(origin.origin + path); assert.equal(await current.page.evaluate(() => sessionStorage.length), 0);
+    await current.page.goto(origin.origin + path); assert.equal(await current.page.evaluate(() => sessionStorage.length), 0); await openFilters(current.page);
     await current.page.getByRole('button', {name: 'Periksa hasil filter', exact: true}).waitFor(); assert.deepEqual(await pending(current.page), [reference]);
-    const waiting = await current.context.newPage(); observe(waiting); await waiting.goto(origin.origin + path);
+    const waiting = await current.context.newPage(); observe(waiting); await waiting.goto(origin.origin + path); await openFilters(waiting);
     await waiting.getByRole('button', {name: 'Periksa hasil filter', exact: true}).waitFor();
     assert.equal(await waiting.getByRole('button', {name: 'Terapkan filter', exact: true}).isDisabled(), true);
     await current.page.getByRole('button', {name: 'Periksa hasil filter', exact: true}).click();

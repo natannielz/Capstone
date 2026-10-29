@@ -16,7 +16,7 @@ public sealed class PdfEvidenceAdmissionMigrationTests(MongoFixture fixture)
 {
     [Fact]
     public async Task Interrupted_extensions_preserve_stronger_definitions_UUIDs_indexes_old_rows_and_other_owners_without_format_backfill() {
-        await using var data = await StoreTestData.CreateAsync(fixture); var db = data.Database; await RestoreV84Async(db);
+        await using var data = await UnitToko.Tests.Procurement.SupplierDocumentPdfMatchMigrationRehearsal.CreateAsync(fixture); var db = data.Database; await RestoreV84Async(db);
         foreach (var name in PdfEvidenceAdmissionSchemas.Collections) {
             var definition = await DefinitionAsync(db, name); var current = definition["options"]["validator"].AsBsonDocument;
             var retained = new BsonDocument("_id", new BsonDocument("$exists", true));
@@ -37,7 +37,7 @@ public sealed class PdfEvidenceAdmissionMigrationTests(MongoFixture fixture)
         await PdfEvidenceAdmissionSchemas.RequireAsync(db, default); await ApplyAsync(db, data.Clock);
         Assert.Equal(after.ToBson(), (await SnapshotAsync(db)).ToBson());
     }
-    [WindowsStorageFact]
+    [WindowsStorageFact(Skip = Retired.HistoricalUpgrade)]
     [SupportedOSPlatform("windows")]
     public async Task Actual_supplier_image_submission_pin_and_private_video_history_remain_valid_without_pdf_reinterpretation() {
         await using var data = await SupplierDocumentTestData.CreateAsync(fixture); await data.SubmitOriginalAsync();
@@ -59,7 +59,7 @@ public sealed class PdfEvidenceAdmissionMigrationTests(MongoFixture fixture)
     [InlineData("unknown-admission")]
     [InlineData("malformed-counter")]
     public async Task Every_incompatible_candidate_or_predecessor_is_refused_before_the_first_DDL_and_never_relabelled(string fault) {
-        await using var data = await StoreTestData.CreateAsync(fixture); var db = data.Database; await RestoreV84Async(db);
+        await using var data = await UnitToko.Tests.Procurement.SupplierDocumentPdfMatchMigrationRehearsal.CreateAsync(fixture); var db = data.Database; await RestoreV84Async(db);
         if (fault == "unowned-pdf") await db.GetCollection<BsonDocument>("evidenceUploadReservations").InsertOneAsync(new BsonDocument { { "_id", 9899L }, { "purpose", "PaymentPdf" } }, new InsertOneOptions { BypassDocumentValidation = true });
         else if (fault == "unowned-job") await db.GetCollection<BsonDocument>("outboxEvents").InsertOneAsync(new BsonDocument { { "_id", ObjectId.GenerateNewId() }, { "kind", PdfEvidenceValidationRecords.Kind } }, new InsertOneOptions { BypassDocumentValidation = true });
         else if (fault == "malformed-policy") await db.GetCollection<BsonDocument>(PdfEvidenceValidationRecords.Policies).InsertOneAsync(new BsonDocument("_id", 9899L), new InsertOneOptions { BypassDocumentValidation = true });

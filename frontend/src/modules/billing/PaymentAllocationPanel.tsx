@@ -11,6 +11,7 @@ import type { PaymentVerificationDetail } from './payment-verification-client';
 import styles from '../administration/access.module.css';
 import invoice from './invoice.module.css';
 import { rupiahAmount } from '@/lib/rupiah-input';
+import { Button } from '@/components/workspace-kit/button';
 
 const rupiah = (value: string) => orderAmount('IDR', value);
 export const allocationInvoiceNumber = (item: PaymentAllocationView['invoices'][number]) => `${item.numberEntity}/${item.numberChannel}/${item.numberYear}/${item.number.padStart(6, '0')}`;
@@ -72,7 +73,7 @@ export function PaymentAllocationPanel({ actorId, owner, verified, allowed, fres
   }
   return <section className={invoice.correctionPanel} aria-label="Alokasi pembayaran"><h3>Alokasi dana ke invoice</h3>
     <p>Dana bank dibukukan satu kali. Pilih bagian dana yang digunakan untuk setiap invoice; sisanya tetap tersedia sebagai dana belum dialokasikan.</p>
-    <button className={styles.secondary} disabled={disabled} onClick={() => void work(read)}>Muat saldo alokasi</button>
+    <Button variant="secondary" disabled={disabled} onClick={() => void work(read)}>Muat saldo alokasi</Button>
     {busy && <p role="status">Memeriksa saldo dan alokasi…</p>}{error !== null && <p role="alert" className={styles.alert}>{message(error)}</p>}
     {allowed && (!fresh || error instanceof AccessFailure && error.code === 'step_up_required') && <p className={styles.alert}>Verifikasi dua langkah terbaru diperlukan. <Link href="/identity/account?operation=payment.allocate&returnPath=%2Fbilling%2Fpayment-reviews">Verifikasi dua langkah untuk alokasi</Link></p>}
     {saved && <p role="status">Alokasi {rupiah(saved.amount)} tersimpan. Dana belum dialokasikan saat pencatatan: {rupiah(saved.unapplied)}.</p>}
@@ -81,15 +82,15 @@ export function PaymentAllocationPanel({ actorId, owner, verified, allowed, fres
         <div><dt>Dicadangkan untuk pengembalian</dt><dd>{rupiah(view.reservedForRefund)}</dd></div><div><dt>Dana tersedia</dt><dd>{rupiah(view.available)}</dd></div></dl>
       {allowed && <section aria-label="Pilihan invoice pembeli"><h4>Invoice lain untuk pembeli ini</h4>
         <p>Invoice dari pengajuan tetap tersedia di bawah. Pilihan tambahan berasal dari pihak pembeli dan toko yang sama; pilih invoice dan nominalnya secara terpisah.</p>
-        <button type="button" className={styles.secondary} disabled={!canAllocate || !!confirm} onClick={() => void work(() => findInvoices())}>Cari invoice lain pembeli ini</button>
+        <Button variant="secondary" type="button" disabled={!canAllocate || !!confirm} onClick={() => void work(() => findInvoices())}>Cari invoice lain pembeli ini</Button>
         {choices && <><ul className={invoice.candidates}>{choices.items.map(item => {
           const included = view.invoices.some(line => line.invoiceId === item.invoiceId);
           return <li key={item.invoiceId}><strong>Invoice {item.number}</strong><p>{item.buyerName} · {item.sellerName}</p>
             <p>Total {rupiah(item.total)} · Dibayar {rupiah(item.paid)} · Kredit {rupiah(item.credited)} · Sisa tagihan {rupiah(item.outstanding)}</p>
             <p>Jatuh tempo {item.dueDate}</p>{included ? <p>Sudah ada dalam daftar alokasi.</p> :
-              <button type="button" className={styles.secondary} disabled={!canAllocate || !!confirm || view.invoices.length >= 100} onClick={() => void work(() => addInvoice(item))}>Tambahkan invoice {item.number}</button>}</li>;
+              <Button variant="secondary" type="button" disabled={!canAllocate || !!confirm || view.invoices.length >= 100} onClick={() => void work(() => addInvoice(item))}>Tambahkan invoice {item.number}</Button>}</li>;
         })}</ul>{choices.items.length === 0 && <p>{choices.nextBeforeInvoiceId ? 'Tidak ada invoice dengan sisa tagihan pada halaman ini. Lanjutkan ke halaman berikutnya.' : 'Tidak ada invoice lain dengan sisa tagihan pada halaman ini.'}</p>}
-          {choices.nextBeforeInvoiceId && <button type="button" className={styles.secondary} disabled={!canAllocate || !!confirm} onClick={() => void work(() => findInvoices(choices.nextBeforeInvoiceId))}>Invoice berikutnya</button>}</>}
+          {choices.nextBeforeInvoiceId && <Button variant="secondary" type="button" disabled={!canAllocate || !!confirm} onClick={() => void work(() => findInvoices(choices.nextBeforeInvoiceId))}>Invoice berikutnya</Button>}</>}
         {view.invoices.length >= 100 && <p>Daftar alokasi sudah mencapai batas 100 invoice.</p>}
       </section>}
       <form onSubmit={event => { event.preventDefault(); if (!canAllocate) return; void work(async () => {
@@ -110,17 +111,17 @@ export function PaymentAllocationPanel({ actorId, owner, verified, allowed, fres
                 onChange={event => { setShown(null); setValues(previous => ({ ...previous, [item.invoiceId]: event.target.value })); }} /></div>}</>}
         </li>)}</ul>
         {allowed && <><label htmlFor="allocation-reason">Alasan alokasi</label><textarea id="allocation-reason" required maxLength={1000} value={reason} disabled={!canAllocate || !!confirm} onChange={event => setReason(event.target.value)} />
-          {!confirm ? <button className={styles.primary} disabled={!canAllocate || view.available === '0.00'}>Periksa alokasi</button> : shown && <section className={styles.state} aria-label="Konfirmasi alokasi pembayaran">
+          {!confirm ? <Button variant="primary" type="submit" disabled={!canAllocate || view.available === '0.00'}>Periksa alokasi</Button> : shown && <section className={styles.state} aria-label="Konfirmasi alokasi pembayaran">
             <h4 ref={reviewHeading} tabIndex={-1}>Konfirmasi invoice dan nominal</h4><p>Prosedur: {shown.procedureReference}</p>
             <ul>{shown.invoices.map(line => <li key={line.invoiceId}>Invoice {number(shown.view.invoices.find(item => item.invoiceId === line.invoiceId)!)}: {rupiah(line.amount)}. Sisa tagihan: {rupiah(line.remaining)}.</li>)}</ul>
             <p>Jumlah alokasi {rupiah(shown.amount)} · Dana tersisa {rupiah(shown.unapplied)}</p><p>{confirm.body.reason}</p>
             <p>Saldo invoice berkurang sesuai nominal yang dipilih. Pencatatan kas asli tetap sama.</p>
-            <button type="button" className={styles.primary} disabled={!canAllocate} onClick={() => void work(async () => {
+            <Button variant="primary" type="button" disabled={!canAllocate} onClick={() => void work(async () => {
               if (journal.list(actorId).length) throw new AccessFailure(400, 'resolve_previous_attempt');
               const ledger = new MutationLedger(() => 'pa.' + confirm.verificationId + '.' + confirm.receiptId + '.' + crypto.randomUUID());
               const result = await submitTrackedRequest(ledger, journal, actorId, 'billing.payment.allocate', 'billing.payment.allocate', confirm, key => gateway.send(confirm, key, active));
               if (active()) setSaved(result); await read();
-            })}>Simpan alokasi pembayaran</button><button type="button" className={styles.secondary} disabled={disabled} onClick={() => { setConfirm(null); setShown(null); balanceHeading.current?.focus(); }}>Kembali ke nominal</button>
+            })} busy={busy}>Simpan alokasi pembayaran</Button><Button variant="secondary" type="button" disabled={disabled} onClick={() => { setConfirm(null); setShown(null); balanceHeading.current?.focus(); }}>Kembali ke nominal</Button>
           </section>}</>}
       </form></>}
     {!allowed && <p>Akun ini dapat membaca saldo. Alokasi dana memerlukan kewenangan tersendiri.</p>}

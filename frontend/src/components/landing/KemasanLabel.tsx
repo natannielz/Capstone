@@ -19,7 +19,7 @@ const FIXED = [
 export function KemasanLabel({ value, coffee, onChange }: { value: string; coffee: number; onChange: (text: string) => void }) {
   const outOfRange = value.trim() !== String(coffee);
   return <aside className={styles.label} aria-labelledby="isi-kardus">
-    <h2 id="isi-kardus" className={styles.labelTitle}>Isi kardus permintaan PT-00000142</h2>
+    <h2 id="isi-kardus" className={styles.labelTitle}>Isi kardus permintaan PB-000142</h2>
     <ul className={styles.labelItems}>
       <li className={styles.labelVariable}>
         <div><p className={styles.labelItem}>Kopi bubuk sachet</p><p className={styles.labelPack}>dus isi {SACHETS_PER_DUS} sachet</p></div>

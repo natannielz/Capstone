@@ -8,7 +8,7 @@ import { IdentityFailure, sessionTiming, type IdentitySession } from '../identit
 import { createAccessGateway } from '../administration/access-client';
 import { AccessFailure, accessMessage } from '../administration/workflow';
 import { AdministrationNavigation } from '../administration/AdministrationNavigation';
-import { ListTable } from '@/components/workspace-kit/list-table';
+import { DataTable } from '@/components/workspace-kit/data-table';
 import { StatusBadge } from '@/components/workspace-kit/status-badge';
 import { orderAmount } from '../ordering/order-quote-client';
 import { createPaymentReviewGateway, type PaymentReviewQueueEntry } from './payment-review-client';
@@ -32,9 +32,15 @@ import { paymentSupplementOwner } from './payment-pdf-supplement-client';
 import common from '../administration/access.module.css';
 import styles from './invoice.module.css';
 import { dateFormatter } from '@/lib/format';
-import { EmptyState } from '@/components/workspace-kit/empty-state';
 import { autoLoadEndsSession } from './payment-review-session';
 import { SessionAccessState } from "@/components/workspace-kit/session-access-state";
+import { Button, buttonClassName } from '@/components/workspace-kit/button';
+import { PageHeader } from '@/components/workspace-kit/page-header';
+import { Section } from '@/components/workspace-kit/section';
+import { StateView } from '@/components/workspace-kit/state-view';
+import { Toolbar } from '@/components/workspace-kit/toolbar';
+import { Field } from '@/components/workspace-kit/field';
+import { Facts } from '@/components/workspace-kit/facts';
 
 type Account = { actorId: string; actions: readonly string[]; session: IdentitySession; observedAt: number };
 const rupiah = (value: string) => orderAmount('IDR', value);
@@ -42,7 +48,7 @@ const date = (value: string) => dateFormatter.format(new Date(value));
 function message(error: unknown) {
   if (error instanceof AccessFailure && (error.code.startsWith('evidence_') || error.code === 'payment_response_invalid')) return 'Bukti tidak dapat dibuka dengan aman. Muat pengajuan terbaru atau hubungi penanggung jawab pemeriksaan bukti.';
   if (error instanceof AccessFailure && error.code === 'payment_draft_changed') return 'Pengajuan berubah. Muat kembali pengajuan sebelum melanjutkan pemeriksaan.';
-  if (error instanceof IdentityFailure) return 'Masuk dengan akun organisasi Anda untuk melanjutkan.';
+  if (error instanceof IdentityFailure) return 'Sesi Anda perlu diperbarui. Masuk kembali untuk melanjutkan.';
   return accessMessage(error);
 }
 export function PaymentReviewWorkspace() {
@@ -64,11 +70,12 @@ export function PaymentReviewWorkspace() {
     const restored = (event: PageTransitionEvent) => { if (event.persisted) { setAccount(null); setRefresh(value => value + 1); } };
     window.addEventListener('pageshow', restored); return () => { window.clearInterval(timer); window.removeEventListener('pageshow', restored); }; }, [account]);
   const denied = useCallback((failure: unknown) => { if (failure instanceof AccessFailure && (failure.status === 401 || failure.status === 403 || failure.code === 'actor_changed')) { setAccount(null); setError(failure); } }, []);
-  return <main className={common.page}><header className={common.header}><div><Link href="/identity/account" className={common.brand}>Unit Toko</Link><h1>Pemeriksaan pembayaran</h1><p>Bandingkan pengajuan cabang, tagihan, bukti asli dan saran pembacaan.</p></div><Link href="/billing/invoices" className={common.secondary}>Lihat tagihan</Link></header>
-    {error !== null && account !== null && <p role="alert" className={common.alert}>{message(error)}</p>}
-    {loading ? <p role="status">Memeriksa akun…</p> : !account || sessionTiming(account.session, elapsed).expired ? <SessionAccessState kind={account ? "expired" : undefined} error={error} returnPath="/billing/payment-reviews" onRetry={() => setRefresh(value => value + 1)} />
+  return <main className={common.page}><PageHeader title="Pemeriksaan pembayaran" description="Bandingkan pengajuan cabang, tagihan, bukti asli dan saran pembacaan."
+    secondaryAction={<Link href="/billing/invoices" className={buttonClassName({ variant: 'secondary' })}>Lihat tagihan</Link>} /><div className="ui-stack">
+    {error !== null && account !== null && <StateView kind="error" title={message(error)} />}
+    {loading ? <StateView kind="loading" title="Memeriksa akun…" /> : !account || sessionTiming(account.session, elapsed).expired ? <SessionAccessState kind={account ? "expired" : undefined} error={error} returnPath="/billing/payment-reviews" onRetry={() => setRefresh(value => value + 1)} />
       : <ReviewDesk key={account.actorId + ':' + account.observedAt} account={account} fresh={sessionTiming(account.session, elapsed).fresh} onDenied={denied} />}
-  </main>;
+  </div></main>;
 }
 function ReviewDesk({ account, fresh, onDenied }: { account: Account; fresh: boolean; onDenied: (failure: unknown) => void }) {
   const [gateway] = useState(createPaymentReviewGateway), [corrections] = useState(createPaymentCorrectionGateway), [manual] = useState(createPaymentManualReviewGateway), [reviewActions] = useState(createPaymentReviewActionGateway), [verification] = useState(createPaymentVerificationGateway), [allocation] = useState(createPaymentAllocationGateway), [allocationCorrections] = useState(createPaymentAllocationCorrectionGateway), recovery = useOperationRecovery(account.actorId);
@@ -78,6 +85,8 @@ function ReviewDesk({ account, fresh, onDenied }: { account: Account; fresh: boo
   const [selected, setSelected] = useState<PaymentDraft | null>(null), [ocr, setOcr] = useState<PaymentOcrView | null>(null), [preview, setPreview] = useState<string | null>(null);
   const [rememberedObservations, setRememberedObservations] = useState<RememberedPaymentObservation[]>([]);
   const [busy, setBusy] = useState(false), [offline, setOffline] = useState(false), [error, setError] = useState<unknown>(null);
+  // A failed queue read (not a failed command) is the table's own error state (U-036).
+  const [readFailed, setReadFailed] = useState(false);
   const alive = useRef(false), pending = useRef(false), previewUrl = useRef<string | null>(null), epoch = useRef(0), heading = useRef<HTMLHeadingElement>(null), previewHeading = useRef<HTMLHeadingElement>(null), previewTrigger = useRef<HTMLButtonElement>(null);
   const clearPreview = useCallback(() => { epoch.current++; if (previewUrl.current) URL.revokeObjectURL(previewUrl.current); previewUrl.current = null; setPreview(null); }, []);
   const current = useCallback(() => alive.current && navigator.onLine && !sessionTiming(account.session, performance.now() - account.observedAt).expired, [account]);
@@ -88,9 +97,9 @@ function ReviewDesk({ account, fresh, onDenied }: { account: Account; fresh: boo
   useEffect(() => { if (selected) heading.current?.focus(); }, [selected]);
   useEffect(() => { if (preview) previewHeading.current?.focus(); }, [preview]);
   useEffect(() => { let active = true; const controller = new AbortController(); void Promise.resolve().then(async () => {
-    if (!active || !current()) return; setBusy(true); setError(null); setPage({ items: [], hasMore: false, observedAt: null });
+    if (!active || !current()) return; setBusy(true); setError(null); setReadFailed(false); setPage({ items: [], hasMore: false, observedAt: null });
     try { const result = await gateway.queue(account.actorId, before, controller.signal); if (active && current()) setPage(result); }
-    catch (failure) { if (active && current()) { setError(failure); onDenied(failure); } } finally { if (active) setBusy(false); }
+    catch (failure) { if (active && current()) { setError(failure); setReadFailed(true); onDenied(failure); } } finally { if (active) setBusy(false); }
   }); return () => { active = false; controller.abort(); }; }, [gateway, account.actorId, before, refresh, current, onDenied]);
   async function perform(work: () => Promise<void>) {
     if (!current() || busy || editingBusy || recovering || handoverLocked || pending.current) return; pending.current = true; setBusy(true); setError(null);
@@ -126,20 +135,20 @@ function ReviewDesk({ account, fresh, onDenied }: { account: Account; fresh: boo
         'billing.payment.verify': { lookup: async entry => { const result = await verification.recover(entry.actorId, entry.key); if (!current()) throw new AccessFailure(409, 'recovery_request_stale'); return result; } } }}
       onFailure={failure => { setError(failure); if (!(failure instanceof AccessFailure && failure.code === 'step_up_required')) onDenied(failure); }}
       onResolved={() => { recovery.refresh(); refreshPage(null); }} />
-    {account.actions.includes('payment.review.correct') && (!fresh || error instanceof AccessFailure && error.code === 'step_up_required') && <p className={common.alert}>Verifikasi terbaru diperlukan untuk menyimpan atau memulihkan koreksi. <Link href="/identity/account?operation=payment.review.correct&returnPath=%2Fbilling%2Fpayment-reviews">Verifikasi dua langkah</Link></p>}
-    {account.actions.includes('payment.review.manual') && (!fresh || error instanceof AccessFailure && error.code === 'step_up_required') && <p className={common.alert}>Verifikasi terbaru diperlukan untuk menyimpan atau memulihkan pengecualian OCR. <Link href="/identity/account?operation=payment.review.manual&returnPath=%2Fbilling%2Fpayment-reviews">Verifikasi dua langkah untuk pengecualian</Link></p>}
-    {account.actions.includes('payment.verify') && (!fresh || error instanceof AccessFailure && error.code === 'step_up_required') && <p className={common.alert}>Verifikasi terbaru diperlukan untuk menyimpan atau memulihkan keputusan pembayaran. <Link href="/identity/account?operation=payment.verify&returnPath=%2Fbilling%2Fpayment-reviews">Verifikasi dua langkah untuk keputusan pembayaran</Link></p>}
-    {recovery.error !== null && <p role="alert">{accessMessage(recovery.error)}</p>}
-    {offline && <p role="status" className={common.alert}>Koneksi terputus. Sambungkan kembali lalu muat pengajuan terbaru.</p>}
-    {error !== null && <p role="alert" className={common.alert}>{message(error)}</p>}
-    <section className={common.accountSection} aria-label="Pengajuan yang menunggu pemeriksaan"><h2>Pengajuan masuk</h2><p>Hanya pengajuan yang sudah dikirim dan berada dalam cakupan akses Anda.</p>
-      <button className={common.secondary} disabled={locked} onClick={() => refreshPage(null)}>Muat pengajuan terbaru</button>
-      <label htmlFor="payment-queue-filter">Tampilan halaman ini</label><select id="payment-queue-filter" value={filter} disabled={locked} onChange={event => setFilter(event.target.value)}><option value="all">Semua pengajuan</option><option value="pending">Belum ditugaskan</option><option value="assigned">Dalam pemeriksaan</option><option value="attention">Perlu perhatian OCR</option><option value="closed">Tindak lanjut ditutup</option></select>
-      <p>Ringkasan dan usia mengikuti waktu server saat dimuat. Filter berlaku pada halaman ini; hasil OCR tidak menetapkan dana masuk.</p>
-      {busy && <p role="status">Memuat data…</p>}
-      {!busy && page.items.length === 0 && <EmptyState kind="first-use" title="Belum ada pengajuan yang dapat Anda periksa." body="Bukti pembayaran yang diajukan cabang dalam cakupan Anda akan muncul di sini." />}
-      {!busy && page.items.length > 0 && visible.length === 0 && <EmptyState kind="no-results" title="Tidak ada pengajuan untuk tampilan ini. Periksa halaman lain atau ubah tampilan." body="Pilih tampilan lain atau buka halaman berikutnya." />}
-      <ListTable caption="Pengajuan pada halaman ini" rows={visible} disabled={locked} getKey={row => row.declaration.id}
+    {account.actions.includes('payment.review.correct') && (!fresh || error instanceof AccessFailure && error.code === 'step_up_required') && <div className={styles.notice}>Verifikasi terbaru diperlukan untuk menyimpan atau memulihkan koreksi. <Link href="/identity/account?operation=payment.review.correct&returnPath=%2Fbilling%2Fpayment-reviews">Verifikasi dua langkah</Link></div>}
+    {account.actions.includes('payment.review.manual') && (!fresh || error instanceof AccessFailure && error.code === 'step_up_required') && <div className={styles.notice}>Verifikasi terbaru diperlukan untuk menyimpan atau memulihkan pengecualian OCR. <Link href="/identity/account?operation=payment.review.manual&returnPath=%2Fbilling%2Fpayment-reviews">Verifikasi dua langkah untuk pengecualian</Link></div>}
+    {account.actions.includes('payment.verify') && (!fresh || error instanceof AccessFailure && error.code === 'step_up_required') && <div className={styles.notice}>Verifikasi terbaru diperlukan untuk menyimpan atau memulihkan keputusan pembayaran. <Link href="/identity/account?operation=payment.verify&returnPath=%2Fbilling%2Fpayment-reviews">Verifikasi dua langkah untuk keputusan pembayaran</Link></div>}
+    {recovery.error !== null && <StateView kind="error" title={accessMessage(recovery.error)} />}
+    {offline && <StateView kind="offline" title="Koneksi terputus. Sambungkan kembali lalu muat pengajuan terbaru." />}
+    {error !== null && !readFailed && <StateView kind="error" title={message(error)} />}
+    <Section title="Pengajuan masuk" label="Pengajuan yang menunggu pemeriksaan" description="Hanya pengajuan yang sudah dikirim dan berada dalam cakupan akses Anda."
+      actions={<Button variant="secondary" disabled={locked} onClick={() => refreshPage(null)}>Muat pengajuan terbaru</Button>}>
+      <Toolbar label="Tampilan pengajuan" filters={<Field id="payment-queue-filter" label="Tampilan halaman ini"><select value={filter} disabled={locked} onChange={event => setFilter(event.target.value)}><option value="all">Semua pengajuan</option><option value="pending">Belum ditugaskan</option><option value="assigned">Dalam pemeriksaan</option><option value="attention">Perlu perhatian OCR</option><option value="closed">Tindak lanjut ditutup</option></select></Field>} />
+      <p className={styles.queueMeta}>Ringkasan dan usia mengikuti waktu server saat dimuat. Filter berlaku pada halaman ini; hasil OCR tidak menetapkan dana masuk.</p>
+      <DataTable caption="Pengajuan pada halaman ini" rows={visible} disabled={locked} getKey={row => row.declaration.id} loading={busy}
+        error={readFailed ? { title: 'Pengajuan belum dapat dimuat', message: message(error), onRetry: () => refreshPage(null) } : undefined}
+        empty={page.items.length === 0 ? { title: 'Belum ada pengajuan yang dapat Anda periksa.', message: 'Bukti pembayaran yang diajukan cabang dalam cakupan Anda akan muncul di sini.' }
+          : { title: 'Tidak ada pengajuan untuk tampilan ini. Periksa halaman lain atau ubah tampilan.', message: 'Pilih tampilan lain atau buka halaman berikutnya.' }}
         selectedKey={selected?.id ?? null} onOpen={row => { if (!locked) void perform(() => open(row.declaration.id)); }} openLabel={row => 'Periksa pengajuan ' + row.declaration.id}
         columns={[
           { key: 'payer', header: 'Pembayar', render: ({ declaration: item }) => <><strong>{item.input.payerName}</strong><p className={styles.queueMeta}>{item.invoices[0].buyerName} · {item.invoices[0].sellerName}</p></> },
@@ -148,17 +157,17 @@ function ReviewDesk({ account, fresh, onDenied }: { account: Account; fresh: boo
           { key: 'state', header: 'Status', render: (queue) => <><StatusBadge text={{ pending: 'Belum ditugaskan', assigned: 'Dalam pemeriksaan', rejected: 'Pengajuan ditolak', replacement_requested: 'Bukti pengganti diminta' }[queue.state]} />{queue.assigneeId && <p className={styles.queueMeta}>Penanggung jawab: akun {queue.assigneeId}</p>}</> },
           { key: 'checks', header: 'Pemeriksaan', render: (queue) => <><p className={styles.queueMeta}>OCR: {{ queued: 'Menunggu pembacaan', running: 'Sedang dibaca', retry: 'Pembacaan perlu diulang oleh layanan', dead: 'Pembacaan perlu tindak lanjut petugas', succeeded: 'Hasil pembacaan tersedia' }[queue.ocrState]}</p>{queue.notification.state !== 'not_applicable' && <p className={styles.queueMeta}>Notifikasi aplikasi: {{ pending: 'Menunggu layanan', running: 'Sedang diproses', retry: 'Menunggu pengulangan layanan', failed: 'Gagal; perlu tindak lanjut petugas', available: 'Tersedia pada akun pembeli' }[queue.notification.state]}. Ketersediaan tidak membuktikan pesan telah dibaca atau email terkirim.</p>}{queue.discrepancies.length > 0 && <ul aria-label="Perhatian pada bukti">{queue.discrepancies.map(flag => <li key={flag}>{{ amount_unknown: 'Nominal bukti belum diketahui', amount_differs: 'Nominal pada bukti berbeda dari pengajuan', date_unknown: 'Tanggal pada bukti belum diketahui', date_differs: 'Tanggal pada bukti berbeda dari pengajuan', currency_unknown: 'Mata uang belum diketahui', ocr_quality: 'Keterbacaan perlu diperiksa', human_corrected: 'Ada koreksi manusia yang tersimpan' }[flag]}</li>)}</ul>}</> },
         ]} />
-      {page.hasMore && <button className={common.secondary} disabled={locked} onClick={() => refreshPage(page.items.at(-1)!.declaration.id)}>Pengajuan lebih lama</button>}
-    </section>
-    {selected && <section className={common.accountSection} aria-label="Rincian pengajuan pembayaran"><h2 ref={heading} tabIndex={-1}>Pengajuan {selected.id}</h2><p>Pengajuan telah dikirim untuk pemeriksaan.</p>
+      {page.hasMore && <Button variant="secondary" disabled={locked} onClick={() => refreshPage(page.items.at(-1)!.declaration.id)}>Pengajuan lebih lama</Button>}
+    </Section>
+    {selected && <section className="ui-section" aria-label="Rincian pengajuan pembayaran"><h2 ref={heading} tabIndex={-1}>Pengajuan {selected.id}</h2><p>Pengajuan telah dikirim untuk pemeriksaan.</p>
       <p>Data berikut berasal dari pengajuan pembeli. Pembacaan dan pemeriksaan gambar belum membuktikan dana masuk.</p>
-      <dl className={styles.facts}><div><dt>Jumlah yang dinyatakan</dt><dd>{rupiah(selected.input.declaredAmount)}</dd></div><div><dt>Nama pembayar</dt><dd>{selected.input.payerName}</dd></div>
-        <div><dt>Tanggal transfer yang dinyatakan</dt><dd>{date(selected.input.transferDate + 'T00:00:00+07:00')}</dd></div><div><dt>Referensi yang dinyatakan</dt><dd>{selected.input.bankReference ?? 'Belum diisi'}</dd></div>
-        <div><dt>Catatan pembeli</dt><dd>{selected.input.note ?? 'Tidak ada catatan'}</dd></div><div><dt>Versi pengajuan</dt><dd>{selected.revision} · Pengiriman {selected.submission!.id}</dd></div></dl>
+      <Facts items={[{ term: 'Jumlah yang dinyatakan', value: rupiah(selected.input.declaredAmount) }, { term: 'Nama pembayar', value: selected.input.payerName },
+        { term: 'Tanggal transfer yang dinyatakan', value: date(selected.input.transferDate + 'T00:00:00+07:00') }, { term: 'Referensi yang dinyatakan', value: selected.input.bankReference ?? 'Belum diisi' },
+        { term: 'Catatan pembeli', value: selected.input.note ?? 'Tidak ada catatan' }, { term: 'Versi pengajuan', value: <>{selected.revision} · Pengiriman {selected.submission!.id}</> }]} />
       <h3>Tagihan yang disebut pembeli</h3><p>Total invoice berikut adalah nilai terbit, bukan saldo piutang setelah pembayaran atau kredit.</p>
       <ul className={styles.lines}>{selected.invoices.map(invoice => <li key={invoice.invoiceId}><strong>{invoice.number}</strong><p>{invoice.buyerName} · {invoice.sellerName}</p><p>Total terbit {rupiah(invoice.total)}</p></li>)}</ul>
-      <button ref={previewTrigger} className={common.secondary} disabled={locked} onClick={() => void perform(showOriginal)}>Lihat bukti asli</button>
-      {preview && <section className={styles.evidencePreview} aria-label="Bukti asli untuk pemeriksaan"><h3 ref={previewHeading} tabIndex={-1}>Bukti asli yang diajukan</h3><button className={common.secondary} onClick={() => { clearPreview(); previewTrigger.current?.focus(); }}>Tutup bukti</button>
+      <Button variant="secondary" ref={previewTrigger} disabled={locked} onClick={() => void perform(showOriginal)}>Lihat bukti asli</Button>
+      {preview && <section className={styles.evidencePreview} aria-label="Bukti asli untuk pemeriksaan"><h3 ref={previewHeading} tabIndex={-1}>Bukti asli yang diajukan</h3><Button variant="secondary" onClick={() => { clearPreview(); previewTrigger.current?.focus(); }}>Tutup bukti</Button>
         <div className={styles.evidenceImage}><Image src={preview} alt="Bukti pembayaran asli yang diajukan pembeli" fill unoptimized style={{ objectFit: 'contain' }} /></div></section>}
       <PaymentReviewActionPanel key={'workflow:' + selected.id + ':' + selected.revision} actorId={account.actorId} owner={selected} allowed={account.actions.includes('payment.review.manage')}
         fresh={fresh} locked={locked || recovery.locked} current={current} journal={recovery.journal} onSettled={recovery.refresh} onDenied={onDenied} onBusyChange={setEditingBusy} />

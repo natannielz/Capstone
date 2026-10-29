@@ -7,6 +7,11 @@ import {sessionTiming, type IdentitySession} from '../identity/identity-workflow
 import {createAnomalyGateway, parseAnomalyPolicyAttempt, retainAnomalyPolicyReference, type AnomalyChoice, type AnomalyEvaluation, type AnomalyPolicyAttempt} from './anomaly-client';
 import {AnomalyJournal, type AnomalyReference} from './anomaly-journal';
 import styles from './anomaly.module.css';
+import common from '../administration/access.module.css';
+import {Button} from '@/components/workspace-kit/button';
+import {Section} from '@/components/workspace-kit/section';
+import {Field} from '@/components/workspace-kit/field';
+import {Facts} from '@/components/workspace-kit/facts';
 
 type Props = {actorId: string; session: IdentitySession; observedAt: number; source: AnomalyChoice; evaluation: AnomalyEvaluation | null;
   disabled: boolean; journal: AnomalyJournal; reference: AnomalyReference | null; onReferences: () => void;
@@ -70,25 +75,25 @@ export function AnomalyPolicyPanel({actorId, session, observedAt, source, evalua
     finally {if (alive.current) onBusy(false);}
   }
   const editable = !disabled && (!reference || reenter) && (evaluation?.current || reference !== null);
-  return <section className={styles.notice} aria-label="Kebijakan tinjauan">
-    <h2>Kebijakan tinjauan</h2><p>Isi hanya batas yang telah ditetapkan penanggung jawab untuk toko sumber ini. Kolom kosong tetap dinyatakan belum tersedia.</p>
-    {notice && <p role="status">{notice}</p>}
-    {reference && <button type="button" disabled={disabled} onClick={() => void recover()}>Periksa penyimpanan kebijakan</button>}
+  return <Section title="Kebijakan tinjauan" id="anomaly-policy-heading" label="Kebijakan tinjauan"
+    description="Isi hanya batas yang telah ditetapkan penanggung jawab untuk toko sumber ini. Kolom kosong tetap dinyatakan belum tersedia.">
+    {notice && <p role="status" className={common.help}>{notice}</p>}
+    {reference && <Button type="button" disabled={disabled} onClick={() => void recover()}>Periksa penyimpanan kebijakan</Button>}
     {!evaluation?.current && !reference && <p>Buat pemeriksaan baru untuk mendapatkan revisi kebijakan saat ini.</p>}
-    <div className={styles.controls}>
+    <div className="ui-form">
       {([['version', 'Versi kebijakan'], ['approvalReference', 'Referensi penetapan kebijakan'], ['maximumPackages', 'Batas jumlah paket'],
         ['maximumUnitPrice', 'Batas harga per paket'], ['currency', 'Kode mata uang'], ['maximumRefund', 'Batas pengembalian dana'], ['reason', 'Alasan perubahan kebijakan']] as const)
-        .map(([key, label]) => <label key={key}>{label}<input value={fields[key]} disabled={!editable || draft !== null}
-          maxLength={key === 'reason' ? 1000 : key === 'approvalReference' ? 256 : 120} onChange={event => setFields(current => ({...current, [key]: event.target.value}))} /></label>)}
-      <button type="button" disabled={!editable || draft !== null} onClick={preview}>Tinjau kebijakan</button>
+        .map(([key, label]) => <Field key={key} id={'anomaly-policy-' + key} label={label}><input value={fields[key]} disabled={!editable || draft !== null}
+          maxLength={key === 'reason' ? 1000 : key === 'approvalReference' ? 256 : 120} onChange={event => setFields(current => ({...current, [key]: event.target.value}))} /></Field>)}
+      <Button type="button" disabled={!editable || draft !== null} onClick={preview}>Tinjau kebijakan</Button>
     </div>
-    {draft && <div><h3>Konfirmasi kebijakan {draft.input.policy.version}</h3><p>{source.label} · Revisi yang ditinjau {draft.input.expectedRevision}</p>
-      <dl><dt>Jumlah paket maksimum</dt><dd>{draft.input.policy.maximumPackages ?? 'Belum ditetapkan'}</dd>
-        <dt>Harga per paket maksimum</dt><dd>{draft.input.policy.maximumUnitPrice ?? 'Belum ditetapkan'} {draft.input.policy.currency}</dd>
-        <dt>Pengembalian dana maksimum</dt><dd>{draft.input.policy.maximumRefund ?? 'Belum ditetapkan'} {draft.input.policy.currency}</dd>
-        <dt>Referensi</dt><dd>{draft.input.policy.approvalReference}</dd><dt>Alasan</dt><dd>{draft.input.reason}</dd></dl>
-      <button type="button" disabled={disabled || reference !== null && draft.key !== reference.key} onClick={() => void save()}>Simpan kebijakan tinjauan</button>
-      {!reference && <button type="button" disabled={disabled} onClick={() => setDraft(null)}>Ubah isian kebijakan</button>}
+    {draft && <div className={styles.inset}><h3>Konfirmasi kebijakan {draft.input.policy.version}</h3><p>{source.label} · Revisi yang ditinjau {draft.input.expectedRevision}</p>
+      <Facts items={[{term: 'Jumlah paket maksimum', value: draft.input.policy.maximumPackages ?? 'Belum ditetapkan'},
+        {term: 'Harga per paket maksimum', value: <>{draft.input.policy.maximumUnitPrice ?? 'Belum ditetapkan'} {draft.input.policy.currency}</>},
+        {term: 'Pengembalian dana maksimum', value: <>{draft.input.policy.maximumRefund ?? 'Belum ditetapkan'} {draft.input.policy.currency}</>},
+        {term: 'Referensi', value: draft.input.policy.approvalReference}, {term: 'Alasan', value: draft.input.reason}]} />
+      <div className="ui-actions"><Button type="button" variant="primary" disabled={disabled || reference !== null && draft.key !== reference.key} onClick={() => void save()}>Simpan kebijakan tinjauan</Button>
+        {!reference && <Button type="button" disabled={disabled} onClick={() => setDraft(null)}>Ubah isian kebijakan</Button>}</div>
     </div>}
-  </section>;
+  </Section>;
 }

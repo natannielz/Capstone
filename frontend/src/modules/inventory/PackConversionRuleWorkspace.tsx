@@ -31,7 +31,7 @@ function message(error: unknown) {
     if (error.code === 'pack_conversion_input_invalid') return 'Isi rasio bilangan bulat 1–1.000.000 dan alasan. Jumlah satuan dasar pada kedua sisi harus sama.';
     if (error.code === 'pack_conversion_preview_required') return 'Minta pratinjau terbaru sebelum meninjau pengajuan atau keputusan.';
     if (error.code === 'independent_person_required') return 'Peninjauan memerlukan orang terverifikasi yang berbeda dari pembuat pengajuan. Akun lain milik orang yang sama tidak memenuhi syarat.';
-    if (error.code === 'pack_conversion_response_invalid') return 'Respons tidak cocok dengan pilihan yang ditinjau. Data disembunyikan; periksa sesi dan pilihan terbaru.';
+    if (error.code === 'pack_conversion_response_invalid') return 'Respons tidak cocok dengan pilihan yang ditinjau. Data disembunyikan; pilih Coba lagi untuk memuat pilihan terbaru.';
     if (error.code === 'pack_conversion_view_stale') return 'Sesi atau pilihan berubah. Periksa kembali; referensi yang belum terkonfirmasi tetap disimpan.';
     if (error.code === 'pack_conversion_rule_changed' || error.code === 'stock_conversion_definition_mismatch') return 'Definisi kemasan atau pengajuan telah berubah. Muat daftar dan minta pratinjau ulang.';
     if (error.code === 'invalid_pack_conversion_rule') return 'Pilihan atau rasio belum dapat diterima. Pilih kemasan tertutup sebagai sumber, satuan/lepas sebagai tujuan, dan rasio bilangan bulat yang tepat.';

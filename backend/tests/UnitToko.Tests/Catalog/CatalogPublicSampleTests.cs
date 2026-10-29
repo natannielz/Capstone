@@ -401,9 +401,9 @@ public sealed class CatalogPublicSampleTests(MongoFixture fixture)
             new BsonDocument { { "_id", 502L }, { "schemaVersion", 1 }, { "isPublic", false }, { "revision", 2L }, { "decisionId", 72L }, { "updatedAt", at }, { "fence", 1L } }]);
         Assert.Equal(0L, await data.CountAsync("catalogPublicSamples"));
 
-        // Re-run exactly the last step, as a deployment upgrading a version 121 database does.
-        Assert.Equal(1, (await data.Rows("schemaMigrations").DeleteOneAsync(new BsonDocument("_id", CollectionMigrations.CurrentVersion))).DeletedCount);
-        Assert.Equal(122, CollectionMigrations.CurrentVersion);
+        // Re-run step 122 and every later step, as a deployment upgrading a version 121 database does.
+        Assert.True(CollectionMigrations.CurrentVersion >= 122);
+        Assert.Equal(CollectionMigrations.CurrentVersion - 121, (await data.Rows("schemaMigrations").DeleteManyAsync(new BsonDocument("_id", new BsonDocument("$gte", 122)))).DeletedCount);
         var migrations = new CollectionMigrations(data.Database, data.Clock);
         await migrations.ApplyAsync();
         Assert.True(await migrations.IsCurrentAsync());
@@ -422,6 +422,37 @@ public sealed class CatalogPublicSampleTests(MongoFixture fixture)
         // Applying again changes nothing.
         await migrations.ApplyAsync();
         Assert.Equal(2L, await data.CountAsync("catalogPublicSamples"));
+    }
+
+    /// <summary>The guest catalog refuses more than 200 samples, so migration 122 never leaves more: when the approved-public
+    /// assortments publish more products than the limit it converts none and records an operator note; within the limit it converts.</summary>
+    [Fact]
+    public async Task Migration_122_converts_nothing_when_the_public_assortments_exceed_the_guest_limit()
+    {
+        await using var setup = await CreateAsync(fixture);
+        var data = setup.Data;
+        var pencil = await ProductAsync(data, "ATK", "Pensil", "PENCIL-12", 501);
+        var coffee = await ProductAsync(data, "KOPI", "Kopi bubuk", "KOPI-12", 501);
+        await data.Rows("catalogPublicShowcaseHeads").InsertOneAsync(new BsonDocument { { "_id", 501L }, { "schemaVersion", 1 }, { "isPublic", true },
+            { "revision", 1L }, { "decisionId", 71L }, { "updatedAt", data.Clock.UtcNow.UtcDateTime }, { "fence", 0L } });
+        var migration = new UnitToko.Platform.Mongo.Migrations.CatalogPublicSampleMigration(data.Database);
+        var notes = new BsonDocument("kind", "catalog.public.sample.migration");
+
+        await migration.ConvertAsync(1, default);
+        Assert.Equal(0L, await data.CountAsync("catalogPublicSamples"));
+        var note = await data.Rows("auditEvents").Find(notes).SingleAsync();
+        Assert.Equal(2, note["record"]["convertible"].ToInt32()); Assert.Equal(1, note["record"]["limit"].ToInt32());
+        Assert.Equal(0, (await data.BuyerService.QueryPublicAsync(0, 24, null)).Total);
+        // A resumed run writes no second note and still converts nothing.
+        await migration.ConvertAsync(1, default);
+        Assert.Equal(1L, await data.Rows("auditEvents").CountDocumentsAsync(notes));
+        Assert.Equal(0L, await data.CountAsync("catalogPublicSamples"));
+
+        // Within the limit the same assortments convert.
+        await migration.ConvertAsync(2, default);
+        Assert.Equal(new[] { pencil.FamilyId, coffee.FamilyId }.Order(),
+            (await data.Rows("catalogPublicSamples").Find(FilterDefinition<BsonDocument>.Empty).ToListAsync()).Select(row => row["_id"].AsInt64).Order());
+        Assert.Equal(200, UnitToko.Platform.Mongo.Migrations.CatalogPublicSampleSchemas.Limit);
     }
 
     /// <summary>The real API host on the fixture database: anonymous reads, and signed-in commands through a verified session.</summary>
