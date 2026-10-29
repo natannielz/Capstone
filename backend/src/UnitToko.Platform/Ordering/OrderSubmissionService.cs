@@ -57,22 +57,23 @@ public sealed partial class OrderSubmissionService
     }
     private IMongoCollection<BsonDocument> Rows(string name) => database.GetCollection<BsonDocument>(name);
     private static object Body(OrderDraftInput input, string review) => new { input, review };
-    /// <summary>F-030: the reviewed group must be drawn from the draft as saved now, and none of its packages may already have
-    /// become an order from that draft (a new key for the same checkout must never place it twice). `Closes` says this order
-    /// leaves nothing of the saved draft unordered, so the draft is the keranjang no more.</summary>
-    private async Task<(long Id, long Revision, bool Closes)> SourceDraftAsync(ActorContext actor, AuthorizationSnapshot snapshot, IClientSessionHandle tx, long draftId,
-        OrderDraftInput input, CancellationToken ct)
+    /// <summary>F-030: the reviewed group must be drawn from the draft as saved now (the live draft when an earlier group of the same
+    /// checkout already closed the one named), and none of its packages may already have become an order from it: a new key for the
+    /// same checkout must never place it twice. `Remaining` is what this order leaves unordered, if anything.</summary>
+    private async Task<(long Id, long Revision, OrderDraftInput? Remaining)> SourceDraftAsync(ActorContext actor, AuthorizationSnapshot snapshot, IClientSessionHandle tx,
+        long draftId, OrderDraftInput input, CancellationToken ct)
     {
-        var (saved, revision) = await new OrderDraftService(database, unit, ids, clock).SourceAsync(actor, snapshot, tx, draftId, ct);
+        var (saved, revision, liveId) = await new OrderDraftService(database, unit, ids, clock).SourceAsync(actor, snapshot, tx, draftId, ct);
         if (saved.Context != input.Context || saved.Delivery != input.Delivery || saved.PurchaseReference != input.PurchaseReference ||
             input.Selections.Any(line => !saved.Selections.Contains(line)))
             throw new PersistenceConflictException("order_draft_changed", "Draft changed; review the saved keranjang again");
         var ordering = input.Selections.Select(line => line.SkuId.Value).ToHashSet();
-        var earlier = await Rows(OrderDraftSubmissionSchemas.Collection).Find(tx, F.Eq("draftId", draftId)).ToListAsync(ct);
+        // Backstop: the live draft has no link of its own (SourceAsync follows them), and none of its packages may have been ordered from it.
+        var earlier = await Rows(OrderDraftSubmissionSchemas.Collection).Find(tx, F.Eq("draftId", liveId)).ToListAsync(ct);
         if (earlier.Any(row => row["createdBy"].AsInt64 != actor.UserId)) throw Invalid();
         if (earlier.Any(row => row["skuIds"].AsBsonArray.Any(sku => ordering.Contains(sku.AsInt64)))) throw OrderDraftService.Submitted();
-        var ordered = earlier.SelectMany(row => row["skuIds"].AsBsonArray.Select(sku => sku.AsInt64)).Concat(ordering).ToHashSet();
-        return (draftId, revision, saved.Selections.All(line => ordered.Contains(line.SkuId.Value)));
+        var left = saved.Selections.Where(line => !ordering.Contains(line.SkuId.Value)).ToImmutableArray();
+        return (liveId, revision, left.IsEmpty ? null : saved with { Selections = left });
     }
     private static void Metadata(AuthorizationCommandMetadata metadata) {
         AuthorizationStore.ValidateMetadata(metadata); InventoryLedger.RequireText(metadata.Reason, 1000); InventoryLedger.RequireText(metadata.CorrelationId, 128);
@@ -138,7 +139,7 @@ public sealed partial class OrderSubmissionService
             return new(ScopePolicy.Authorize(actor, snapshot, Permissions.OrderSubmit, resource, clock.UtcNow),
                 ScopePolicy.RequiredNodes(resource, snapshot.Directory), Permissions.OrderSubmit, new(resource));
         }, async (tx, token) => {
-            var source = draftId is { } sourceId ? await SourceDraftAsync(actor, current, tx, sourceId, input, token) : ((long Id, long Revision, bool Closes)?)null;
+            var source = draftId is { } sourceId ? await SourceDraftAsync(actor, current, tx, sourceId, input, token) : ((long Id, long Revision, OrderDraftInput? Remaining)?)null;
             var quote = await QuoteAsync(actor, current, tx, input, token); admitted = await AdmitAsync(actor, tx, input, quote, token);
             if (B.Review(input, quote, admitted.Terms) != review) throw new PersistenceConflictException("order_review_changed", "Review the current branch, delivery and commercial terms");
             var state = OrderSpendingPolicy.Initial(admitted.Terms.Spending, admitted.Terms.Total);
@@ -165,10 +166,15 @@ public sealed partial class OrderSubmissionService
             row["snapshotHash"] = B.SnapshotHash(row);
             await Rows(B.Orders).InsertOneAsync(tx, row, cancellationToken: token);
             await Rows(B.Suborders).InsertManyAsync(tx, suborders, cancellationToken: token);
-            if (source is { } closed)
+            if (source is { } closed) {
+                // The draft closes with the order; what the order left unordered continues in a successor draft, which is the keranjang next.
+                BsonValue successor = closed.Remaining is { } rest
+                    ? new BsonInt64(await new OrderDraftService(database, unit, ids, clock).WriteSuccessorAsync(tx, actor, rest, id, metadata.CorrelationId, now, token))
+                    : BsonNull.Value;
                 await Rows(OrderDraftSubmissionSchemas.Collection).InsertOneAsync(tx, new BsonDocument { { "_id", id }, { "schemaVersion", 1 },
-                    { "kind", OrderDraftSubmissionSchemas.Kind }, { "draftId", closed.Id }, { "draftRevision", closed.Revision }, { "closesDraft", closed.Closes }, { "createdBy", actor.UserId },
+                    { "kind", OrderDraftSubmissionSchemas.Kind }, { "draftId", closed.Id }, { "draftRevision", closed.Revision }, { "successorId", successor }, { "createdBy", actor.UserId },
                     { "skuIds", new BsonArray(input.Selections.Select(line => new BsonInt64(line.SkuId.Value))) }, { "recordedAt", now.UtcDateTime } }, cancellationToken: token);
+            }
             foreach (var allocation in admitted.Stock) {
                 var reservation = new BsonDocument { { "_id", (await ids.NextAsync(B.Reservations, token)).Value }, { "schemaVersion", 1 }, { "kind", "ordering.reservation" },
                     { "orderId", id }, { "suborderId", groupBySku[allocation.SkuId] }, { "allocation", B.Allocation(allocation) },
