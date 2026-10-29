@@ -267,8 +267,10 @@ public sealed partial class OrderSubmissionService
         var reservations = await Rows(B.Reservations).Find(tx, F.Eq("orderId", id) & OrderLineageSchemas.OrderValidator(B.Reservations)).Limit(OrderReservationHistoryLimits.MaximumRetained + 1).ToListAsync(ct);
         // New reservations are introduced only by authenticated accepted amendments. Their
         // genesis and exact membership are replayed by DecisionGraphAsync below.
+        // Integrity is refused before any limit check: an order always keeps at least one reservation per original allocation, so fewer
+        // rows means the original history was damaged. Require would call an empty history "limit reached", a retry hint for a tampered order.
+        if (reservations.Count < Math.Max(1, allocations.Length)) throw Invalid();
         OrderReservationHistoryLimits.Require(reservations);
-        if (reservations.Count < allocations.Length) throw Invalid();
         foreach (var allocation in allocations) {
             var reservation = reservations.SingleOrDefault(row => CatalogSchemas.SemanticEquals(row["allocation"], allocation)) ?? throw Invalid();
             var suborder = suborders.Single(row => row["skuIds"].AsBsonArray.Contains(allocation["skuId"]));
