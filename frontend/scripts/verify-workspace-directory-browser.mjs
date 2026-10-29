@@ -27,7 +27,10 @@ export async function verifyWorkspaceDirectoryBrowser({ page, origin, directory,
     const section = page.getByRole('navigation', { name: 'Bidang kerja', exact: true }).getByRole('link').first(); const anchor = await section.getAttribute('href'); await section.focus(); await page.keyboard.press('Enter'); assert.equal(new URL(page.url()).hash, anchor);
     await page.setViewportSize({ width: 360, height: 800 }); assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true); await page.screenshot({ path: resolve(directory, 'workspace-directory-mobile.png'), fullPage: true });
     await page.setViewportSize({ width: 1440, height: 1000 }); await page.screenshot({ path: resolve(directory, 'workspace-directory-desktop.png'), fullPage: true });
-    assert.ok(requests.length >= 2); assert.ok(requests.every(request => request.method === 'GET' && ['/api/v1/identity/session', '/api/v1/access/current'].includes(request.path)));
+    // The home page reads the signed-in actor's identity and live access, and its "Pekerjaan saya" panel reads the work summary (a POST
+    // query, sent with the request token read first from identity/csrf: it counts waiting work from each owner's own authorised queue and changes nothing). Any other request is a failure.
+    const reads = [['GET', '/api/v1/identity/session'], ['GET', '/api/v1/access/current'], ['GET', '/api/v1/identity/csrf'], ['POST', '/api/v1/work/summary/query']];
+    assert.ok(requests.length >= 2); assert.ok(requests.every(request => reads.some(([method, path]) => request.method === method && request.path === path)), 'Unexpected request from /workspace: ' + JSON.stringify(requests));
     console.log('REAL_WORKSPACE_DIRECTORY_BROWSER_PASS ' + JSON.stringify({ actualActor: true, livePermissions: true, canonicalEntry: true, localSearch: true, keyboard: true, mobile: true, desktop: true, mutations: 0 }));
   } finally { page.off('request', observe); }
 }
