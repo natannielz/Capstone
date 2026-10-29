@@ -24,7 +24,8 @@ test('the receipt page and the access page show one shared state, without a stac
   assert.match(receipt, /\{error !== null && account && !expired && <StateView kind="error"/, 'the error alert only shows inside the signed-in page');
   const access = source('administration/AccessAdministration.tsx');
   assert.match(access, /<SessionAccessState /);
-  assert.match(access, /\{error !== null && pageState === "ready" && <div className=\{styles\.alert\}/, 'no error with trace id above the signed-out state');
+  // The alert is the shared StateView error (role="alert") since UI-PAGES-C; the condition is what this test pins.
+  assert.match(access, /\{error !== null && pageState === "ready" && <StateView kind="error"/, 'no error with trace id above the signed-out state');
 });
 
 test('a session that changed hands is an actor change, not "no session" (round 3)', () => {

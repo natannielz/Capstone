@@ -1,12 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { OutcomeState } from '@/components/workspace-kit/outcome-state';
+import { outcomeCopy, type OutcomeKind } from '@/components/workspace-kit/outcome-copy';
+import { Button } from '@/components/workspace-kit/button';
+import { Section } from '@/components/workspace-kit/section';
+import { StateView } from '@/components/workspace-kit/state-view';
 import { AccessFailure } from '../administration/workflow';
 import { createWorkSummaryGateway, visibleWorkItems, type WorkSummary as Summary } from './work-summary-client';
 import { WorkQueue } from './WorkQueue';
-import styles from './identity.module.css';
-import { EmptyState } from '@/components/workspace-kit/empty-state';
 
 type State = { kind: 'loading' } | { kind: 'ready'; summary: Summary } | { kind: 'offline' } | { kind: 'denied' } | { kind: 'error' };
 
@@ -32,16 +33,18 @@ export function WorkSummary({ actorId, actions, heading = 'Pekerjaan saya' }: { 
   }, []);
 
   const items = state.kind === 'ready' ? visibleWorkItems(state.summary.items, actions) : [];
-  return <section className={styles.workspace} aria-labelledby="work-heading">
-    <div className={styles.directoryHeader}><div><h2 id="work-heading" tabIndex={-1}>{heading}</h2>
-      <p className={styles.help}>Pekerjaan yang menunggu Anda, dari yang paling lama. Jumlah dihitung dari antrean yang dapat Anda buka.</p></div>
-      <button type="button" className={styles.secondary} onClick={() => setRefresh(value => value + 1)} disabled={state.kind === 'loading'}>Muat ulang</button></div>
-    {state.kind === 'loading' && <OutcomeState kind="loading" />}
-    {state.kind === 'offline' && <OutcomeState kind="offline" />}
-    {state.kind === 'denied' && <OutcomeState kind="denied" />}
-    {state.kind === 'error' && <OutcomeState kind="error" onAction={() => setRefresh(value => value + 1)} />}
+  const reload = () => setRefresh(value => value + 1);
+  const copy = (kind: OutcomeKind) => outcomeCopy(kind);
+  return <Section title={heading} id="work-heading" variant="plain" focusable busy={state.kind === 'loading'}
+    description="Pekerjaan yang menunggu Anda, dari yang paling lama. Jumlah dihitung dari antrean yang dapat Anda buka."
+    actions={<Button onClick={reload} disabled={state.kind === 'loading'}>Muat ulang</Button>}>
+    {state.kind === 'loading' && <StateView kind="loading" title={copy('loading').title} />}
+    {state.kind === 'offline' && <StateView kind="offline" title={copy('offline').title} message={copy('offline').body} />}
+    {state.kind === 'denied' && <StateView kind="denied" title={copy('denied').title} message={copy('denied').body} />}
+    {state.kind === 'error' && <StateView kind="error" title={copy('error').title} message={copy('error').body}
+      action={<Button onClick={reload}>{copy('error').action}</Button>} />}
     {state.kind === 'ready' && (items.length === 0
-      ? <EmptyState kind="done" title="Semua pekerjaan selesai" body="Tidak ada pekerjaan yang menunggu Anda saat ini." />
+      ? <StateView kind="empty" title="Semua pekerjaan selesai" message="Tidak ada pekerjaan yang menunggu Anda saat ini." />
       : <WorkQueue items={items} observedAt={state.summary.observedAt} />)}
-  </section>;
+  </Section>;
 }

@@ -17,6 +17,12 @@ import { PersonReviewQueue, PersonReviewTargetSearch, PersonReviewEditor, type P
 import { LatestPersonReviewRead, personReviewMessage, personReviewNeedsRefresh, personReviewOperations, personReviewPath, personReviewPermission,
   type PersonReviewCommand, type PersonReviewSummary } from "./person-review-workflow";
 import styles from "../administration/access.module.css";
+import { Button } from '@/components/workspace-kit/button';
+import { PageHeader } from '@/components/workspace-kit/page-header';
+import { Section } from '@/components/workspace-kit/section';
+import { StateView } from '@/components/workspace-kit/state-view';
+import { Field } from '@/components/workspace-kit/field';
+import { Tabs } from '@/components/workspace-kit/tabs';
 
 type Loaded = { current: components["schemas"]["CurrentAccessDto"]; session: IdentitySession; observedAt: number };
 const unavailable = (failure: unknown) => failure instanceof AccessFailure && ["person_governance_unavailable", "person_selection_unavailable"].includes(failure.code);
@@ -59,11 +65,10 @@ export function PersonReviewAdministration() {
     }
   }, [reads]);
   return <main className={styles.page}>
-    <header className={styles.header}><div><Link className={styles.brand} href="/identity/account">Unit Toko</Link><h1>Peninjauan keterkaitan akun</h1>
-      <p>Periksa pengajuan penangguhan, akun yang terdampak, dan keputusan petugas yang berwenang.</p></div></header>
-    {loaded ? <PersonReviewBody key={`${loaded.current.userId}:${revision}`} {...loaded} onFailure={onFailure} onRefresh={refresh} />
-      : loading ? <section className={styles.state} aria-busy="true"><h2>Memeriksa sesi dan penugasan</h2></section>
-      : <SessionAccessState error={error} returnPath={personReviewPath} onRetry={() => void refresh()} detail={error !== null ? personReviewMessage(error) : undefined} />}
+    <PageHeader title="Peninjauan keterkaitan akun" description="Periksa pengajuan penangguhan, akun yang terdampak, dan keputusan petugas yang berwenang." />
+    <div className="ui-stack">{loaded ? <PersonReviewBody key={`${loaded.current.userId}:${revision}`} {...loaded} onFailure={onFailure} onRefresh={refresh} />
+      : loading ? <StateView kind="loading" title="Memeriksa sesi dan penugasan" />
+      : <SessionAccessState error={error} returnPath={personReviewPath} onRetry={() => void refresh()} detail={error !== null ? personReviewMessage(error) : undefined} />}</div>
   </main>;
 }
 
@@ -151,21 +156,21 @@ function PersonReviewBody({ current, session, observedAt, onFailure, onRefresh }
   if (timing.expired) return <SessionAccessState error={null} kind="expired" returnPath={personReviewPath} busy={busy} onRetry={() => void onRefresh()} />;
   return <>
     <AdministrationNavigation current="person-reviews" actions={current.allowedActions} locked={locked} />
-    <section className={styles.accountSection} aria-labelledby="person-session-title"><h2 id="person-session-title">Sesi peninjauan</h2><p className={styles.preserve}>Anda masuk sebagai <strong>{session.account?.displayName ?? session.account?.verifiedEmail}</strong>.</p>
+    <Section title="Sesi peninjauan" id="person-session-title" description={<>Anda masuk sebagai <strong>{session.account?.displayName ?? session.account?.verifiedEmail}</strong>.</>}
+      actions={<Button variant="secondary" type="button" disabled={locked} onClick={() => void onRefresh()}>Muat ulang sesi dan akses</Button>}>
       <p className={styles.help}>{timing.fresh ? "Verifikasi dua langkah masih baru. Setiap tindakan tetap diperiksa terhadap izin dan penugasan terbaru." : "Verifikasi dua langkah terbaru diperlukan sebelum mengirim keputusan."}</p>
-      <div className={styles.actions}><button type="button" className={styles.secondary} disabled={locked} onClick={() => void onRefresh()}>Muat ulang sesi dan akses</button>
-        <button type="button" className={mode === "queue" ? styles.primary : styles.secondary} disabled={locked} onClick={() => { resetSelection(); setMode("queue"); }}>Daftar pengajuan</button>
-        {current.allowedActions.includes("person.review.propose") && <button type="button" className={mode === "propose" ? styles.primary : styles.secondary} disabled={locked} onClick={() => { resetSelection(); setMode("propose"); }}>Ajukan penangguhan baru</button>}</div>
-      {factors.length > 0 && !retry && <div className={styles.review}><label>Tindakan untuk verifikasi<select value={factorOperation} disabled={busy || recoveryBusy} onChange={event => setFactorOperation(event.target.value)}>
-        {factors.map(operation => <option key={operation} value={operation}>{operation === "person.review.propose" ? "Pengajuan atau penarikan" : "Persetujuan atau penolakan"}</option>)}</select></label>
+      {current.allowedActions.includes("person.review.propose") && <Tabs label="Tampilan peninjauan" disabled={locked} current={mode} onSelect={value => { resetSelection(); setMode(value as "queue" | "propose"); }}
+                items={[{ label: "Daftar pengajuan", value: "queue" }, ...(current.allowedActions.includes("person.review.propose") ? [{ label: "Ajukan penangguhan baru", value: "propose" }] : [])]} />}
+      {factors.length > 0 && !retry && <div className={styles.preview}><Field id="person-review-factor" label="Tindakan untuk verifikasi"><select value={factorOperation} disabled={busy || recoveryBusy} onChange={event => setFactorOperation(event.target.value)}>
+        {factors.map(operation => <option key={operation} value={operation}>{operation === "person.review.propose" ? "Pengajuan atau penarikan" : "Persetujuan atau penolakan"}</option>)}</select></Field>
         <ProtectedNavigationForm action="/auth/step-up" fields={fields ?? {}} disabled={busy || recoveryBusy || !fields} label="Verifikasi dua langkah" secondary />
         <p className={styles.help}>Verifikasi membuka layanan akun. Setelah kembali, pilih dan periksa pengajuan kembali. Verifikasi tidak mengaktifkan peninjauan yang belum disetujui.</p></div>}
-    </section>
-    {message && <p role="status" className={styles.success}>{message}</p>}
-    {error !== null && <div role="alert" className={styles.alert}><p>{personReviewMessage(error)}</p>{retry && <><p>Hasil belum pasti. Isian dan referensi pengajuan yang sama tetap tersimpan hanya di tab ini.</p>
-      <button type="button" className={styles.secondary} disabled={busy || recoveryBusy} onClick={() => void run(retry).catch(() => undefined)}>Periksa ulang permintaan yang sama</button>
-      <p><Link href={retryFactorHref} target="_blank" rel="noopener noreferrer">Buka Akun saya untuk verifikasi dua langkah di tab baru</Link>. Setelah selesai, kembali ke tab ini untuk memeriksa hasil. Jangan membuat pengajuan pengganti.</p></>}</div>}
-    {recovery.error !== null && <p role="alert" className={styles.alert}>{personReviewMessage(recovery.error)}</p>}
+    </Section>
+    {message && <StateView kind="success" title={message} />}
+    {error !== null && <StateView kind="error" title={personReviewMessage(error)} message={retry ? "Hasil belum pasti. Isian dan referensi pengajuan yang sama tetap tersimpan hanya di tab ini." : undefined}
+      action={retry ? <Button variant="secondary" type="button" disabled={busy || recoveryBusy} onClick={() => void run(retry).catch(() => undefined)}>Periksa ulang permintaan yang sama</Button> : undefined}
+      detail={retry ? <><Link href={retryFactorHref} target="_blank" rel="noopener noreferrer">Buka Akun saya untuk verifikasi dua langkah di tab baru</Link>. Setelah selesai, kembali ke tab ini untuk memeriksa hasil. Jangan membuat pengajuan pengganti.</> : undefined} />}
+    {recovery.error !== null && <StateView kind="error" title={personReviewMessage(recovery.error)} />}
     <OperationRecovery key={current.userId} entries={recovery.entries} journal={recovery.journal} disabled={busy} onResolved={resolved} onFailure={failedRead} onBusyChange={setRecoveryBusy}
       recoveryAdapters={{ "person.review": {
         lookup: entry => gateway.receipt(entry, retry && operationReference.current?.operation === entry.operation && operationReference.current.key === entry.key ? retry : undefined),
@@ -175,13 +180,14 @@ function PersonReviewBody({ current, session, observedAt, onFailure, onRefresh }
         },
       } }} />
     {recovery.entries.some(entry => entry.operation.startsWith("person.review.")) && <p className={styles.help}>Penutupan menggunakan referensi asli, tanpa mengirim ulang isian pengajuan. Izin tindakan semula, verifikasi dua langkah terbaru, dan penugasan khusus tetap diperiksa server. Hasil yang sudah tersimpan tidak dibatalkan.</p>}
-    {privateHidden ? <section className={styles.state}><h2>{profileUnavailable(error) ? "Data akun belum dapat ditinjau" : unavailable(error) ? "Peninjauan belum diaktifkan" : personReviewNeedsRefresh(error) ? "Data peninjauan perlu diperiksa kembali" : error instanceof AccessFailure && error.status === 403 && error.code !== "step_up_required" ? "Akses peninjauan belum disetujui" : "Data peninjauan perlu diperiksa kembali"}</h2><p>Data sebelumnya disembunyikan setelah perubahan izin, ketersediaan data, atau pratinjau. {retry || recovery.entries.length > 0 ? "Selesaikan pemulihan permintaan yang belum pasti, lalu muat ulang sesi dan akses." : "Muat ulang sesi dan akses untuk memeriksa data terbaru."}</p></section> : <div className={styles.desk}>
+    {privateHidden ? <StateView kind="denied" title={profileUnavailable(error) ? "Data akun belum dapat ditinjau" : unavailable(error) ? "Peninjauan belum diaktifkan" : personReviewNeedsRefresh(error) ? "Data peninjauan perlu diperiksa kembali" : error instanceof AccessFailure && error.status === 403 && error.code !== "step_up_required" ? "Akses peninjauan belum disetujui" : "Data peninjauan perlu diperiksa kembali"}
+      message={<>Data sebelumnya disembunyikan setelah perubahan izin, ketersediaan data, atau pratinjau. {retry || recovery.entries.length > 0 ? "Selesaikan pemulihan permintaan yang belum pasti, lalu muat ulang sesi dan akses." : "Muat ulang sesi dan akses untuk memeriksa data terbaru."}</>} /> : <div className="ui-desk">
       {mode === "queue" ? <PersonReviewQueue gateway={gateway} actorId={current.userId} revision={revision} locked={locked} onReset={resetSelection} onFailure={failedRead} onSelect={summary => void choose(summary)} />
         : <PersonReviewTargetSearch gateway={gateway} actorId={current.userId} revision={revision} locked={locked} onReset={resetSelection} onFailure={failedRead} onSelect={target => { resetSelection(); setSelection({ kind: "target", target }); }} />}
       {selection ? <PersonReviewEditor key={selection.kind === "target" ? `target:${selection.target.groupId}:${selection.target.version}` : `proposal:${selection.detail.summary.result.proposalId}:${selection.detail.summary.result.version}`}
         selection={selection} actorId={current.userId} permissions={current.allowedActions} gateway={gateway} locked={locked} fresh={timing.fresh} now={now} onFailure={failedRead} onSubmit={run} onCancel={resetSelection} />
-        : <section className={styles.detail} aria-busy={detailBusy}><div className={styles.form}><h2>{detailBusy ? "Memuat rincian pengajuan" : "Pilih untuk memeriksa"}</h2>
-          <p role={detailBusy ? "status" : undefined}>{detailBusy ? "Memeriksa data dalam lingkup penugasan Anda…" : mode === "queue" ? "Buka pengajuan dari daftar untuk melihat alasan, akun terdampak, dan keputusan yang tersedia." : "Cari dan pilih keterkaitan akun, lalu periksa dampaknya sebelum mengajukan."}</p></div></section>}
+        : <section className="ui-section" aria-busy={detailBusy}><h2>{detailBusy ? "Memuat rincian pengajuan" : "Pilih untuk memeriksa"}</h2>
+          <p role={detailBusy ? "status" : undefined}>{detailBusy ? "Memeriksa data dalam lingkup penugasan Anda…" : mode === "queue" ? "Buka pengajuan dari daftar untuk melihat alasan, akun terdampak, dan keputusan yang tersedia." : "Cari dan pilih keterkaitan akun, lalu periksa dampaknya sebelum mengajukan."}</p></section>}
     </div>}
   </>;
 }

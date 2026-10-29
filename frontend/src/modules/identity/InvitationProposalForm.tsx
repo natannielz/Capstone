@@ -8,6 +8,7 @@ import { permissionLabel } from "../administration/permission-labels";
 import { rolePermissionSuggestions } from "../administration/role-permission-suggestions";
 import styles from "../administration/access.module.css";
 import { dateTimeFormatter } from "@/lib/format";
+import { Button } from '@/components/workspace-kit/button';
 
 type Schemas = components["schemas"];
 type Proposal = Schemas["IdentityInvitationProposalDto"];
@@ -51,7 +52,7 @@ export function InvitationProposalForm({current,catalog,locked,onSubmit,labels}:
   };
   const dateLabel=(value:string)=>dateTimeFormatter.format(new Date(value));
 
-  return <form className={styles.form} onSubmit={event=>{void submit(event);}} aria-label="Usulkan undangan akun">
+  return <form className="ui-section" onSubmit={event=>{void submit(event);}} aria-label="Usulkan undangan akun">
     <h2>Usulkan undangan akun</h2>
     <p className={styles.help}>Pilih lingkup dan kewenangan yang akan diperiksa sebelum undangan disetujui. Alamat email harus sudah disepakati dengan penerima.</p>
     <fieldset className={styles.fields} disabled={disabled}>
@@ -104,9 +105,9 @@ export function InvitationProposalForm({current,catalog,locked,onSubmit,labels}:
       <label>Alasan pengundangan
         <textarea aria-label="Alasan pengundangan" required maxLength={1000} rows={3} value={reason} onChange={event=>change(()=>setReason(event.target.value))}/>
       </label>
-      <button type="button" className={styles.secondary} disabled={!candidate} onClick={()=>setReview(content)}>Tinjau usulan</button>
+      <Button variant="secondary" type="button" disabled={!candidate} onClick={()=>setReview(content)}>Tinjau usulan</Button>
     </fieldset>
-    {confirmed&&candidate&&<section className={styles.review} aria-label="Tinjauan undangan">
+    {confirmed&&candidate&&<section className={styles.preview} aria-label="Tinjauan undangan">
       <h3>Periksa sebelum mengirim</h3>
       <dl className={styles.facts}>
         <div><dt>Email</dt><dd>{candidate.email}</dd></div>
@@ -122,7 +123,7 @@ export function InvitationProposalForm({current,catalog,locked,onSubmit,labels}:
         <div><dt>Akses berakhir</dt><dd>{candidate.accessExpiresAt?`${dateLabel(candidate.accessExpiresAt)} WIB`:"Tidak ditetapkan"}</dd></div>
         <div><dt>Alasan</dt><dd className={styles.preserve}>{candidate.reason}</dd></div>
       </dl>
-      <button type="submit" className={styles.primary} disabled={disabled}>Kirim usulan undangan</button>
+      <Button variant="primary" type="submit" disabled={disabled}>Kirim usulan undangan</Button>
     </section>}
   </form>;
 }
