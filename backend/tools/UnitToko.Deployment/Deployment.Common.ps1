@@ -74,7 +74,7 @@ function Get-DeploymentEnvironment($Value, [string] $Prefix = '') {
 function Get-DeploymentConfig([string] $Path, [ValidateSet('api','worker')] [string] $Component,
     [ValidateSet('release1','full')] [string] $ExpectedProfile = 'release1') {
     $config = Read-DeploymentJson (Require-DeploymentPath $Path -Existing)
-    $allowed = if ($Component -eq 'api') { @('Mongo','Identity','Evidence','Release','Logging','AllowedHosts','ASPNETCORE_ENVIRONMENT','ASPNETCORE_URLS') }
+    $allowed = if ($Component -eq 'api') { @('Mongo','Identity','Integrity','Evidence','Release','Logging','AllowedHosts','ASPNETCORE_ENVIRONMENT','ASPNETCORE_URLS') }
         else { @('Mongo','Evidence','Notifications','Logging','DOTNET_ENVIRONMENT') }
     foreach ($property in $config.PSObject.Properties) {
         if ($property.Name -cnotin $allowed) { Stop-Deployment 'unsupported_config_section' }
@@ -124,6 +124,14 @@ function Get-DeploymentConfig([string] $Path, [ValidateSet('api','worker')] [str
         $null = Require-DeploymentPath $pairs['Identity__Keys__Directory'] -Existing
         $certificate = Require-DeploymentPath $pairs['Identity__Keys__CertificatePath'] -Existing
         if ((Get-Item -LiteralPath $certificate).PSIsContainer -or (Get-Item -LiteralPath $certificate).Length -gt 1048576) { Stop-Deployment 'identity_certificate_file_invalid' }
+        if ($ExpectedProfile -eq 'full') {
+            # Provenance seals let each request verify sealed history instead of re-proving it; unsealed history would
+            # take the slow full proof everywhere. A full deployment requires them and refuses to start without the keys.
+            if ($pairs['Integrity__SealsRequired'] -cne 'true') { Stop-Deployment 'provenance_seals_required' }
+            if (-not (Test-Path -LiteralPath (Join-Path $pairs['Identity__Keys__Directory'] 'seal-current.txt') -PathType Leaf)) {
+                Stop-Deployment 'provenance_seal_keys_not_provisioned'
+            }
+        }
     } elseif (-not $pairs.ContainsKey('DOTNET_ENVIRONMENT') -or $pairs['DOTNET_ENVIRONMENT'] -cne 'Production') { Stop-Deployment 'worker_environment_invalid' }
     if (@($pairs.Keys | Where-Object { $_ -like 'Evidence__PaymentPdfOcr__*' }).Count -gt 0) { Stop-Deployment 'primary_payment_pdf_not_supported' }
     if ($ExpectedProfile -eq 'full') {

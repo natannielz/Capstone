@@ -17,6 +17,7 @@ using UnitToko.Platform;
 using UnitToko.Platform.Billing;
 using UnitToko.Platform.Fulfillment;
 using UnitToko.Platform.Identity;
+using UnitToko.Platform.Integrity;
 using UnitToko.Platform.Mongo;
 using UnitToko.Tests.Identity;
 using UnitToko.Tests.Inventory;
@@ -29,8 +30,18 @@ namespace UnitToko.Tests.Billing;
 [SupportedOSPlatform("windows")]
 public sealed class InvoiceReleaseBrowserTests(MongoFixture fixture, ITestOutputHelper output)
 {
-    [LocalStockBrowserFact(Skip = Pending.BrowserLatency)]
+    [LocalStockBrowserFact]
     public async Task Browser_independently_approves_actual_received_goods_issues_once_and_recovers_three_committed_commands_after_process_restarts()
+    {
+        // Production-like: a deployed API runs with a provenance seal ring, so receipts, releases, conversions and dispatches are
+        // sealed as they are written. This fixture is written before the host starts, so the ring goes in first; without it the
+        // history stays unsealed and every read takes the full-proof fallback, which is what exceeded the 30 s browser bound.
+        var ownsRing = ProvenanceSealRing.Current is null;
+        if (ownsRing) ProvenanceSealRing.Configure(SealKeyRing.ForKeys("invoice-release", new Dictionary<string, byte[]> { ["invoice-release"] = RandomNumberGenerator.GetBytes(32) }));
+        try { await RehearseAsync(); } finally { if (ownsRing) ProvenanceSealRing.Configure(null); }
+    }
+
+    private async Task RehearseAsync()
     {
         if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException("Genuine finite inventory browser fixture requires Windows");
         var root = Root(); var frontend = Frontend(root);

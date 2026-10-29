@@ -40,6 +40,15 @@ using UnitToko.Api.Procurement;
 using UnitToko.Platform.Procurement;
 using UnitToko.Api;
 
+if (args is ["provision-seal-keys", ..])
+{
+    // Operator command: provision the provenance seal key ring in this environment's protected key directory (read from the
+    // same configuration the API uses), then exit. It never rotates an existing ring and prints only the key id.
+    var provisioning = WebApplication.CreateBuilder(args[1..]).Configuration;
+    Console.WriteLine("Provenance seal key ring ready (current key " + IdentityKeyMaterial.ProvisionSealKeys(provisioning) + ").");
+    return;
+}
+
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
