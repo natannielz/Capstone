@@ -24,9 +24,29 @@ if ($ResetData) {
     if ((Test-Path -LiteralPath $state) -and (Test-Running)) { throw 'Stop the review stack first (start-local-pilot.ps1 -Profile review -Stop).' }
     $stamp = (Get-Date).ToUniversalTime().ToString('yyyyMMddTHHmmssZ')
     $data = Join-Path $state 'mongo-data'
-    if (Test-Path -LiteralPath $data) { Rename-Item -LiteralPath $data -NewName "mongo-data.before-reset-$stamp"; Write-Output "Review database set aside: $data.before-reset-$stamp" }
     $store = Join-Path $env:LOCALAPPDATA 'UnitToko.LocalPilot/review'
-    if (Test-Path -LiteralPath $store) { Rename-Item -LiteralPath $store -NewName "review.before-reset-$stamp"; Write-Output "Review photo store set aside: $store.before-reset-$stamp" }
+    $dataAside = "$data.before-reset-$stamp"; $storeAside = "$store.before-reset-$stamp"
+    # Renames only, never a delete. The photo store (a per-user protected folder that antivirus or Explorer may hold open) goes first: if it
+    # cannot be renamed, nothing has moved. If the database rename then fails, the photo store is put back, or the exact step is printed.
+    $storeMoved = $false
+    if (Test-Path -LiteralPath $store) {
+        try { Rename-Item -LiteralPath $store -NewName (Split-Path $storeAside -Leaf) -ErrorAction Stop }
+        catch { throw "Nothing was renamed: the review photo store cannot be renamed ($($_.Exception.Message))." }
+        $storeMoved = $true; Write-Output "Review photo store set aside: $storeAside"
+    }
+    if (Test-Path -LiteralPath $data) {
+        try { Rename-Item -LiteralPath $data -NewName (Split-Path $dataAside -Leaf) -ErrorAction Stop }
+        catch {
+            $reason = $_.Exception.Message
+            if (-not $storeMoved) { $undo = 'Nothing is changed.' }
+            else {
+                try { Rename-Item -LiteralPath $storeAside -NewName 'review' -ErrorAction Stop; $undo = 'The photo store was put back; nothing is changed.' }
+                catch { $undo = "The photo store could not be put back. Rename it back by hand: Rename-Item -LiteralPath '$storeAside' -NewName 'review'" }
+            }
+            throw "The review database cannot be renamed ($reason). $undo"
+        }
+        Write-Output "Review database set aside: $dataAside"
+    }
     Write-Output 'The next start of the review profile seeds from empty (run it under the heavy lock).'
     exit 0
 }

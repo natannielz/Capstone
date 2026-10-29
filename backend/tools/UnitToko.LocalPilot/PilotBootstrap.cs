@@ -16,11 +16,19 @@ namespace UnitToko.LocalPilot;
 public static class PilotBootstrap
 {
     private const string Marker = "localPilotMetadata";
-    public static async Task InitializeAsync(MongoClient client, PilotSecrets secrets, CancellationToken ct)
+    /// <param name="stateDirectory">The profile's state folder (beside, not inside, its mongo-data): where the full pilot leaves
+    /// <see cref="UpgradeFailedMarker"/> when the organisation profile upgrade fails.</param>
+    public static async Task InitializeAsync(MongoClient client, PilotSecrets secrets, CancellationToken ct, string? stateDirectory = null)
     {
         PilotBoundary.RequireDatabase(PilotBoundary.MongoUri, PilotBoundary.DatabaseName);
-        await InitializeDatabaseAsync(client, client.GetDatabase(PilotBoundary.DatabaseName), secrets, ct);
+        await InitializeDatabaseAsync(client, client.GetDatabase(PilotBoundary.DatabaseName), secrets, ct, stateDirectory);
     }
+
+    /// <summary>Left in the full pilot's state folder when its organisation profile upgrade failed: a UTC timestamp and the exception type, nothing
+    /// else (never the message, a connection string or a secret). A later successful upgrade deletes it.</summary>
+    internal const string UpgradeFailedMarker = "profile-upgrade-failed.txt";
+    /// <summary>The warning the launcher prints after its ready banner, so a failed upgrade of the full pilot is not lost in the scrollback.</summary>
+    public static string? UpgradeWarning { get; private set; }
 
     /// <summary>The synthetic organisation: buying organisation 10 with branches 11 and 12; cooperative 100 with shop 101, its warehouse 102
     /// and channel 103.</summary>
@@ -36,7 +44,7 @@ public static class PilotBootstrap
 
     /// <summary>The two bootstrap people who name the organisation, added when missing (a database seeded before G-034 has neither). They are
     /// synthetic, hold nothing beyond technical.configure and organization.approve, and are different people.</summary>
-    private static async Task EnsureProfileActorsAsync(IMongoDatabase database, DateTime at, CancellationToken ct)
+    internal static async Task EnsureProfileActorsAsync(IMongoDatabase database, DateTime at, CancellationToken ct)
     {
         var system = new BsonDocument("kind", "system");
         async Task Add(string table, BsonDocument row)
@@ -88,20 +96,35 @@ public static class PilotBootstrap
     }
 
     /// <summary>The same approvals for a full or review database that is already set up, on its next start (the persistent Release 1 pilot is
-    /// left as it is). A failure is reported and does not stop the start: every step is its own transaction, so nothing is half-written, and
-    /// the pages that need the approvals keep answering 409 until the next start retries.</summary>
-    private static async Task UpgradeOrganizationProfilesAsync(IMongoDatabase database, MongoClient client, DateTime at, CancellationToken ct)
+    /// left as it is). Every step is its own transaction, so a failure leaves nothing half-written and the next start resumes.
+    /// <list type="bullet"><item>Review (<paramref name="failClosed"/>): the failure is rethrown, so the launcher stops before it prints "ready" and
+    /// before the persona sessions exist. The stack must not look ready while the organisation, address, policy, procurement and accounting
+    /// pages answer 409.</item><item>Full: the owner's pilot still starts. The failure leaves <see cref="UpgradeFailedMarker"/> in
+    /// <paramref name="stateDirectory"/> and sets <see cref="UpgradeWarning"/> for the launcher to print after its banner.</item></list>
+    /// A successful upgrade deletes the marker.</summary>
+    internal static async Task UpgradeOrganizationProfilesAsync(IMongoDatabase database, MongoClient client, DateTime at, bool failClosed,
+        string? stateDirectory, CancellationToken ct)
     {
         if (!PilotBoundary.IsFullRelease) return;
-        try { await OrganizationProfilesAsync(database, client, at, ct); }
+        var marker = stateDirectory is null ? null : Path.Combine(stateDirectory, UpgradeFailedMarker);
+        try
+        {
+            await OrganizationProfilesAsync(database, client, at, ct);
+            UpgradeWarning = null;
+            if (marker is not null) File.Delete(marker);
+        }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            Console.WriteLine("Nama organisasi pilot belum dapat disahkan lewat layanan organisasi (" + exception.GetType().Name + ": " + exception.Message + "). Mulai ulang pilot untuk mencoba lagi.");
+            if (failClosed) throw;
+            var type = exception.GetType().Name;
+            UpgradeWarning = "PERINGATAN: nama organisasi pilot belum disahkan lewat layanan organisasi (" + type + "). Halaman organisasi, alamat, aturan, pengadaan " +
+                "dan pembukuan akan menjawab 409 sampai berhasil. Mulai ulang pilot untuk mencoba lagi." + (marker is null ? "" : " Catatan: " + marker);
+            if (marker is not null) File.WriteAllText(marker, DateTime.UtcNow.ToString("o") + Environment.NewLine + type + Environment.NewLine);
         }
     }
 
     /// <summary>The bootstrap on a database the caller has already verified: the pilot's own (above), or a test's disposable one.</summary>
-    internal static async Task InitializeDatabaseAsync(MongoClient client, IMongoDatabase database, PilotSecrets secrets, CancellationToken ct)
+    internal static async Task InitializeDatabaseAsync(MongoClient client, IMongoDatabase database, PilotSecrets secrets, CancellationToken ct, string? stateDirectory = null)
     {
         var names = await (await database.ListCollectionNamesAsync(cancellationToken: ct)).ToListAsync(ct);
         var markers = database.GetCollection<BsonDocument>(Marker);
@@ -119,7 +142,7 @@ public static class PilotBootstrap
         await new CollectionMigrations(database, clock).ApplyAsync(ct);
         if (marker["phase"] == "complete")
         {
-            await UpgradeOrganizationProfilesAsync(database, client, marker["createdAt"].ToUniversalTime(), ct);
+            await UpgradeOrganizationProfilesAsync(database, client, marker["createdAt"].ToUniversalTime(), PilotBoundary.Profile == "review", stateDirectory, ct);
             await GrowGrantsAsync(database, secrets, ct);
             await PilotCatalog.ExpandAsync(database, client, secrets, markers, PilotBoundary.Profile, ct);
             await SeedAfterCatalogAsync(database, client, secrets, markers, ct);
