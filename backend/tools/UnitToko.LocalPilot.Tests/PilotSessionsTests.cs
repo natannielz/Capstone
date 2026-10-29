@@ -58,6 +58,28 @@ public sealed class PilotSessionsTests
         (Permissions.PeriodClose, Permissions.PeriodReopenApprove),                // ApprovalPolicy: ClosedBy
     ];
 
+    /// <summary>The copy above must not drift from the backend's own list: MakerCheckerPairs.All, read from its source in this checkout (a
+    /// separate test project, so it cannot be referenced). A pair added there and not here would let a persona hold both sides unnoticed.</summary>
+    [Fact]
+    public void The_pair_list_is_the_backends_MakerCheckerPairs()
+    {
+        string? file = null;
+        for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null && file is null; directory = directory.Parent)
+        {
+            var candidate = Path.Combine(directory.FullName, "backend", "tests", "UnitToko.Tests", "Authorization", "RoleTemplateJobTests.cs");
+            if (File.Exists(candidate)) file = candidate;
+        }
+        Assert.NotNull(file);
+        var text = File.ReadAllText(file); var start = text.IndexOf("class MakerCheckerPairs", StringComparison.Ordinal);
+        Assert.True(start >= 0, "MakerCheckerPairs is no longer in RoleTemplateJobTests.cs; point this test at its new home.");
+        var body = text[start..text.IndexOf("];", start, StringComparison.Ordinal)];
+        string Value(string name) => (string)typeof(Permissions).GetField(name)!.GetRawConstantValue()!;
+        var canonical = System.Text.RegularExpressions.Regex.Matches(body, @"\(Permissions\.(\w+),\s*Permissions\.(\w+)\)").Select(match => (Value(match.Groups[1].Value), Value(match.Groups[2].Value))).ToArray();
+        Assert.NotEmpty(canonical);
+        Assert.Equal(canonical.Distinct().Order().ToArray(), MakerChecker.Distinct().Order().ToArray());
+        Assert.Equal(canonical.Length, MakerChecker.Length);
+    }
+
     [Fact]
     public async Task Review_profile_refuses_non_loopback_and_mints_one_session_per_persona()
     {
@@ -128,6 +150,14 @@ public sealed class PilotSessionsTests
         }
         Assert.DoesNotContain(Permissions.OrderSubmit, Held("penyetuju-cabang"));
         Assert.DoesNotContain(Permissions.SupplierClaim, Held("penyetuju-pengadaan"));
+        // G-035: the payment checker reads the bank pages, which also require receiving-account details.
+        Assert.Contains(Permissions.ReceivingAccountDetailsRead, Held("pemeriksa-pembayaran"));
+        Assert.Contains(Permissions.BankStatementStage, Held("keuangan-tagihan"));
+        // F-027: each persona holds only its role's grants, so its workspace shows only its own work.
+        Assert.Equal(new[] { Permissions.CatalogPublicApprove, Permissions.CatalogRead, Permissions.OrderRead, Permissions.PricingApprove }, Held("peninjau-katalog").Order(StringComparer.Ordinal));
+        Assert.DoesNotContain(Permissions.CaseRead, Held("keuangan-tagihan")); Assert.DoesNotContain(Permissions.PaymentReviewRead, Held("keuangan-tagihan"));
+        Assert.DoesNotContain(Permissions.StockSourceRead, Held("petugas-gudang")); Assert.DoesNotContain(Permissions.StockSourceReconciliationRead, Held("petugas-gudang"));
+        Assert.DoesNotContain(Permissions.OrderSpendingPolicyRead, Held("penyetuju-cabang"));
         // The access checker approves what admin-akses proposes and cannot propose itself.
         Assert.Contains(Permissions.AccessApprove, Held("penyetuju-akses"));
         Assert.Contains(Permissions.MembershipApprove, Held("penyetuju-akses"));

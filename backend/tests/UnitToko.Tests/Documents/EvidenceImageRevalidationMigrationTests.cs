@@ -14,12 +14,12 @@ public sealed class EvidenceImageRevalidationMigrationTests(MongoFixture fixture
     [Fact]
     public async Task Empty_interrupted_owner_resumes_without_rewriting_predecessor_definitions()
     {
-        await using var data = await StoreTestData.CreateAsync(fixture);
+        await using var data = await UnitToko.Tests.Procurement.SupplierDocumentPdfMatchMigrationRehearsal.CreateAsync(fixture);
         await RestoreV80Async(data.Database);
         var beforePhoto = await DefinitionAsync(data.Database, "catalogPrimaryPhotos");
         var key = EvidenceImageRevalidationSchemas.Keys(EvidenceImageRevalidationSchemas.Requests)[0];
         await data.Database.GetCollection<BsonDocument>(EvidenceImageRevalidationSchemas.Requests).Indexes.DropOneAsync(key.Name);
-        await new CollectionMigrations(data.Database, data.Clock).ApplyAsync();
+        await UnitToko.Tests.Procurement.SupplierDocumentPdfMatchMigrationRehearsal.ApplyAsync(data.Database, data.Clock);
         var afterPhoto = await DefinitionAsync(data.Database, "catalogPrimaryPhotos");
         Assert.Equal(beforePhoto.ToBson(), afterPhoto.ToBson());
         var indexes = await (await data.Database.GetCollection<BsonDocument>(EvidenceImageRevalidationSchemas.Requests)
@@ -33,7 +33,7 @@ public sealed class EvidenceImageRevalidationMigrationTests(MongoFixture fixture
     [Fact]
     public async Task Positive_or_malformed_allocators_and_unsafe_predecessor_refuse_before_ddl()
     {
-        await using var data = await StoreTestData.CreateAsync(fixture);
+        await using var data = await UnitToko.Tests.Procurement.SupplierDocumentPdfMatchMigrationRehearsal.CreateAsync(fixture);
         await RestoreV80Async(data.Database);
         var counters = data.Database.GetCollection<BsonDocument>("idCounters");
         await counters.InsertOneAsync(new BsonDocument { { "_id", EvidenceImageRevalidationSchemas.Requests }, { "value", 1L } });
@@ -50,7 +50,7 @@ public sealed class EvidenceImageRevalidationMigrationTests(MongoFixture fixture
     [Fact]
     public async Task Unowned_rows_cannot_be_relabelled_as_an_empty_candidate()
     {
-        await using var data = await StoreTestData.CreateAsync(fixture);
+        await using var data = await UnitToko.Tests.Procurement.SupplierDocumentPdfMatchMigrationRehearsal.CreateAsync(fixture);
         await RestoreV80Async(data.Database);
         // A new collection can be present during an interrupted DDL sequence, but
         // there is no sanctioned pre-81 writer for a retained business row.
@@ -86,7 +86,7 @@ public sealed class EvidenceImageRevalidationMigrationTests(MongoFixture fixture
     {
         var before = await SnapshotAsync(db);
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            new CollectionMigrations(db, clock).ApplyAsync());
+            UnitToko.Tests.Procurement.SupplierDocumentPdfMatchMigrationRehearsal.ApplyAsync(db, clock));
         Assert.Equal("Image revalidation migration found incompatible retained storage", error.Message);
         Assert.Equal(before.ToBson(), (await SnapshotAsync(db)).ToBson());
     }

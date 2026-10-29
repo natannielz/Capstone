@@ -30,9 +30,9 @@ internal sealed class AccountingReportTestData(AccountingBookSetupTestData setup
     internal static readonly AccountingReportReadMetadata Metadata = new(AccountingReportReadMetadata.ReportingPurpose, "synthetic-report-validation");
     internal string EndDate => AccountingCalendar.BusinessDate(Clock.UtcNow).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
     internal IMongoCollection<BsonDocument> Rows(string name) => Database.GetCollection<BsonDocument>(name);
-    internal static async Task<AccountingReportTestData> CreateAsync(MongoFixture fixture)
+    internal static async Task<AccountingReportTestData> CreateAsync(MongoFixture fixture, int? migrationTarget = null)
     {
-        var setup = await AccountingBookSetupTestData.CreateAsync(fixture);
+        var setup = await AccountingBookSetupTestData.CreateAsync(fixture, migrationTarget);
         try {
             var data = new AccountingReportTestData(setup);
             await AccountingReportTestSchema.ApplyAsync(data.Database, data.Clock);
