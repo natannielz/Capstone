@@ -444,7 +444,7 @@ async function cartAndCancellation() {
     await addToCart(pemohon, 'K5'); cancelled = await checkoutFromCart(pemohon, 'K5');
     // F-029: a buyer who may cancel has no menu entry to the cancellation page; it is reached by its address.
     console.log('GOLDEN_JOURNEY_OBSERVATION ' + JSON.stringify({ step: 'K5', cancellationInBuyerMenu: await reachesFromWorkspace(pemohon, 'Peninjauan pesanan').then(() => true, () => false) }));
-    await pemohon.page.goto(origin.origin + '/ordering/reviews'); await pemohon.page.getByRole('button', { name: 'Pembatalan pesanan', exact: true }).click();
+    await openCancellationReviews(pemohon);
     await pemohon.page.getByRole('button', { name: new RegExp('^Tinjau pesanan ' + cancelled.order) }).click();
     const panel = pemohon.page.getByRole('region', { name: 'Tinjauan keputusan', exact: true });
     await panel.getByLabel('Catatan peninjauan', { exact: true }).fill('Kebutuhan cabang dibatalkan');
@@ -457,6 +457,14 @@ async function cartAndCancellation() {
   return { cancelled: cancelled.order };
 }
 
+// The review page shows its view tabs only when the account has 2+ views (a3efa6d4); a cancel-only buyer lands on Cancellation.
+async function openCancellationReviews(actor) {
+  await actor.page.goto(origin.origin + '/ordering/reviews');
+  await actor.page.getByRole('button', { name: 'Muat ulang sesi dan akses', exact: true }).waitFor();
+  const tab = actor.page.getByRole('button', { name: 'Pembatalan pesanan', exact: true });
+  if (await tab.count()) await tab.click();
+}
+
 // F-030: after a first order from the keranjang, a second order from the keranjang can be submitted, and the store can
 // reject its part of it (PTK-02).
 async function secondOrderAndStoreRejection() {
@@ -464,7 +472,7 @@ async function secondOrderAndStoreRejection() {
   let first, rejected;
   await step('S1', 'pemohon', 'places a first order from the keranjang and cancels it (its stock is released)', async () => {
     await addToCart(pemohon, 'S1'); first = await checkoutFromCart(pemohon, 'S1');
-    await pemohon.page.goto(origin.origin + '/ordering/reviews'); await pemohon.page.getByRole('button', { name: 'Pembatalan pesanan', exact: true }).click();
+    await openCancellationReviews(pemohon);
     await pemohon.page.getByRole('button', { name: new RegExp('^Tinjau pesanan ' + first.order) }).click();
     const panel = pemohon.page.getByRole('region', { name: 'Tinjauan keputusan', exact: true });
     await panel.getByLabel('Catatan peninjauan', { exact: true }).fill('Diganti pesanan baru');
