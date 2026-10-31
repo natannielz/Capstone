@@ -19,7 +19,7 @@ const reviewSchema = z.object({ challengeId: id, shipmentId: id, documentId: id,
   consentVersion: z.literal('delivery-receipt-v1'), consentText: text, lines: z.array(z.object({ skuId: id, lineRevision, skuCode: text, productName: text, definitionId: id, packageLabel: text, baseUnitCode: text,
     baseUnitsPerPackage: z.number().int().min(1).max(1000000), packages: z.number().int().min(1).max(1000000) }).strict()).min(1).max(100) }).strict()
   .refine(row => new Set(row.lines.map(line => line.skuId)).size === row.lines.length);
-function parse<T>(schema: z.ZodType<T, z.ZodTypeDef, unknown>, value: unknown): T {
+function parse<T>(schema: z.ZodType<T, unknown>, value: unknown): T {
   try { const result = schema.safeParse(value); if (result.success) return result.data; } catch { /* A malformed numeric field is an invalid response as well. */ }
   throw new AccessFailure(502, 'shipment_receipt_response_invalid');
 }

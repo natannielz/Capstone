@@ -7,7 +7,8 @@ import { parsePaymentSupplement, paymentSupplementOwner, paymentSupplementOwnerK
 import { pdfDocumentOcrOwnerKey } from '../documents/pdf-document-ocr-client';
 import type { PaymentSupplementObservation } from './PaymentSupplementReviewPanel';
 
-export const correctionFields = ['amount', 'currency', 'transfer_date', 'transfer_time', 'recipient', 'account', 'bank', 'reference'] as const;
+import { correctionFields } from './payment-correction-fields';
+export { correctionFields };
 const id = z.string().refine(value => /^[1-9][0-9]{0,18}$(?![\s\S])/.test(value) && BigInt(value) <= BigInt('9223372036854775807'));
 const revision = z.union([z.literal('0'), id]);
 const text = (limit: number) => z.string().min(1).max(limit).refine(value => value === value.trim() && !/[\p{Cc}\p{Cf}]/u.test(value));

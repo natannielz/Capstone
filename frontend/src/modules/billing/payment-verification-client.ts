@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { createUnitTokoClient, RequestNotSentError } from '../../api/client';
 import { AccessFailure } from '../administration/workflow';
-import { correctionFields } from './payment-correction-client';
+import { correctionFields } from './payment-correction-fields';
 import type { PaymentDraft } from './payment-client';
 
 const id = z.string().refine(value => /^[1-9][0-9]{0,18}$(?![\s\S])/.test(value) && BigInt(value) <= BigInt('9223372036854775807'));
