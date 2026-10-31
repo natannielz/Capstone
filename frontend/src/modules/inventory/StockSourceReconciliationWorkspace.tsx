@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { RequestNotSentError } from '../../api/client';
 import { createIdentityGateway } from '../identity/identity-client';
-import { IdentityFailure, sessionTiming, type IdentitySession } from '../identity/identity-workflow';
+import { IdentityFailure, sessionNow, sessionTiming, type IdentitySession } from '../identity/identity-workflow';
 import { createAccessGateway } from '../administration/access-client';
 import { AccessFailure, MutationLedger, accessMessage } from '../administration/workflow';
 import { OperationRecovery, useOperationRecovery } from '../administration/OperationRecovery';
@@ -102,6 +102,8 @@ function ReconciliationDesk({ account, fresh, now, onDenied }: { account: Accoun
   }, [gateway, gate, account.actorId, revision, current, clearScope, onDenied, canRead]);
   useEffect(() => { if (review) reviewHeading.current?.focus(); }, [review]);
   useEffect(() => { if (!busy && !mode && recovery.entries.length === 0) return; const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ''; }; window.addEventListener('beforeunload', warn); return () => window.removeEventListener('beforeunload', warn); }, [busy, mode, recovery.entries.length]);
+  // Read at the moment of the action: the ticked `now` prop can lag real time by a second.
+  const clock = useCallback(() => sessionNow(account.session, performance.now() - account.observedAt), [account]);
   function mutations() { return ledger.current ??= new MutationLedger(() => `${keyPrefix.current}.${crypto.randomUUID()}`); }
   async function work(action: (valid: () => boolean, signal: AbortSignal) => Promise<void>) {
     if (!current() || locked || pending.current) return; pending.current = true; setBusy(true); setError(null); setNotice('');
@@ -124,11 +126,11 @@ function ReconciliationDesk({ account, fresh, now, onDenied }: { account: Accoun
     event.preventDefault(); if (!baseline || !mode || !fresh || commandLocked || review) return;
     await work(async (valid, signal) => {
       const observation = enteredObservation(baseline);
-      if (mode === 'propose') { const command = prepareSourceReconciliation(account.actorId, baseline, observation, reason, now); if (valid()) { setReview({ kind: 'propose', baseline, command }); setConfirmed(false); } }
-      else if (saved) { const shown = await gateway.previewDecision(account.actorId, saved, 'confirm', observation, signal); if (!valid()) return; const eligible = shown.canConfirm && shown.baseline && reconciliationObservationCurrent(shown.baseline, saved.proposal.observation, now) && reconciliationObservationCurrent(shown.baseline, observation, now); const command = eligible ? prepareSourceReconciliationDecision(account.actorId, saved, shown, observation, reason, now) : null; setReview({ kind: 'decide', preview: shown, observation, command }); setConfirmed(false); }
+      if (mode === 'propose') { const command = prepareSourceReconciliation(account.actorId, baseline, observation, reason, clock()); if (valid()) { setReview({ kind: 'propose', baseline, command }); setConfirmed(false); } }
+      else if (saved) { const shown = await gateway.previewDecision(account.actorId, saved, 'confirm', observation, signal); if (!valid()) return; const eligible = shown.canConfirm && shown.baseline && reconciliationObservationCurrent(shown.baseline, saved.proposal.observation, clock()) && reconciliationObservationCurrent(shown.baseline, observation, clock()); const command = eligible ? prepareSourceReconciliationDecision(account.actorId, saved, shown, observation, reason, clock()) : null; setReview({ kind: 'decide', preview: shown, observation, command }); setConfirmed(false); }
     });
   }
-  async function reject() { if (!saved || saved.decision || !canDecide || !fresh || commandLocked || review) return; await work(async (valid, signal) => { const shown = await gateway.previewDecision(account.actorId, saved, 'reject', null, signal), command = prepareSourceReconciliationDecision(account.actorId, saved, shown, null, reason, now); if (valid()) { setReview({ kind: 'decide', preview: shown, observation: null, command }); setConfirmed(false); } }); }
+  async function reject() { if (!saved || saved.decision || !canDecide || !fresh || commandLocked || review) return; await work(async (valid, signal) => { const shown = await gateway.previewDecision(account.actorId, saved, 'reject', null, signal), command = prepareSourceReconciliationDecision(account.actorId, saved, shown, null, reason, clock()); if (valid()) { setReview({ kind: 'decide', preview: shown, observation: null, command }); setConfirmed(false); } }); }
   async function save() {
     if (!review || !review.command || !confirmed || !fresh || commandLocked || (review.kind === 'propose' ? !canPropose : !canDecide)) return;
     const frozen = review, action = frozen.kind === 'propose' ? 'propose' : frozen.preview.decision;

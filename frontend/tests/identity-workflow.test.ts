@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseIdentitySession, loginFields, stepUpFields, identityMessage, IdentityFailure, sessionTiming, identityDestinations } from "../src/modules/identity/identity-workflow";
+import { parseIdentitySession, loginFields, stepUpFields, identityMessage, IdentityFailure, sessionTiming, sessionNow, identityDestinations } from "../src/modules/identity/identity-workflow";
 import { createIdentityGateway } from "../src/modules/identity/identity-client";
 
 const session = { authenticated: true, account: { userId: "9007199254740993", displayName: "Operator Tebet", verifiedEmail: "operator@example.test" }, factorCompletedAt: "2026-09-28T02:00:00Z", freshFactorUntil: "2026-09-28T02:05:00Z", idleExpiresAt: "2026-09-28T02:30:00Z", absoluteExpiresAt: "2026-09-28T10:00:00Z", serverTime: "2026-09-28T02:01:00Z", stepUpOperations: ["access.approve"] };
@@ -77,4 +77,10 @@ test("signing in from a public product returns to that product's priced page, an
   assert.equal(identityReturnPath("/shop/00000065-0000-4000-8000-000000000101"), "/shop/00000065-0000-4000-8000-000000000101");
   for (const forged of ["/shop/00000065-0000-4000-8000-000000000101/x", "/shop/../identity/account", "/shop/ABCDEF65-0000-4000-8000-000000000101", "/shop/1"])
     assert.equal(identityReturnPath(forged), "/workspace");
+});
+
+test("sessionNow follows the elapsed time exactly, so an action sees the clock of that instant, not a ticked one", () => {
+  const parsed = parseIdentitySession(session), base = Date.parse(parsed.serverTime);
+  assert.equal(sessionNow(parsed, 1_250), base + 1_250);
+  assert.equal(sessionNow(parsed, -5), base);
 });
