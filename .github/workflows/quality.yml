@@ -1,8 +1,9 @@
 name: Focused quality
 
 on:
-  # Implementation is verified locally; run every preserved job manually on
-  # the integrated candidate. Repository protection is managed separately.
+  # The changes job picks affected checks from the PR diff; Release validation stays manual.
+  pull_request:
+    branches: [pc-sync, main]
   workflow_dispatch:
 
 permissions:
