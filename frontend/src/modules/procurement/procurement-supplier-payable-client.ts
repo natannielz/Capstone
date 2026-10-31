@@ -19,8 +19,8 @@ const result = z.union([proposalResult, decisionResult]);
 const recovery = z.object({ state: z.enum(['not_confirmed', 'confirmed']), result: result.nullable() }).strict().refine(value => (value.state === 'confirmed') === (value.result !== null));
 const purpose = 'supplier-payable-review';
 const invalid = (): never => { throw new AccessFailure(502, 'supplier_payable_response_invalid'); };
-function parse<T>(schema: z.ZodType<T, z.ZodTypeDef, unknown>, value: unknown): T { try { const checked = schema.safeParse(value); return checked.success ? checked.data : invalid(); } catch { return invalid(); } }
-function entered<T>(schema: z.ZodType<T, z.ZodTypeDef, unknown>, value: unknown): T { try { const checked = schema.safeParse(value); if (checked.success) return checked.data; } catch { /* Reject malformed input before dispatch. */ } throw new RequestNotSentError(400, 'procurement_supplier_payable_invalid'); }
+function parse<T>(schema: z.ZodType<T, unknown>, value: unknown): T { try { const checked = schema.safeParse(value); return checked.success ? checked.data : invalid(); } catch { return invalid(); } }
+function entered<T>(schema: z.ZodType<T, unknown>, value: unknown): T { try { const checked = schema.safeParse(value); if (checked.success) return checked.data; } catch { /* Reject malformed input before dispatch. */ } throw new RequestNotSentError(400, 'procurement_supplier_payable_invalid'); }
 function data<T>(value: { data?: T; error?: unknown; response: Response }): T { if (!value.response.ok || value.data === undefined) throw new AccessFailure(value.response.status, (value.error as { code?: string })?.code ?? 'request_failed'); return value.data; }
 const headers = (actorId: string) => ({ 'X-Expected-Actor-Id': parse(id, actorId) });
 const same = (left: unknown, right: unknown) => JSON.stringify(left) === JSON.stringify(right);

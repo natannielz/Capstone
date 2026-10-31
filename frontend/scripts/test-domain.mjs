@@ -13,5 +13,6 @@ const outputs=await Promise.all(files.map(async file=>{
 }));
 // Retained full-workflow regressions run explicitly in full mode; pilot tests check the pure allowlist.
 const testEnv={...process.env,NODE_ENV:"test",NEXT_PUBLIC_UNIT_TOKO_RELEASE:"full"};
-const result=spawnSync(process.execPath,["--test",...outputs],{stdio:"inherit",env:testEnv});
+// A leaked handle in one test kept the runner alive after the summary and hung CI until timeout.
+const result=spawnSync(process.execPath,["--test","--test-force-exit",...outputs],{stdio:"inherit",env:testEnv});
 process.exitCode=result.status??1;
