@@ -207,7 +207,8 @@ flowchart LR
 ```
 
 - Perbaikan kecil, dokumen dan konfigurasi boleh ikut di branch yang sedang berjalan.
-- **Focused quality** ([quality.yml](.github/workflows/quality.yml)) berjalan pada setiap pull request ke `pc-sync` dan `main`; job dipilih menurut path yang berubah (frontend, backend, otoritas transaksional, supply chain).
+- **Focused quality** ([quality.yml](.github/workflows/quality.yml)) berjalan pada setiap pull request ke `pc-sync` dan `main` (sekitar 5 menit); job dipilih menurut path yang berubah (frontend, backend, supply chain).
+- Regresi otoritas transaksional (uji MongoDB, lebih dari 30 menit) tidak berjalan pada PR. Bila PR mengubah path identitas/otorisasi/stok, CI memberi peringatan; jalankan Focused quality secara manual (`workflow_dispatch`) di branch itu sebelum merge.
 - **Release validation** ([release-validation.yml](.github/workflows/release-validation.yml)) hanya dijalankan manual.
 - `main` men-deploy ke Vercel produksi, jadi merge `pc-sync` → `main` hanya atas keputusan pemilik.
 

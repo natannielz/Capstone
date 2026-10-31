@@ -9,7 +9,8 @@
 ## Branches and PRs
 - Big slices go on `feat/<short-name>` branches, one PR into `pc-sync` (not `main`). Small fixes, docs and config ride along on the current branch.
 - `pc-sync` → `main` only when I say so: merging `main` deploys to Vercel production.
-- CI: Focused quality (`.github/workflows/quality.yml`) runs on every PR into `pc-sync` and `main`; Release validation stays manual.
+- CI: Focused quality (`.github/workflows/quality.yml`) runs on every PR into `pc-sync` and `main` (~5 min); Release validation stays manual.
+- Its Mongo authority regression (30+ min) runs only on manual dispatch. When a PR warns "Authority regression not run", dispatch Focused quality on that branch before merging.
 
 ## Progress
 - Progress is features passing end-to-end in `docs/readiness.json` (`id`, `journey`, `steps[]`, `passes`).
