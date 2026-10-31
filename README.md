@@ -218,7 +218,6 @@ flowchart LR
 | Instalasi, API lokal, regenerasi kontrak | [docs/runbooks/local-development.md](docs/runbooks/local-development.md) |
 | Pilot lokal (Windows) | [docs/runbooks/local-pilot-release1.md](docs/runbooks/local-pilot-release1.md) |
 | OCR lokal | [docs/runbooks/local-document-processing.md](docs/runbooks/local-document-processing.md) |
-| Build rilis | [docs/runbooks/release-build.md](docs/runbooks/release-build.md) |
 | Alur per peran | [docs/runbooks/user-workflows.md](docs/runbooks/user-workflows.md) |
 | Runbook lain (pembayaran, pengadaan, gudang, restore, …) | [docs/runbooks/](docs/runbooks/) |
 
