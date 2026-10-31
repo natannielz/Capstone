@@ -1,70 +1,241 @@
-# Unit Toko — platform operasional koperasi BNI
+<p align="center">
+  <img src="frontend/src/app/icon.svg" alt="Logo Unit Toko" width="88" height="88">
+</p>
 
-Unit Toko melayani pemesanan cabang BNI dan akun bisnis yang disetujui. Cakupan lengkapnya mencakup katalog/kemasan, persediaan, pengadaan, pengiriman dan bukti penerimaan, invoice, bukti pembayaran/OCR, peninjauan bank, alokasi, retur/refund, peran, notifikasi, laporan dan tutup periode. Migrasi penuh masih berjalan; hasil rapat/manual dan seluruh [97 butir laporan](docs/requirements/unit-toko-report-2026-09-28.md) tetap berlaku.
+<h1 align="center">Unit Toko</h1>
 
-Status dan pekerjaan tersisa dicatat dalam satu [ledger kemajuan, checklist dan pemetaan persyaratan](docs/quality/production-progress.md). [Urutan pelaksanaan M0–M6](docs/superpowers/plans/2026-09-29-accelerated-completion.md) tetap menjadi acuan; checklist Release 1 yang selesai tidak berarti proyek lengkap selesai.
+<p align="center">
+  Platform operasional toko koperasi untuk cabang BNI dan akun bisnis yang disetujui.<br>
+  <a href="https://github.com/natannielz/Capstone/actions/workflows/quality.yml"><img src="https://github.com/natannielz/Capstone/actions/workflows/quality.yml/badge.svg?event=pull_request" alt="Status CI Focused quality"></a>
+</p>
 
-## Status yang dapat digunakan
+## Apa itu Unit Toko
 
-| Lingkungan | Batas yang sudah diketahui |
+Unit Toko menggantikan pemesanan lewat WhatsApp, telepon dan berkas terpisah dengan satu aplikasi: katalog dan kemasan, keranjang dan pesanan cabang, persetujuan, stok, pengadaan ke pemasok, pengiriman dengan Surat Jalan bernomor, bukti penerimaan, invoice, bukti pembayaran dengan bantuan OCR, peninjauan bank dan alokasi, retur/refund, laporan dan tutup periode. Cakupan lengkapnya adalah [97 butir laporan](docs/requirements/unit-toko-report-2026-09-28.md) dan [spesifikasi produksi](docs/requirements/unit-toko-production.md).
+
+### Siapa yang memakai (persona)
+
+Akses diberikan dari enam templat peran ([izin](docs/architecture/permissions.md)); persetujuan selalu oleh orang yang berbeda dari pengaju.
+
+| Persona | Pekerjaan utama |
 | --- | --- |
-| Pilot lokal Release 1 | Browser → API .NET → MongoDB telah diverifikasi untuk akun cabang, katalog/kemasan, permintaan, keputusan petugas dan riwayat. Bukti lokal juga mencakup isolasi cabang, pemulihan respons hilang, pemeliharaan katalog serta persistensi setelah restart. Identitas dan data contoh bersifat sintetis. |
-| [Frontend Vercel](https://unit-toko-bni.vercel.app/) | Frontend dipublikasikan sebagai pratinjau dengan pemberitahuan layanan belum tersedia. Publikasi dan tampilan publik tercatat dalam ledger; koneksi akun/API bisnis hosted belum diterima. |
-| Sistem produksi lengkap | Belum diterima. Hosted API/worker, MongoDB, Auth0, penyimpanan privat, kebijakan bisnis, migrasi/restore dan pilot pengguna sebenarnya masih memerlukan koneksi atau penerimaan yang sesuai. |
+| Buyer (cabang / akun bisnis) | Katalog, keranjang, pesanan, konfirmasi penerimaan, invoice, bukti bayar, kasus retur |
+| Approver cabang | Menyetujui permintaan dan pesanan sesuai kebijakan belanja cabang |
+| Store Staff / gudang | Penerimaan barang, hitung stok, packing, dispatch, persiapan pengadaan |
+| Store Head | Menerima pesanan, persetujuan pengadaan/stok, penugasan kurir |
+| Courier | Pengiriman yang ditugaskan, percobaan antar dan bukti serah terima |
+| Finance (paket izin terpisah) | Rilis invoice, pemeriksaan pembayaran, rekonsiliasi bank, utang pemasok, laporan |
+| System Admin | Undangan, usulan akses, pengaturan teknis; tanpa wewenang transaksi keuangan |
+| Auditor (paket baca saja) | Membaca laporan dan jejak audit tanpa mengubah data |
 
-Release 1 mencakup katalog dan permintaan cabang. **“Diterima untuk diproses” tidak mereservasi stok, menetapkan harga, membuat invoice, menerima pembayaran atau menjanjikan pengiriman.** Foto editorial bukan foto produk katalog yang telah disetujui. Lihat [cakupan dan bukti Release 1](docs/releases/release-1.md).
+### Status saat ini
 
-Pilot yang dipertahankan tetap memakai Release 1 dengan skema migrasi **78**. Pekerjaan sistem penuh, termasuk mixed-receipt costing dan migrasi berikutnya, berjalan pada validasi terisolasi; tidak dipasang ke pilot hanya karena build berhasil. [Ledger utama](docs/quality/production-progress.md) membedakan source kandidat, hasil terminal dan penerimaan per persyaratan.
+Kemajuan diukur dengan journey end-to-end di [docs/readiness.json](docs/readiness.json): **3 dari 15 journey lulus** (31 Oktober 2026). Catatan harian ada di [docs/progress.md](docs/progress.md).
 
-## Struktur dan teknologi
+| ID | Journey | Status |
+| --- | --- | --- |
+| J01 | Tamu menjelajah katalog contoh lalu masuk | belum |
+| J02 | Buyer mengisi keranjang dan checkout | **lulus** |
+| J03 | Pesanan → dispatch → penerimaan lintas persona | **lulus** |
+| J04 | Rilis invoice → pembayaran buyer terverifikasi | belum |
+| J05 | Permintaan pengadaan → barang diterima dan dinilai | belum |
+| J06 | Usulan substitusi dan persetujuan buyer | **lulus** |
+| J07 | Retur, penggantian, kredit dan refund | belum |
+| J08 | Permintaan cabang, kebijakan belanja dan persetujuan | belum |
+| J09 | Rekening koran, penerimaan bank dan rekonsiliasi | belum |
+| J10 | Laporan dan auditor baca saja | belum |
+| J11 | Workspace staf: satu shell, satu antrean | belum |
+| J12 | Akun, sign-in, delegasi dan tinjauan akses | belum |
+| J13 | Katalog, identifier, foto dan harga dikelola staf | belum |
+| J14 | Gudang: pemindaian, sumber stok dan hitung stok | belum |
+| J15 | Operasi: rilis, pemantauan dan restore | belum |
 
-| Direktori | Tanggung jawab |
-| --- | --- |
-| [frontend/](frontend/) | Next.js 16, React dan TypeScript; halaman, komponen, [modul UI](frontend/src/modules/), klien API dan pemeriksaan frontend |
-| [backend/](backend/) | C#/.NET 10 API dan worker, modul bisnis, MongoDB transaksional, migrasi, bukti privat, kontrak API dan alat pilot |
-| [docs/](docs/) | Persyaratan, arsitektur, runbook operator, bukti penerimaan, rencana pelaksanaan dan deployment |
+[Frontend di Vercel](https://unit-toko-bni.vercel.app/) masih berupa pratinjau; API, worker, MongoDB dan Auth0 hosted belum diterima untuk produksi. Identitas dan data contoh bersifat sintetis.
 
-Identitas produksi disiapkan untuk **Auth0**, verifikasi email, MFA, sesi server dan izin sesuai lingkup; penerimaan tenant sebenarnya masih terbuka. Dokumen keuangan memakai penyimpanan privat dengan akses terotorisasi. OCR memakai satu mesin lokal yang dipatok: **Tesseract 5.5.3 / tesserocr 2.11.0**, model `ind+eng`. [OCR gambar dan PDF pemasok](docs/pdf-document-ocr.md) memiliki checkpoint lokal; pembayaran tetap memerlukan bukti gambar, dan OCR dokumen pengiriman belum diterima. Hasil OCR adalah saran untuk pemeriksaan manusia, bukan persetujuan atau bukti uang diterima.
+## Teknologi dan bahasa
 
-**Legacy sudah dihapus (20 Oktober 2026).** Backend Node/Drizzle lama (`backend/legacy`), aplikasi frontend lama beserta lapisan domainnya, uji regresi legacy, dan folder `website/` telah dihapus dari repositori. Seluruh layar yang dipakai berjalan di atas API .NET dan MongoDB; tautan lama (`/cart`, `/checkout`, `/login`, `/account`) hanya mengalihkan ke layar yang dipelihara. Riwayatnya tetap tersedia di Git.
+Diambil dari kode: [backend/global.json](backend/global.json), berkas `*.csproj`, [frontend/package.json](frontend/package.json) dan [frontend/vercel.json](frontend/vercel.json).
 
-Profil bawaan tetap `release1`: frontend `NEXT_PUBLIC_UNIT_TOKO_RELEASE=release1`, API `Release__Profile=release1`. Halaman dan API di luar cakupan pilot dibatasi. Profil `full` hanya untuk validasi terisolasi sampai prasyaratnya diterima; jangan mengaktifkannya pada pilot/deployment untuk melewati batas tersebut. Build frontend penuh memakai `.next-full`, sedangkan pilot memakai `.next`. Build dan pemeriksaan tipe tetap dijalankan berurutan karena Next memperbarui berkas tipe bersama.
+| Lapisan | Teknologi | Bahasa |
+| --- | --- | --- |
+| Frontend | Next.js 16.4, React 19.3, Tailwind CSS 4, Base UI / Radix / shadcn, React Hook Form + Zod, `openapi-fetch` | TypeScript, CSS |
+| Backend API dan worker | ASP.NET Core / .NET SDK 10.0.401 (`UnitToko.Api`, `UnitToko.Worker`, `UnitToko.Modules`, `UnitToko.Platform`), OpenAPI | C# |
+| Database | MongoDB replica set dengan transaksi (MongoDB.Driver 3.12; CI memakai `mongo:8.2.12`) | — |
+| Identitas | Auth0 lewat OpenID Connect, sesi server dengan cookie opak, Auth0 Actions | C#, JavaScript |
+| Dokumen dan OCR | Tesseract 5.5.3 / tesserocr 2.11.0 (model `ind+eng`) sebagai saran untuk pemeriksa manusia, preprocessing PDF, Magick.NET untuk decode gambar, ClamAV (`clamd`) untuk pemindaian berkas | Python, C# |
+| Penyimpanan bukti | Penyimpanan privat di sistem berkas lokal yang diperiksa izinnya ([runbook](docs/runbooks/private-evidence-storage.md)) | C# |
+| Pengujian | xUnit, `Microsoft.AspNetCore.Mvc.Testing`, Playwright (uji browser dari xUnit dan skrip `frontend/scripts`), uji unit frontend | C#, TypeScript, JavaScript |
+| Deployment dan CI | Vercel (frontend, region `sin1`, otomatis hanya dari `main`), GitHub Actions | YAML |
+| Skrip operasi | Pilot lokal, restore drill, build rilis | PowerShell |
 
-## Membuka pilot lokal
+Tidak ada WebSocket/SignalR: tampilan memuat ulang data dari API.
 
-Pilot persisten ini khusus Windows: PowerShell 7, Node.js 24, SDK sesuai [backend/global.json](backend/global.json), MongoDB yang telah diperiksa dan Microsoft Edge. Ikuti [penyiapan dependensi, build dan jalur alat](docs/runbooks/local-pilot-release1.md) terlebih dahulu. Setelah build Release 1 tersedia, jalankan dari root repositori:
+## Arsitektur sistem
 
-```powershell
-./backend/tools/UnitToko.LocalPilot/start-local-pilot.ps1 -MongoPath 'C:\lokasi\mongod.exe'
+```mermaid
+flowchart LR
+    user["Pengguna<br/>(buyer, staf, kurir, finance)"] --> web["Frontend Next.js<br/>(Vercel)"]
+    web -- "rewrite /api/v1 dan /auth" --> api["UnitToko.Api<br/>ASP.NET Core"]
+    api <-- "OIDC" --> auth0["Auth0"]
+    api <--> mongo[("MongoDB replica set<br/>transaksi, outbox, job")]
+    worker["UnitToko.Worker"] <--> mongo
+    worker --> ocr["OCR lokal<br/>Tesseract + preprocessing PDF"]
+    worker --> clam["ClamAV clamd"]
+    api --> store[("Penyimpanan bukti privat")]
+    worker --> store
+    auth0 -- "event keamanan" --> api
 ```
 
-Ganti jalur tersebut dengan executable sebenarnya; parameter `-DotnetPath` dan `-NodePath` tersedia jika diperlukan. [Launcher](backend/tools/UnitToko.LocalPilot/start-local-pilot.ps1) tidak mengunduh alat atau membuat build diam-diam. Jangan membangun ulang `.next` yang sedang dipakai pilot.
+## Proses bisnis
 
-Setelah muncul **SYNTHETIC LOCAL PILOT**, jalankan `tmp/pilot/release1/open-browser.ps1` di jendela PowerShell 7 lain. Pintasan memakai Edge khusus pilot, loopback dan pin sertifikat. Buka `tmp/pilot/release1/ACCOUNTS-PRIVATE.txt` **secara privat** untuk akun `pemohon-a`, `pemohon-b` atau `petugas`, password acak dan kode faktor simulasi masing-masing. Keluar sebelum berganti akun; faktor simulasi ini bukan enrollment MFA/Auth0 sebenarnya.
+Diturunkan dari [laporan 28 September 2026](docs/requirements/unit-toko-report-2026-09-28.md), [spesifikasi produksi](docs/requirements/unit-toko-production.md) dan [catatan sumber](docs/source-material/README.md). Diagram memakai gaya BPMN: lingkaran = mulai/selesai, belah ketupat = gateway, kolom = lajur peran.
 
-Permintaan dan perubahan katalog tersimpan di MongoDB lokal terpisah. `Ctrl+C` menghentikan API/Next; MongoDB dan state privat tetap dipertahankan. Jalankan launcher yang sama untuk melanjutkan. Jangan membagikan, memasukkan ke Git, menghapus atau memisahkan database dari `tmp/pilot/release1` dan berkas kuncinya. Prosedur lengkap serta batas akun sintetis tersedia dalam panduan pilot.
+### AS-IS (proses lama)
 
-## Panduan pengembangan dan operasi
+```mermaid
+flowchart TB
+    subgraph cabang["Cabang BNI"]
+        a0(("Mulai")) --> a1["Pesan lewat WhatsApp / telepon"]
+        a9["Terima barang, kadang tanpa Surat Jalan"]
+    end
+    subgraph toko["Unit Toko"]
+        a2["Catat pesanan manual"] --> a3{"Stok cukup?"}
+        a3 -- "tidak" --> a4["Ganti barang tanpa konfirmasi buyer"]
+        a3 -- "ya" --> a5["Siapkan dan kirim"]
+        a4 --> a5
+    end
+    subgraph keu["Keuangan"]
+        a6["Invoice terlambat, posting tertunda 1–2 minggu"] --> a7["Tagih lewat email / telepon"]
+        a7 --> a8{"Transfer diterima?"}
+        a8 -- "belum, > 30 hari" --> a7
+        a8 -- "ya" --> a10(("Selesai"))
+    end
+    a1 --> a2
+    a5 --> a9
+    a9 --> a6
+```
 
-| Kebutuhan | Mulai dari sini |
+Masalah utama: pesanan tercecer di chat, substitusi tanpa persetujuan, Surat Jalan hilang, retur yang sulit, invoice terlambat dan penagihan lebih dari 30 hari.
+
+### TO-BE (dengan Unit Toko)
+
+```mermaid
+flowchart TB
+    subgraph cabang["Buyer / approver cabang"]
+        b0(("Mulai")) --> b1["Pilih katalog dan kemasan, isi keranjang"]
+        b1 --> b2["Kirim pesanan"]
+        b2 --> b3{"Perlu persetujuan cabang?"}
+        b3 -- "ya" --> b4["Approver menyetujui"]
+        b9{"Ada substitusi?"}
+        b9 -- "ya" --> b10["Buyer setuju / tolak"]
+        b12["Konfirmasi penerimaan"]
+        b15["Unggah bukti bayar, OCR memberi saran"]
+    end
+    subgraph toko["Toko / gudang / kurir"]
+        b5["Store head menerima pesanan"] --> b6["Reservasi dan rilis stok"]
+        b6 --> b7["Packing, Surat Jalan bernomor"]
+        b7 --> b11["Kurir mengantar"]
+    end
+    subgraph keu["Finance"]
+        b13["Usulan rilis invoice, diputuskan orang kedua"] --> b14["Invoice terbit bernomor"]
+        b16["Pemeriksa memverifikasi dengan bukti bank"] --> b17["Alokasi ke invoice"]
+        b17 --> b18(("Selesai"))
+    end
+    b3 -- "tidak" --> b5
+    b4 --> b5
+    b6 --> b9
+    b9 -- "tidak" --> b7
+    b10 --> b7
+    b11 --> b12
+    b12 --> b13
+    b14 --> b15
+    b15 --> b16
+```
+
+## Journey utama
+
+### Pesanan → dispatch → penerimaan (J03)
+
+```mermaid
+flowchart LR
+    o1["Buyer kirim pesanan<br/>dari keranjang"] --> o2["Approver cabang meninjau"]
+    o2 --> o3["Store head menerima<br/>di meja pesanan"]
+    o3 --> o4["Stok direservasi dan dirilis<br/>dari sumber stok"]
+    o4 --> o5["Gudang menyiapkan,<br/>Surat Jalan bernomor"]
+    o5 --> o6["Kurir ditugaskan,<br/>pengiriman berangkat"]
+    o6 --> o7["Buyer konfirmasi penerimaan"]
+    o7 --> o8["Timeline pesanan<br/>menampilkan setiap nomor"]
+```
+
+### Invoice → pembayaran (J04)
+
+```mermaid
+flowchart LR
+    i1["Finance mengusulkan<br/>rilis invoice"] --> i2{"Orang kedua<br/>memutuskan"}
+    i2 -- "tolak" --> i1
+    i2 -- "setuju" --> i3["Invoice terbit bernomor"]
+    i3 --> i4["Buyer unggah bukti bayar<br/>(kamera / berkas)"]
+    i4 --> i5["OCR menyarankan nominal<br/>dan referensi"]
+    i5 --> i6["Buyer konfirmasi dan kirim"]
+    i6 --> i7{"Pemeriksa pembayaran"}
+    i7 -- "tolak" --> i4
+    i7 -- "verifikasi" --> i8["Alokasi ke invoice,<br/>status lunas"]
+```
+
+### Pengadaan (J05)
+
+```mermaid
+flowchart LR
+    p1["Toko mengajukan<br/>permintaan pengadaan"] --> p2["Disetujui dan didanai"]
+    p2 --> p3["Purchase order SP-…<br/>ke pemasok"]
+    p3 --> p4["Uang muka / pencairan<br/>dicatat"]
+    p4 --> p5["Barang diterima<br/>dan diperiksa mutu"]
+    p5 --> p6["Menjadi stok<br/>dan dinilai"]
+    p6 --> p7["Utang pemasok dan<br/>penyelesaian bank dicatat"]
+```
+
+## Alur branch, PR dan CI
+
+```mermaid
+flowchart LR
+    f["feat/nama-slice<br/>(slice besar)"] -- "pull request" --> ci1{"CI Focused quality"}
+    ci1 -- "hijau + review" --> pc["pc-sync"]
+    pc -- "PR hanya atas<br/>keputusan pemilik" --> ci2{"CI Focused quality"}
+    ci2 -- "hijau" --> m["main"]
+    m -- "deploy otomatis" --> v["Vercel produksi"]
+    rv["Release validation<br/>(manual)"] -.-> pc
+```
+
+- Perbaikan kecil, dokumen dan konfigurasi boleh ikut di branch yang sedang berjalan.
+- **Focused quality** ([quality.yml](.github/workflows/quality.yml)) berjalan pada setiap pull request ke `pc-sync` dan `main` (sekitar 5 menit); job dipilih menurut path yang berubah (frontend, backend, supply chain).
+- Regresi otoritas transaksional (uji MongoDB, lebih dari 30 menit) tidak berjalan pada PR. Bila PR mengubah path identitas/otorisasi/stok, CI memberi peringatan; jalankan Focused quality secara manual (`workflow_dispatch`) di branch itu sebelum merge.
+- **Release validation** ([release-validation.yml](.github/workflows/release-validation.yml)) hanya dijalankan manual.
+- `main` men-deploy ke Vercel produksi, jadi merge `pc-sync` → `main` hanya atas keputusan pemilik.
+
+## Menjalankan secara lokal
+
+| Kebutuhan | Panduan |
 | --- | --- |
-| Kebutuhan dan sumber asli | [Spesifikasi](docs/requirements/unit-toko-production.md), [manual/diagram/rapat dan riwayat](docs/source-material/README.md), [keputusan bisnis](docs/quality/report-decisions.md) |
-| Setup dan kontrak API | [Pengembangan lokal](docs/runbooks/local-development.md), [skrip frontend](frontend/package.json), [kontrak API](backend/contracts/) |
-| Panduan per peran | [Alur requester, staf, gudang, kurir, finance, administrator dan operator; hasil terhenti serta pemulihan](docs/runbooks/user-workflows.md) |
-| Modul dan alur terpelihara | [Identitas](frontend/src/modules/identity/README.md), [katalog](frontend/src/modules/catalog/README.md), [ordering](frontend/src/modules/ordering/README.md), [fulfillment](frontend/src/modules/fulfillment/README.md), [purchase order](docs/runbooks/purchase-orders.md), [alokasi pembayaran](docs/runbooks/payment-allocation.md) |
-| Keamanan dan bukti privat | [Izin](docs/architecture/permissions.md), [otoritas orang](docs/architecture/person-authority.md), [hosting Auth0/sesi](docs/runbooks/identity-hosting.md), [admission bukti](docs/runbooks/private-evidence-admission.md), [penyimpanan privat](docs/runbooks/private-evidence-storage.md) |
-| OCR lokal | [Engine, preprocessing dan kebijakan worker](docs/runbooks/document-processing.md), [konfigurasi lokal](docs/runbooks/local-document-processing.md), [invoice/SPH pemasok](docs/runbooks/supplier-documents.md) |
-| Bantuan operasional dan saran pembelian | [Pencocokan pengadaan](docs/runbooks/procurement-requests.md), [anomali dan tinjauan manusia](docs/runbooks/operational-anomalies.md), [jadwal kedatangan yang diperiksa](docs/runbooks/purchase-arrival-schedules.md), [replenishment dan riwayat input](docs/runbooks/replenishment.md) |
-| Identifier, pemindaian dan tampilan pesanan | [Kode katalog dan pemindaian operasi](docs/runbooks/catalog-identifiers-and-scans.md), [filter pribadi, berbagi pilihan dan riwayat pesanan](docs/runbooks/order-views.md) |
-| Delegasi dan serah-terima | [Pengajuan/persetujuan delegasi, pengambilalihan pemeriksaan pembayaran dan pemulihan hasil asli](docs/runbooks/temporary-delegation-and-payment-handover.md) |
-| Pengujian | [Browser/API/Mongo terisolasi](docs/runbooks/stock-count-browser-rehearsal.md), [CI terfokus](.github/workflows/quality.yml), [validasi rilis lengkap](.github/workflows/release-validation.yml), [bukti dan batas hasil](docs/quality/production-progress.md) |
-| Deployment, migrasi dan restore | [Deployment Release 1](docs/runbooks/release1-deployment.md), [penerimaan produksi dan backup/restore](docs/quality/production-acceptance.md), [pemulihan akses](docs/runbooks/account-recovery.md) |
-| Seluruh backlog | [97 persyaratan asli](docs/requirements/unit-toko-report-2026-09-28.md), [traceability dan pekerjaan tersisa](docs/quality/production-progress.md#current-traceability--all-97-report-items) |
+| Instalasi, API lokal, regenerasi kontrak | [docs/runbooks/local-development.md](docs/runbooks/local-development.md) |
+| Pilot lokal (Windows) | [docs/runbooks/local-pilot-release1.md](docs/runbooks/local-pilot-release1.md) |
+| OCR lokal | [docs/runbooks/local-document-processing.md](docs/runbooks/local-document-processing.md) |
+| Alur per peran | [docs/runbooks/user-workflows.md](docs/runbooks/user-workflows.md) |
+| Runbook lain (pembayaran, pengadaan, gudang, restore, …) | [docs/runbooks/](docs/runbooks/) |
 
-Skrip frontend yang tersedia mencakup `typecheck`, `lint`, `test` dan `build`. Pemeriksaan yang menulis data memakai database terisolasi, bukan database pilot. Selama implementasi, **Focused quality** dan **Release validation** dijalankan manual; job dan pemeriksaan sebenarnya tetap dipertahankan. Jalankan CI lengkap setelah integrasi siap dan patuhi required checks sebelum merge. Hasil fixture lokal tidak membuktikan penerimaan hosted.
+### Pemeriksaan
 
-Vercel memakai root `frontend`, Node.js 24 dan [konfigurasi deployment](frontend/vercel.json) dengan Git otomatis hanya dari `main`. Publikasi frontend tidak menjalankan API/worker .NET. Peluncuran sebenarnya memerlukan ingress HTTPS/API yang disetujui, MongoDB replica set, Auth0, private storage dan operator/kebijakan bisnis, lalu verifikasi browser, izin, persistensi, worker dan restore pada koneksi sebenarnya. Push GitHub atau status Ready Vercel saja belum memenuhi gerbang itu.
+```bash
+npm --prefix frontend run typecheck
+npm --prefix frontend run lint
+npm --prefix frontend test
+```
 
-## Arsip yang tetap dipertahankan
+Uji backend dijalankan per kelas xUnit yang tepat (bukan seluruh suite) terhadap MongoDB replica set uji; lihat [pengembangan lokal](docs/runbooks/local-development.md). Uji browser memakai Playwright dari kelas `*BrowserTests`.
 
-[Kronologi progres](docs/archive/production-progress-before-consolidation-2026-10-08.md) menyimpan konteks sejarah. Instruksi akun, database, status proses dan deployment historis tidak menggantikan ledger serta panduan pilot saat ini. Sumber, bukti bisnis, data privat dan pekerjaan belum selesai dipertahankan; hasil build obsolete yang dihapus dicatat beserta backup dalam ledger.
+## Struktur repositori
+
+| Direktori | Isi |
+| --- | --- |
+| [frontend/](frontend/) | Aplikasi Next.js: halaman, [modul UI](frontend/src/modules/), klien API hasil generate |
+| [backend/](backend/) | API dan worker .NET, modul bisnis, migrasi, [kontrak API](backend/contracts/), OCR lokal, integrasi Auth0, alat pilot |
+| [docs/](docs/) | Persyaratan, arsitektur, runbook, bukti penerimaan, rencana dan [papan readiness](docs/readiness.json) |
