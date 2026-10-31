@@ -3,7 +3,7 @@
 .NET backend in `backend/`, Next.js frontend in `frontend/` (read `frontend/AGENTS.md` before frontend code), MongoDB.
 
 ## Program
-- The production program (`docs/superpowers/specs/2026-10-19-production-completion-program.md`) runs one plan per phase with superpowers:executing-plans and Sonnet workers: test-first per task, no per-task reviews, one final review per phase on Opus, then commit, push and report. Don't ask for approval per phase.
+- The production program (`docs/superpowers/specs/2026-10-19-production-completion-program.md`) runs one plan per phase with superpowers:executing-plans and Sonnet workers: test-first per task, no per-task reviews, one final review per phase on Opus, then commit and report. Don't ask for approval per phase, but ask before pushing `main`: it deploys to Vercel production.
 - Hardening, performance, seals and rehearsal tooling count only when a readiness item or a named launch requirement needs them. Otherwise add a `shortcut:` comment or one line to `docs/debt.md` and go back to the slice.
 
 ## Progress
