@@ -1,0 +1,215 @@
+[
+  {
+    "id": "J01",
+    "journey": "Guest browses the sample catalog and signs in",
+    "items": ["V01", "I02", "S04"],
+    "steps": [
+      "Open the landing page signed out; the catalog link shows only owner-approved sample products",
+      "Open a sample product; no price, no private photo and no other organisation's data is shown",
+      "Try a staff or workspace URL signed out; you are sent to sign in, never shown the page",
+      "Sign in as a buyer; the full catalog with your contract prices replaces the samples"
+    ],
+    "test": "CatalogPublicSampleTests.Guest_sees_only_approved_samples_without_prices",
+    "passes": false
+  },
+  {
+    "id": "J02",
+    "journey": "Buyer fills the keranjang and checks out an order",
+    "items": ["V02", "V03", "V07", "V10", "U07"],
+    "steps": [
+      "Sign in as a branch buyer and open the catalog",
+      "Pick a product, choose a kemasan and a quantity, and add it to the keranjang",
+      "Open the keranjang, choose the branch and the delivery details",
+      "Review the quote (per-channel groups, totals in Rupiah) and submit",
+      "See the order number (PSN-…) and find the order in Pesanan saya with its filters",
+      "Order again from the same keranjang; a new order is placed and the first one is not repeated"
+    ],
+    "test": "OrderSubmissionBrowserTests + OrderViewBrowserTests + FunctionGapBrowserTests.Second_order_from_the_keranjang_is_new_and_the_store_can_reject_its_part",
+    "passes": true
+  },
+  {
+    "id": "J03",
+    "journey": "Order to dispatch to receipt across personas",
+    "items": ["F03", "V06", "U04", "Q05", "R01", "F10", "U05"],
+    "steps": [
+      "Buyer submits an order from the keranjang",
+      "Branch approver reviews it; store head accepts it on the store order desk",
+      "Stock is reserved and released from the store's stock source",
+      "Warehouse prepares and dispatches the order with a numbered Surat Jalan",
+      "Courier assignment is recorded and the shipment leaves",
+      "Buyer confirms receipt; the order timeline shows every step with its number",
+      "Each page shows loading, denied, offline and 'Belum pasti / Periksa hasil' states instead of failing silently"
+    ],
+    "test": "GoldenJourneyBrowserTests.Golden_order_to_receipt_across_personas_shows_each_result_and_order_number",
+    "passes": false
+  },
+  {
+    "id": "J04",
+    "journey": "Invoice release to verified buyer payment",
+    "items": ["F11", "P01", "P02", "P03", "P04", "P05", "P06", "P09", "P10", "M03", "M05", "M09", "S05"],
+    "steps": [
+      "Store finance proposes an invoice release for a received order; a second person decides it",
+      "The invoice is issued with its number",
+      "Buyer opens the invoice and uploads a payment proof (camera or file) with a preview",
+      "OCR suggests amount and reference; the buyer confirms and submits",
+      "Payment checker reviews the proof and verifies or rejects it",
+      "The payment is allocated to the invoice; the buyer sees the paid status"
+    ],
+    "test": "GoldenJourneyBrowserTests.Golden_invoice_release_to_verified_payment_across_personas_shows_each_result_and_invoice_number",
+    "passes": false
+  },
+  {
+    "id": "J05",
+    "journey": "Procurement request to received and valued goods",
+    "items": ["F06", "F02", "M01", "M06"],
+    "steps": [
+      "Store raises a procurement request; it is approved and funded",
+      "A purchase order (SP-…) is issued to the supplier",
+      "The supplier is paid in advance or the disbursement is recorded",
+      "Goods are received, inspected and accepted for quality",
+      "Accepted goods become stock and are valued",
+      "The supplier payable and its bank settlement are recorded"
+    ],
+    "test": "GoldenJourneyBrowserTests.Golden_procurement_request_to_received_goods_across_personas_shows_each_result_and_number",
+    "passes": false
+  },
+  {
+    "id": "J06",
+    "journey": "Substitution proposal and buyer consent",
+    "items": ["R02", "V08"],
+    "steps": [
+      "Store staff propose a replacement kemasan for an order line",
+      "Buyer declines one proposal and consents exactly to another",
+      "A lost reply is recovered with the original key, never repeated",
+      "The real replacement is dispatched"
+    ],
+    "test": "OrderSubstitutionBrowserTests",
+    "passes": true
+  },
+  {
+    "id": "J07",
+    "journey": "Returns, replacement, credit and refund",
+    "items": ["F09"],
+    "steps": [
+      "Buyer reports a problem with a received order (case)",
+      "Store reviews the case and decides return, replacement or credit",
+      "Returned goods are received as a return lot and checked",
+      "A refund or credit is recorded and its payout evidence is kept",
+      "Supplier claims are raised for supplier-caused faults"
+    ],
+    "test": "ReturnLotBrowserTests + SupplierClaimBrowserTests",
+    "passes": false
+  },
+  {
+    "id": "J08",
+    "journey": "Branch requests, spending policy and approvals",
+    "items": ["R03", "R06", "F05", "R04"],
+    "steps": [
+      "Buyer sends a branch request (PB-…) to the store",
+      "Store accepts or rejects it with a reason; the buyer sees the result",
+      "An order above the branch budget waits for the branch approver",
+      "The approver cannot approve their own proposal (maker/checker guard shown)",
+      "An inactive branch's history stays readable but cannot be ordered against"
+    ],
+    "test": "FunctionGapBrowserTests.Branch_request_is_sent_by_the_buyer_and_accepted_or_rejected_by_the_store_in_the_browser + OrderSpendingPolicyBrowserTests",
+    "passes": false
+  },
+  {
+    "id": "J09",
+    "journey": "Bank statement, receipts and reconciliation",
+    "items": ["F08", "P07", "P08", "P11", "P12", "S07", "M04"],
+    "steps": [
+      "Finance stages a bank statement import; a second person approves it",
+      "Incoming bank receipts are matched to payments or left in suspense",
+      "Duplicate-payment signals are shown and explained",
+      "A receiving-account change needs a separate approval",
+      "Every payment decision is in the audit trail"
+    ],
+    "test": "BankStatementBrowserTests + BankReceiptBrowserTests + PaymentVerificationBrowserTests",
+    "passes": false
+  },
+  {
+    "id": "J10",
+    "journey": "Reports and read-only auditor",
+    "items": ["R14", "R05", "F07", "S06"],
+    "steps": [
+      "Set up the accounting book (chart and mapping) with maker/checker",
+      "Open AR/AP aging and invoice-ready reports for a period",
+      "Sign in as auditor; every list and report opens read-only",
+      "Export a report; the export is scoped and recorded"
+    ],
+    "test": "AccountingBookSetupBrowserTests + AccountingReportBrowserTests",
+    "passes": false
+  },
+  {
+    "id": "J11",
+    "journey": "Staff workspaces: one shell, one queue, consistent pages",
+    "items": ["U01", "U02", "U03", "U06", "U08", "Q02", "F12"],
+    "steps": [
+      "Sign in as each staff role; the home shows that role's work and sidebar",
+      "Pekerjaan saya lists waiting work across owners, ordered by deadline",
+      "Pick records by name or code, not by internal id",
+      "Every decision opens a review panel that is itself the confirmation",
+      "Dates, money (Rp…, staff screens with ,00) and statuses read the same everywhere",
+      "Pages work at 390 px and by keyboard with no horizontal scroll"
+    ],
+    "test": null,
+    "passes": false
+  },
+  {
+    "id": "J12",
+    "journey": "Accounts, sign-in, delegation and access review",
+    "items": ["S01", "S02", "S03", "R07", "R08", "R10", "R11", "R12", "R13"],
+    "steps": [
+      "Admin invites a person; they sign in and set up MFA",
+      "A privileged action asks for step-up",
+      "An account is recovered by the documented recovery path",
+      "A temporary delegation is granted and expires; a suspended account loses access immediately",
+      "Join, move and leave change a person's access; the access review lists effective access"
+    ],
+    "test": "AccessIdentitySuspensionBrowserTests + TemporaryDelegationBrowserTests + AccountContactBrowserTests",
+    "passes": false
+  },
+  {
+    "id": "J13",
+    "journey": "Catalog, identifiers, photos and prices maintained by staff",
+    "items": ["V04", "V05", "V09", "I01", "I03", "I04", "I05", "I06", "I07", "I09", "I10", "F01"],
+    "steps": [
+      "Catalog clerk edits a product, its kemasan and the base-unit content",
+      "Trade codes and GTINs per kemasan level are validated",
+      "A primary photo is uploaded, scanned and approved",
+      "A price change is proposed and approved by a second person",
+      "A pack conversion rule is approved and used for a physical stock conversion"
+    ],
+    "test": "CatalogPriceBrowserTests + CatalogPhotoBrowserTests + CatalogIdentifierBrowserTests + PackConversionRuleBrowserTests",
+    "passes": false
+  },
+  {
+    "id": "J14",
+    "journey": "Warehouse: scanning, stock sources and counts",
+    "items": ["I08", "F04", "M08", "M02", "M07", "R09"],
+    "steps": [
+      "Receive goods by scanning (camera, keyboard wedge or manual entry)",
+      "Pick and dispatch by scanning against the Surat Jalan",
+      "Activate and reconcile a stock source with maker/checker",
+      "Run a blind stock count with separate approval",
+      "Replenishment suggests quantities from lead time"
+    ],
+    "test": "OperationalScanReceivingBrowserTests + OperationalScanFulfillmentBrowserTests + StockCountBrowserTests + StockSourceReconciliationBrowserTests",
+    "passes": false
+  },
+  {
+    "id": "J15",
+    "journey": "Operations: release, monitoring and restore",
+    "items": ["Q01", "Q03", "Q04", "Q06", "Q07", "Q08", "Q09", "Q10", "Q11", "Q12", "S08", "S09", "M10"],
+    "steps": [
+      "Build the release from a clean checkout with one command",
+      "Start the stack; the operator health page shows every dependency",
+      "Back up Mongo, the evidence store and the key directories together",
+      "Restore into an empty environment and time it; the app starts and reads old records",
+      "A crash mid-write recovers without duplicate effects"
+    ],
+    "test": null,
+    "passes": false
+  }
+]
