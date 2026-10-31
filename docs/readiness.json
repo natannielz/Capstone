@@ -41,7 +41,7 @@
       "Each page shows loading, denied, offline and 'Belum pasti / Periksa hasil' states instead of failing silently"
     ],
     "test": "GoldenJourneyBrowserTests.Golden_order_to_receipt_across_personas_shows_each_result_and_order_number",
-    "passes": false
+    "passes": true
   },
   {
     "id": "J04",
