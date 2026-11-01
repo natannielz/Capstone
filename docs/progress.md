@@ -1,17 +1,17 @@
 # Unit Toko progress
 
-- **Done:** 1 Nov: J04 green on feat/j04-payment: Golden A2 written and un-skipped (A10 release → A11 invoice → A12 payment with proof and OCR → A13 verify, allocate, buyer sees it), green on runs j04-a2-5 and j04-a2-rebased; A1 still green. Step 4 reworded with owner approval (OCR is advisory after submit). 7/15 passing. Earlier: J01 (6/15), J05 (5/15).
-- **Next:** J08, branch requests and approvals: rerun the branch-request rehearsal on staging.
-- **Blockers:** Phase F (D01–D08) still needs owner inputs. OCR misread the A2 proof (100.00 instead of Rp22.000, no reference), so OCR quality is unproven. PurchaseOrderBrowserTests (2) and PurchaseOrderInboundBrowserTests still expect pre-F-021/F-023 copy and an order reply without `inboundPools`; fixing them needs owner approval.
+- **Done:** 1 Nov: Golden A2 written and un-skipped on feat/j04-payment (A10 release → A11 invoice → A12 payment with proof and OCR → A13 verify and allocate), with money end state asserted in Mongo; green on j04-a2-fix5, A1 still green. F-004 latency is gone (invoice issue 11.9 s). Step 4 reworded with owner approval. J04 stays **no**: two product gaps. 6/15 passing.
+- **Next:** J04 product gaps: (1) the buyer sees no paid state on `/billing/invoices` or `/billing/payments` (no buyer-readable invoice balance; PaymentWorkspace still says "belum dialokasikan" after allocation); (2) F-007, no pilot persona can allocate (owner to choose who allocates).
+- **Blockers:** Phase F (D01–D08) still needs owner inputs. F-007 allocation persona needs an owner decision. OCR misread the A2 proof (100.00 instead of Rp22.000, no reference), so OCR quality is unproven. A 409 `version_conflict` once hit the checker's first review-page reads (passed on rerun). PurchaseOrderBrowserTests (2) and PurchaseOrderInboundBrowserTests still expect pre-F-021/F-023 copy and an order reply without `inboundPools`; fixing them needs owner approval.
 
-## 7/15 passing
+## 6/15 passing
 
 | ID | Journey | Passes | Evidence |
 | --- | --- | --- | --- |
 | J01 | Guest browses the sample catalog and signs in | **yes** | 1 Nov on feat/j01-guest-catalog: CatalogPublicSampleTests 12/12 (samples only, no price, no private photo, non-sample hidden). Signed-out staff URL redirect proven by the catalog identifier and stock release browser rehearsals; buyer redirect by the frontend unit tests |
 | J02 | Buyer fills the keranjang and checks out an order | **yes** | 31 Oct on main: OrderSubmission, OrderView and FunctionGap (second order, buyer cancellation) browser tests green |
 | J03 | Order to dispatch to receipt across personas | **yes** | 31 Oct on main: Golden A1 (`Golden_order_to_receipt_across_personas_shows_each_result_and_order_number`) green |
-| J04 | Invoice release to verified buyer payment | **yes** | 1 Nov on feat/j04-payment: Golden A2 (`Golden_invoice_release_to_verified_payment_across_personas_shows_each_result_and_invoice_number`) green, invoice issue 11.9 s under the 30 s bound |
+| J04 | Invoice release to verified buyer payment | no | 1 Nov on feat/j04-payment: Golden A2 green (j04-a2-fix5) for steps 1–5 and allocation; step 6 "buyer sees the paid status" has no buyer UI, and allocation uses a grant no pilot persona holds (F-007) |
 | J05 | Procurement request to received and valued goods | **yes** | 1 Nov on feat/j05-procurement: Golden B (request → SP- → arrival → koli received) plus Funding, Disbursement, Inspection, QualityAcceptance, StockReceipt, StockValuation, SupplierPayable and Settlement browser tests green |
 | J06 | Substitution proposal and buyer consent | **yes** | 31 Oct on main: OrderSubstitutionBrowserTests green |
 | J07 | Returns, replacement, credit and refund | no | F09 partial |
