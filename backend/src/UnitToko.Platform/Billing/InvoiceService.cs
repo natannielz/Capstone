@@ -24,7 +24,7 @@ public sealed record InvoiceIssuePreview(string Review, string BuyerName, string
     string Grouping, DateOnly PeriodFrom, DateOnly PeriodTo, string TermOrigin, int TermDays, string DayRule, string TaxDocumentProcess,
     Money Net, Money Tax, Money Charges, Money Total, ImmutableArray<InvoiceReadLine> Lines);
 public sealed record InvoiceView(LongId Id, LongId NumberEntity, LongId NumberChannel, int NumberYear, long Number, DateTimeOffset IssuedAt,
-    InvoiceIssuePreview Detail, string DocumentHash, int DocumentLength);
+    InvoiceIssuePreview Detail, string DocumentHash, int DocumentLength, InvoiceBalance? Balance = null);
 
 public sealed partial class InvoiceService
 {
@@ -105,7 +105,7 @@ public sealed partial class InvoiceService
         if (review is null || !Regex.IsMatch(review, @"\A[0-9a-f]{64}\z", RegexOptions.CultureInvariant)) throw InvoicePolicy.Invalid();
         await StorageAsync(ct); var id = (await ids.NextAsync(InvoiceBson.Invoices, ct)).Value; var audit = (await ids.NextAsync("auditEvents", ct)).Value;
         var body = InvoiceBson.Body(copied, review); ImmutableArray<InvoiceReceiptSource> sources = []; InvoiceTerms? approved = null; BsonDocument final = null!;
-        IClientSessionHandle? operationTransaction = null;
+        IClientSessionHandle? operationTransaction = null; InvoiceView view = null!;
         await authorization.ExecuteCommandAsync(actor, InvoiceBson.Operation, metadata, body, async (authority, tx, token) => {
             operationTransaction = tx; approved = null; sources = await SourcesAsync(actor, authority, tx, copied, Permissions.InvoiceIssue, token);
             foreach (var source in sources) if (!ScopePolicy.Authorize(actor, authority, Permissions.InvoiceIssue, source.Resource, clock.UtcNow).Allowed) throw InvoiceRecords.Invalid();
@@ -141,7 +141,7 @@ public sealed partial class InvoiceService
             var original = await records.Rows(InvoiceBson.Invoices).Find(tx, new BsonDocument { { "issuedBy", actor.UserId }, { "requestKey", metadata.IdempotencyKey } }).SingleOrDefaultAsync(token) ?? throw InvoiceRecords.Invalid();
             if (approved is not null && admission is IInvoiceReleaseWriter releaseWriter)
                 await releaseWriter.BindPostedAsync(tx, actor, approved, original, token);
-            final = await records.VerifyAsync(actor, tx, original, token);
+            final = await records.VerifyAsync(actor, tx, original, token); view = await BalancedAsync(tx, final, token);
             if (final["bodyHash"] != AuthorizationStore.CommandHash(body, metadata.Reason) || !InvoiceRecords.Equal(final["sources"], InvoiceBson.Sources(sources))) throw InvoiceRecords.Invalid();
             if (approved is not null) { await admission!.CompleteAsync(tx, actor, approved, token); InvoiceAdmissionPolicy.Current(approved, clock.UtcNow); }
             await receipts.InvoiceFenceAsync(actor, authority, tx, sources.Select(source => source.Resource), Permissions.InvoiceIssue, token);
@@ -149,7 +149,7 @@ public sealed partial class InvoiceService
             if (approved is not null && admission is IInvoiceReleaseWriter releaseWriter)
                 releaseWriter.RequireCurrent(operationTransaction ?? throw InvoiceRecords.Invalid(), actor, approved);
         });
-        return View(final);
+        return view;
     }
     private async Task<long> NextNumberAsync(IClientSessionHandle tx, long entity, long channel, int year, CancellationToken ct) {
         var key = FormattableString.Invariant($"invoice-number.{entity}.{channel}.{year}"); var rows = records.Rows("idCounters");

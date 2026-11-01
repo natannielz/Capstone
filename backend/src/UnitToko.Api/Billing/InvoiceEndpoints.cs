@@ -24,7 +24,8 @@ public sealed record InvoiceLineDto(LongId OrderId, LongId ShipmentId, LongId Re
     string PackageLabel, int BaseUnitsPerPackage, string BaseUnitCode, string AcceptedBaseUnits, Money Net, Money Tax, Money Charges);
 public sealed record InvoicePreviewDto(string Review, string BuyerName, string SellerName, DateOnly IssueDate, DateOnly DueDate, string Grouping,
     DateOnly PeriodFrom, DateOnly PeriodTo, string TermOrigin, int TermDays, string DayRule, string TaxDocumentProcess, Money Net, Money Tax, Money Charges, Money Total, ImmutableArray<InvoiceLineDto> Lines);
-public sealed record InvoiceDto(LongId Id, LongId NumberEntity, LongId NumberChannel, int NumberYear, string Number, DateTimeOffset IssuedAt, InvoicePreviewDto Detail, string DocumentHash, int DocumentLength);
+public sealed record InvoiceDto(LongId Id, LongId NumberEntity, LongId NumberChannel, int NumberYear, string Number, DateTimeOffset IssuedAt, InvoicePreviewDto Detail, string DocumentHash, int DocumentLength,
+    Money Paid, Money Credited, Money Outstanding, string PaymentState, string Aging);
 public sealed record InvoicePageDto(ImmutableArray<InvoiceDto> Items, bool HasMore);
 public sealed record InvoiceRecoveryDto(string Status, InvoiceDto? Invoice);
 
@@ -64,8 +65,11 @@ public static class InvoiceEndpoints
             return TypedResults.File(Encoding.UTF8.GetBytes(file.Content), "text/html; charset=utf-8", file.FileName);
         }).WithName("DownloadInvoice").Produces<byte[]>(200, "text/html");
     }
-    internal static InvoiceDto View(InvoiceView row) => new(row.Id, row.NumberEntity, row.NumberChannel, row.NumberYear, row.Number.ToString(CultureInfo.InvariantCulture), row.IssuedAt,
-        Preview(row.Detail), row.DocumentHash, row.DocumentLength);
+    internal static InvoiceDto View(InvoiceView row) {
+        var balance = row.Balance ?? throw Invalid();
+        return new(row.Id, row.NumberEntity, row.NumberChannel, row.NumberYear, row.Number.ToString(CultureInfo.InvariantCulture), row.IssuedAt,
+            Preview(row.Detail), row.DocumentHash, row.DocumentLength, balance.AllocatedPayment, balance.ApprovedCredit, balance.Outstanding, balance.PaymentState, balance.Aging);
+    }
     private static InvoicePreviewDto Preview(InvoiceIssuePreview row) => new(row.Review, row.BuyerName, row.SellerName, row.IssueDate, row.DueDate, row.Grouping, row.PeriodFrom, row.PeriodTo,
         row.TermOrigin, row.TermDays, row.DayRule, row.TaxDocumentProcess, row.Net, row.Tax, row.Charges, row.Total,
         [.. row.Lines.Select(line => new InvoiceLineDto(line.OrderId, line.ShipmentId, line.ReceiptId, line.SkuId, line.SkuCode, line.ProductName, line.PackageLabel, line.BaseUnitsPerPackage,

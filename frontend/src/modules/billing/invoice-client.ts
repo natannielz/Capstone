@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { createUnitTokoClient, RequestNotSentError } from '../../api/client';
 import { AccessFailure } from '../administration/workflow';
 import { priceId } from '../catalog/catalog-price-workflow';
+import { orderAmount } from '../ordering/order-quote-client';
 
 const id = z.string().regex(/^[1-9][0-9]{0,18}$(?![\s\S])/).refine(value => BigInt(value) <= BigInt('9223372036854775807'));
 const money = z.string().regex(/^(?:0|[1-9][0-9]{0,14})(?:\.[0-9]{1,2})?$(?![\s\S])/);
@@ -23,7 +24,16 @@ const preview = z.object({ review: hash, buyerName: text, sellerName: text, issu
   return cents(value.total) > BigInt(0) && cents(value.net) + cents(value.tax) + cents(value.charges) === cents(value.total);
 });
 const invoice = z.object({ id, numberEntity: id, numberChannel: id, numberYear: z.number().int().min(1).max(9999), number: id, issuedAt: timestamp,
-  detail: preview, documentHash: hash, documentLength: z.number().int().min(1).max(2097152) }).strict();
+  detail: preview, documentHash: hash, documentLength: z.number().int().min(1).max(2097152),
+  paid: money, credited: money, outstanding: money, paymentState: z.enum(['unpaid', 'partial', 'paid', 'credited']), aging: z.enum(['settled', 'overdue', 'due', 'not_due']) }).strict().refine(value =>
+  cents(value.paid) + cents(value.credited) + cents(value.outstanding) === cents(value.detail.total) && (value.aging === 'settled') === (cents(value.outstanding) === BigInt(0)) &&
+  value.paymentState === (cents(value.outstanding) === BigInt(0) ? cents(value.credited) === cents(value.detail.total) ? 'credited' : 'paid' : cents(value.paid) + cents(value.credited) > BigInt(0) ? 'partial' : 'unpaid'));
+const paymentStates = { unpaid: 'Belum dibayar', partial: 'Dibayar sebagian', paid: 'Lunas', credited: 'Dikreditkan' } as const;
+/** The buyer-visible payment line of an issued invoice, in the allocation desk's words. */
+export function invoicePayment(item: Invoice) {
+  return ['Status pembayaran: ' + paymentStates[item.paymentState], 'Dibayar ' + orderAmount('IDR', item.paid),
+    ...(cents(item.credited) > BigInt(0) ? ['Kredit ' + orderAmount('IDR', item.credited)] : []), 'Sisa tagihan ' + orderAmount('IDR', item.outstanding)].join(' · ');
+}
 const candidate = z.object({ shipmentId: id, receiptId: id, receivedAt: timestamp, buyerName: text, acceptedLines: z.number().int().min(1).max(100), invoiced: z.boolean() }).strict();
 export type Invoice = z.infer<typeof invoice>;
 export type InvoicePreview = z.infer<typeof preview>;

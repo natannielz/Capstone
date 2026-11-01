@@ -10,7 +10,7 @@ import { AdministrationNavigation } from '../administration/AdministrationNaviga
 import { OperationRecovery, useOperationRecovery } from '../administration/OperationRecovery';
 import { submitTrackedRequest } from '../administration/operation-journal';
 import { orderAmount } from '../ordering/order-quote-client';
-import { createInvoiceGateway, prepareInvoice, type Invoice, type InvoiceCandidate, type InvoicePreview } from './invoice-client';
+import { createInvoiceGateway, invoicePayment, prepareInvoice, type Invoice, type InvoiceCandidate, type InvoicePreview } from './invoice-client';
 import common from '../administration/access.module.css';
 import styles from './invoice.module.css';
 import { longDateFormatter } from '@/lib/format';
@@ -130,7 +130,7 @@ function InvoiceDesk({ account, onDenied, header }: { account: Account; onDenied
     {review && <section className="ui-section" aria-label="Tinjauan invoice"><h2 ref={heading} tabIndex={-1}>Tinjau penerbitan invoice</h2><InvoiceDetail value={review.detail} /><p>Alasan: {review.body.reason}</p>
       <p>Konfirmasi akan menerbitkan invoice dan mencatat piutang. Jumlah mengikuti barang yang diterima; nomor dan isi dokumen tidak dapat diedit setelah terbit.</p>
       <div className="ui-actions"><Button variant="primary" disabled={locked} onClick={() => void issue()} busy={busy}>Terbitkan invoice</Button><Button variant="secondary" disabled={busy || recovering} onClick={() => setReview(null)}>Kembali ke pilihan penerimaan</Button></div></section>}
-    {selected && <section className="ui-section" aria-label="Invoice terbit"><h2 ref={heading} tabIndex={-1}>Invoice {number(selected)}</h2><InvoiceDetail value={selected.detail} />
+    {selected && <section className="ui-section" aria-label="Invoice terbit"><h2 ref={heading} tabIndex={-1}>Invoice {number(selected)}</h2><p>{invoicePayment(selected)}</p><InvoiceDetail value={selected.detail} />
       <div className="ui-actions">{account.actions.includes('case.request') && <Link href={'/fulfillment/cases?invoice=' + selected.id} className={buttonClassName({ variant: 'secondary' })} aria-disabled={locked} onClick={event => { if (locked) event.preventDefault(); }}>Laporkan masalah barang</Link>}
       {canRead && <Button variant="secondary" disabled={busy || recovering || offline} onClick={() => void perform(async () => { const blob = await gateway.download(account.actorId, selected); if (!current()) return;
         const url = URL.createObjectURL(blob), link = document.createElement('a'); link.href = url; link.download = `invoice-${selected.id}.html`; document.body.appendChild(link); link.click(); link.remove(); window.setTimeout(() => URL.revokeObjectURL(url), 1000); })}>Unduh invoice</Button>}
@@ -146,7 +146,7 @@ function InvoiceDesk({ account, onDenied, header }: { account: Account; onDenied
       {candidates.nextShipmentId && <Button variant="secondary" disabled={busy || recovering || offline} onClick={() => setBeforeShipment(candidates.nextShipmentId)}>Penerimaan lebih lama</Button>}</Section>}
     {canRead && <Section title="Invoice terbit" label="Daftar invoice">
       <DataList label="Invoice terbit" items={page.items} getKey={item => item.id} loading={busy} empty={{ title: 'Belum ada invoice dalam akses Anda pada halaman ini.' }}
-        renderTitle={item => number(item)} renderMeta={item => <>{item.detail.buyerName} · {rupiah(item.detail.total)} · Jatuh tempo {date(item.detail.dueDate)}</>}
+        renderTitle={item => number(item)} renderMeta={item => <>{item.detail.buyerName} · {rupiah(item.detail.total)} · Jatuh tempo {date(item.detail.dueDate)}</>} renderContent={item => <p>{invoicePayment(item)}</p>}
         renderActions={item => <Button variant="secondary" disabled={busy || recovering || offline || !!review} onClick={() => void perform(async () => { const detail = await gateway.read(account.actorId, item.id); if (current()) setSelected(detail); })}>Buka invoice {number(item)}</Button>} />
       {page.hasMore && <Button variant="secondary" disabled={busy || recovering || offline || !!review} onClick={() => setBefore(page.items.at(-1)!.id)}>Invoice lebih lama</Button>}</Section>}
     </>}

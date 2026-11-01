@@ -13981,6 +13981,8 @@ export interface components {
             nextShipmentId: null | components["schemas"]["LongId"];
         };
         InvoiceDto: {
+            aging: string;
+            credited: components["schemas"]["Money"];
             detail: components["schemas"]["InvoicePreviewDto"];
             documentHash: string;
             /** Format: int32 */
@@ -13993,6 +13995,9 @@ export interface components {
             numberEntity: components["schemas"]["LongId"];
             /** Format: int32 */
             numberYear: number | string;
+            outstanding: components["schemas"]["Money"];
+            paid: components["schemas"]["Money"];
+            paymentState: string;
         };
         InvoiceIssueDto: {
             reason: string;

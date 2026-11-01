@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Runtime.Versioning;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using UnitToko.Modules.Accounting;
@@ -14,6 +15,7 @@ using UnitToko.Platform.Fulfillment;
 using UnitToko.Platform.Mongo;
 using UnitToko.Tests.Accounting;
 using UnitToko.Tests.Catalog;
+using UnitToko.Tests.Documents;
 
 namespace UnitToko.Tests.Ordering;
 
@@ -121,6 +123,24 @@ public sealed class InvoiceTests(MongoFixture fixture)
         await Assert.ThrowsAsync<AuthorizationDeniedException>(() => data.Service.ReadAsync(other, result.Id.Value));
         await data.Rows("memberships").UpdateManyAsync(new BsonDocument("userId", data.Finance.UserId), Builders<BsonDocument>.Update.Set("status", "revoked"));
         await Assert.ThrowsAsync<AuthorizationDeniedException>(() => data.Service.RecoverAsync(data.Finance, "invoice-scoped"));
+    }
+    [WindowsStorageFact]
+    [SupportedOSPlatform("windows")]
+    public async Task Buyer_reads_the_allocated_balance_on_its_own_invoice_and_outsiders_still_cannot_read_it() {
+        await using var data = await PaymentAllocationTests.Data.CreateAsync(fixture);
+        var invoices = data.Source.Read.Payment.Invoice; var buyer = invoices.Order.Buyer; var id = data.InvoiceId;
+        var issued = data.Source.Read.Payment.Issued.Balance!; var total = data.Source.Read.Payment.Issued.Detail.Total;
+        Assert.Equal(("unpaid", 0m, 0m, total), (issued.PaymentState, issued.AllocatedPayment.Value, issued.ApprovedCredit.Value, issued.Outstanding));
+        Assert.Equal(issued, (await invoices.Service.ReadAsync(buyer, id)).Balance);
+        var input = data.Input(0, 1000m); var preview = await data.Service.PreviewAsync(data.Actor, data.VerificationId, input);
+        await data.Service.AllocateAsync(data.Actor, data.VerificationId, preview.Binding, input, PaymentAllocationTests.Data.Meta("buyer-balance"));
+        var read = (await invoices.Service.ReadAsync(buyer, id)).Balance!;
+        Assert.Equal(("partial", "not_due", 1000m, 0m, total.Value - 1000m), (read.PaymentState, read.Aging, read.AllocatedPayment.Value, read.ApprovedCredit.Value, read.Outstanding.Value));
+        Assert.Equal(read, Assert.Single((await invoices.Service.ListAsync(buyer)).Items).Balance);
+        var other = await invoices.Order.Prices.Catalog.ActorAsync(9942, CatalogAuthoringTestData.OtherOwner, Permissions.InvoiceRead);
+        Assert.Empty((await invoices.Service.ListAsync(other)).Items);
+        await Assert.ThrowsAsync<AuthorizationDeniedException>(() => invoices.Service.ReadAsync(other, id));
+        await Assert.ThrowsAsync<AuthorizationDeniedException>(() => invoices.Service.ReadAsync(invoices.Dispatch.Courier, id));
     }
     [Theory]
     [InlineData("allocation")] [InlineData("journal")] [InlineData("document")] [InlineData("invoice-and-allocations")]

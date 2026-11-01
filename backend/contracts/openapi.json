@@ -102899,7 +102899,12 @@
           "issuedAt",
           "detail",
           "documentHash",
-          "documentLength"
+          "documentLength",
+          "paid",
+          "credited",
+          "outstanding",
+          "paymentState",
+          "aging"
         ],
         "type": "object",
         "properties": {
@@ -102940,6 +102945,21 @@
               "string"
             ],
             "format": "int32"
+          },
+          "paid": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "credited": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "outstanding": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "paymentState": {
+            "type": "string"
+          },
+          "aging": {
+            "type": "string"
           }
         },
         "additionalProperties": false

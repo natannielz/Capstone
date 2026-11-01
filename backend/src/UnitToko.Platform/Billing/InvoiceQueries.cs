@@ -2,6 +2,8 @@ using System.Collections.Immutable;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization;
 using MongoDB.Driver;
+using UnitToko.Modules.Accounting;
+using UnitToko.Modules.Billing;
 using UnitToko.Modules.Contracts;
 using UnitToko.Modules.Identity;
 using UnitToko.Modules.Identity.Contracts;
@@ -53,7 +55,19 @@ public sealed partial class InvoiceService
     }
     public async Task<InvoiceView> ReadAsync(ActorContext actor, long id, CancellationToken ct = default) {
         if (id <= 0) throw InvoiceRecords.Invalid(); await StorageAsync(ct);
-        return await authorization.ReadAsync(actor, async (authority, tx, token) => View(await AuthorizedInvoiceAsync(actor, authority, tx, id, Permissions.InvoiceRead, token)), ct);
+        return await authorization.ReadAsync(actor, async (authority, tx, token) => await BalancedAsync(tx, await AuthorizedInvoiceAsync(actor, authority, tx, id, Permissions.InvoiceRead, token), token), ct);
+    }
+    // Only called after the invoice itself passed its scope check. The balance head is replayed
+    // and its allocation sources verified exactly as the allocation desk and refund preflight do.
+    private async Task<InvoiceView> BalancedAsync(IClientSessionHandle tx, BsonDocument row, CancellationToken ct) {
+        var funds = new PaymentAllocationRecords(database, clock); var source = PaymentSnapshot(row);
+        async Task Validate(BsonDocument item) {
+            if (item["operation"] != ReturnFinancialApprovalBson.Operation) { await funds.PreflightSourceAsync(tx, item, ct); return; }
+            foreach (var link in item["links"].AsBsonArray) await funds.PreflightSourceAsync(tx, await funds.RawAsync(tx, link["originalAllocationId"].AsInt64, ct), ct);
+        }
+        var (balance, _) = await funds.BalanceAsync(tx, false, row["_id"].AsInt64, PaymentDraftBson.Party(new BsonArray { source }), source["total"], source["snapshotHash"], Validate, ct);
+        return View(row) with { Balance = ReceivablesPolicy.Calculate(InvoiceBson.Money(source["total"]), InvoiceBson.Money(balance["paid"]), InvoiceBson.Money(balance["credited"]),
+            InvoiceBson.Date(row["dueDate"]), AccountingCalendar.BusinessDate(Now)) };
     }
     public async Task<InvoiceDownload> DownloadAsync(ActorContext actor, long id, CancellationToken ct = default) {
         if (id <= 0) throw InvoiceRecords.Invalid(); await StorageAsync(ct);
@@ -70,7 +84,7 @@ public sealed partial class InvoiceService
             var receipt = await records.Rows("idempotencyRecords").Find(tx, new BsonDocument { { "actorId", actor.UserId }, { "operation", InvoiceBson.Operation }, { "key", key } }).SingleOrDefaultAsync(token);
             if (rows.Count == 0 && receipt is null) { await receipts.InvoiceFenceAsync(actor, authority, tx, [], Permissions.InvoiceIssue, token); return null; }
             if (rows.Count != 1 || receipt is null) throw InvoiceRecords.Invalid();
-            return View(await AuthorizedInvoiceAsync(actor, authority, tx, rows[0]["_id"].AsInt64, Permissions.InvoiceIssue, token));
+            return await BalancedAsync(tx, await AuthorizedInvoiceAsync(actor, authority, tx, rows[0]["_id"].AsInt64, Permissions.InvoiceIssue, token), token);
         }, ct);
     }
     public Task<InvoicePage> ListAsync(ActorContext actor, long? beforeId = null, CancellationToken ct = default) =>
@@ -100,7 +114,7 @@ public sealed partial class InvoiceService
             var result = ImmutableArray.CreateBuilder<InvoiceView>(); var allScopes = new List<ResourceScope>();
             foreach (var value in ids) {
                 var row = await AuthorizedInvoiceAsync(actor, authority, tx, value["_id"].AsInt64, Permissions.InvoiceRead, token);
-                result.Add(View(row)); allScopes.AddRange(InvoiceBson.Sources(row["sources"].AsBsonArray).Select(source => source.Resource));
+                result.Add(await BalancedAsync(tx, row, token)); allScopes.AddRange(InvoiceBson.Sources(row["sources"].AsBsonArray).Select(source => source.Resource));
             }
             await receipts.InvoiceFenceAsync(actor, authority, tx, allScopes, Permissions.InvoiceRead, token);
             return new InvoicePage([.. result.Take(25)], ids.Count > 25);
