@@ -253,6 +253,12 @@ async function invoiceToPayment() {
   const keuangan = await persona('keuangan-tagihan'), pemeriksa = await persona('pemeriksa-pembayaran'), pemohon = await persona('pemohon');
   // "Rp12.345,00" as the page writes it -> "12345.00" as a field takes it.
   const decimal = text => text.replace(/^Rp\s?/, '').replace(/\./g, '').replace(',', '.');
+  // The OCR panel's amount reading: present (not "Belum diketahui") and, as digits, not already the invoice total, so the checker's correction is a real change.
+  const digits = text => text.replace(/\D/g, '');
+  const ocrAmount = async region => {
+    const text = (await region.locator('dl > div').filter({ has: region.page().locator('dt', { hasText: /^Jumlah transfer$/ }) }).locator('dd > span').first().innerText()).trim();
+    assert.notEqual(text, 'Belum diketahui'); assert.match(text, /[0-9]/, 'The OCR panel reads an amount'); return text;
+  };
   const openOriginal = async (person, region, bytes) => {
     const response = person.page.waitForResponse(value => value.url().endsWith('/original/query'));
     await region.getByRole('button', { name: 'Lihat bukti asli', exact: true }).click(); const original = await response;
@@ -260,7 +266,7 @@ async function invoiceToPayment() {
     assert.equal(createHash('sha256').update(await original.body()).digest('hex'), createHash('sha256').update(bytes).digest('hex'), 'The exact original is shown');
   };
   const releaseChecks = 'Saya sudah memeriksa penerimaan, alokasi biaya, kalender, dan akun pembukuan yang ditampilkan.', saved = 'Perubahan persetujuan invoice tersimpan. Muat riwayat untuk memeriksanya.';
-  let release, invoice, number, total, world, declarationId, image;
+  let release, invoice, number, total, world, declarationId, image, ocrReading;
   await step('A10a', 'keuangan-tagihan', 'proposes the invoice release for the received order', async () => {
     await renew(keuangan); assert.equal(await reachesFromWorkspace(keuangan, 'Persetujuan penerbitan tagihan'), '/billing/invoice-releases');
     await keuangan.page.goto(origin.origin + '/billing/invoice-releases');
@@ -286,11 +292,16 @@ async function invoiceToPayment() {
     await keuangan.page.getByRole('button', { name: 'Lihat persetujuan ' + release.releaseId, exact: true }).click();
     const stored = keuangan.page.getByRole('region', { name: 'Fakta persetujuan tersimpan', exact: true }); await stored.waitFor();
     assert.equal(await stored.getByRole('button', { name: /^Tinjau (persetujuan|penolakan) penerbitan$/ }).count(), 0, 'The proposer cannot decide the own release');
+    // The page is this release's stored proposal and offers the proposer neither the reviewer's decision section nor its reason field.
+    await stored.getByRole('heading', { name: 'Persetujuan ' + release.releaseId + ' — Usulan', exact: true }).waitFor();
+    assert.equal(await stored.getByText('Keputusan pemeriksa', { exact: true }).count(), 0, 'No decision section for the proposer');
+    assert.equal(await stored.getByRole('textbox', { name: 'Alasan keputusan persetujuan invoice', exact: true }).count(), 0, 'No decision reason field for the proposer');
   });
   await step('A10b', 'pemeriksa-pembayaran', 'approves the invoice release proposed by someone else', async () => {
     await renew(pemeriksa); await pemeriksa.page.goto(origin.origin + '/billing/invoice-releases');
     await pemeriksa.page.getByRole('button', { name: 'Lihat persetujuan ' + release.releaseId, exact: true }).click();
     const stored = pemeriksa.page.getByRole('region', { name: 'Fakta persetujuan tersimpan', exact: true }); await stored.waitFor();
+    await stored.getByText('Keputusan pemeriksa', { exact: true }).waitFor(); // the same release, which the proposer was not offered a decision on
     await stored.getByRole('textbox', { name: 'Alasan keputusan persetujuan invoice', exact: true }).fill('Synthetic independent checker acceptance');
     await stored.getByRole('button', { name: 'Tinjau persetujuan penerbitan', exact: true }).click();
     const confirmation = pemeriksa.page.getByRole('region', { name: 'Konfirmasi persetujuan invoice', exact: true }); await confirmation.waitFor();
@@ -350,6 +361,7 @@ async function invoiceToPayment() {
     const available = ocr.getByText('Hasil pembacaan tersedia', { exact: true });
     for (let attempt = 0; attempt < 20 && !await available.isVisible(); attempt++) { await ocr.getByRole('button', { name: 'Muat hasil OCR', exact: true }).click(); await available.waitFor({ timeout: 1000 }).catch(() => {}); }
     await available.waitFor(); assert.match(await ocr.innerText(), /tidak mengubah pengajuan atau saldo tagihan/); await capture(pemohon.page, 'A12-submitted-with-ocr');
+    ocrReading = await ocrAmount(ocr); assert.notEqual(digits(ocrReading), digits(total), 'The advisory reading differs from the invoice total');
     console.log('GOLDEN_JOURNEY_NUMBER ' + JSON.stringify({ payment: 'Pengajuan ' + declarationId }));
   });
   await step('A13a', 'pemeriksa-pembayaran', 'checks the exact original, corrects the OCR reading and verifies it against the bank credit', async () => {
@@ -362,8 +374,11 @@ async function invoiceToPayment() {
     await capture(pemeriksa.page, 'A13-original'); await original.getByRole('button', { name: 'Tutup bukti', exact: true }).click();
     const ocr = review.getByRole('region', { name: 'Pembacaan bukti otomatis', exact: true });
     await ocr.getByRole('button', { name: 'Muat hasil OCR', exact: true }).click(); await ocr.getByText('Hasil pembacaan tersedia', { exact: true }).waitFor();
+    assert.equal(await ocrAmount(ocr), ocrReading, 'The checker sees the same OCR reading the buyer saw');
     const correction = review.getByRole('region', { name: 'Koreksi pemeriksaan', exact: true });
     await correction.getByRole('button', { name: 'Muat pemeriksaan terbaru', exact: true }).click();
+    const ocrOriginal = await correction.locator('label[for="correction-amount"] + p').innerText();
+    assert.equal(digits(ocrOriginal), digits(ocrReading), 'The correction form shows the OCR amount it replaces'); assert.doesNotMatch(ocrOriginal, /Belum diketahui/);
     for (const [label, value] of [['Nominal (IDR)', total], ['Mata uang', 'IDR'], ['Rekening tujuan pada bukti', world.account], ['Alasan koreksi', 'Nominal dan rekening dibaca dari bukti asli']])
       await correction.getByLabel(label, { exact: true }).fill(value);
     await correction.getByRole('button', { name: 'Periksa koreksi', exact: true }).click();
@@ -394,7 +409,12 @@ async function invoiceToPayment() {
     await panel.getByLabel('Alasan alokasi', { exact: true }).fill('Synthetic full allocation of the verified payment to its invoice');
     await panel.getByRole('button', { name: 'Periksa alokasi', exact: true }).click();
     const confirm = panel.getByRole('region', { name: 'Konfirmasi alokasi pembayaran', exact: true }); await confirm.waitFor(); await capture(page, 'A13-allocation-review');
-    await confirm.getByRole('button', { name: 'Simpan alokasi pembayaran', exact: true }).click(); await panel.getByText(/Lunas/).first().waitFor();
+    await confirm.getByRole('button', { name: 'Simpan alokasi pembayaran', exact: true }).click();
+    // This invoice's own row shows it paid in full: status Lunas, paid = total, nothing left to pay.
+    const parts = number.split('/'), padded = new RegExp('^Invoice ' + parts.slice(0, 3).join('/') + '/0*' + parts[3] + '$'); // the desk zero-pads the sequence
+    const row = panel.locator('li', { has: page.getByText(padded) }); await row.getByText(/^Lunas ·/).waitFor();
+    const figures = /Total (Rp\s?[0-9.]+,[0-9]{2}) · Dibayar (Rp\s?[0-9.]+,[0-9]{2}) · Kredit (Rp\s?[0-9.]+,[0-9]{2}) · Sisa tagihan (Rp\s?[0-9.]+,[0-9]{2})/.exec(await row.innerText());
+    assert.ok(figures, 'The allocation row states its figures'); assert.equal(decimal(figures[1]), total); assert.equal(decimal(figures[2]), total); assert.equal(decimal(figures[3]), '0.00'); assert.equal(decimal(figures[4]), '0.00');
     const allocated = writes.filter(record => record.path.endsWith('/allocations') && record.status === 200); assert.equal(allocated.length, 1); assert.equal(allocated[0].actor, pemeriksa.id);
     await capture(page, 'A13-allocated');
   });
@@ -403,7 +423,17 @@ async function invoiceToPayment() {
     const timeline = pemohon.page.getByRole('region', { name: 'Riwayat pemenuhan dan penyelesaian', exact: true }); await timeline.waitFor();
     await timeline.getByRole('button', { name: 'Muat pengajuan pembayaran saya terbaru', exact: true }).click();
     await timeline.getByRole('button', { name: 'Periksa pembayaran ' + declarationId, exact: true }).click();
-    await timeline.getByText(/Penerimaan bank diverifikasi/).waitFor(); await timeline.getByText(/Pembayaran dialokasikan ke invoice/).waitFor(); await capture(pemohon.page, 'A13-buyer-sees-allocation');
+    // The buyer's own page states this payment's verification and its allocation to this invoice, both by the checker's account.
+    await timeline.getByText(new RegExp('^Penerimaan bank diverifikasi .+ oleh akun ' + pemeriksa.id + '[.]$')).waitFor();
+    await timeline.getByText(new RegExp('^Pembayaran dialokasikan ke invoice ' + String(invoice.id) + ' · .+ · Dicatat akun ' + pemeriksa.id + '$')).waitFor();
+    await capture(pemohon.page, 'A13-buyer-sees-allocation');
+  });
+  await step('A13d', 'pemohon', 'cannot reach the payment verification desk', async () => {
+    await pemohon.page.goto(origin.origin + '/billing/payment-reviews'); await pemohon.page.getByRole('heading', { name: 'Halaman ini di luar tugas akun Anda', exact: true }).waitFor();
+    assert.equal(await pemohon.page.getByRole('button', { name: /^Periksa pengajuan / }).count(), 0, 'The buyer has no queue to open');
+    assert.equal(await pemohon.page.getByRole('region', { name: /Verifikasi pembayaran|Alokasi pembayaran|Rincian pengajuan pembayaran/ }).count(), 0, 'The buyer has no verification or allocation desk');
+    assert.equal(await pemohon.page.getByRole('button', { name: /^(Simpan verifikasi pembayaran|Periksa keputusan verifikasi|Simpan alokasi pembayaran)$/ }).count(), 0, 'The buyer has no verification control');
+    await capture(pemohon.page, 'A13-buyer-no-verification-desk');
   });
   return { order: received.order, shipment: received.shipment, invoice: number, payment: 'Pengajuan ' + declarationId, total };
 }

@@ -101,6 +101,31 @@ public sealed class GoldenJourneyBrowserTests(MongoFixture fixture, ITestOutputH
             "billing.payment.submit", PaymentVerificationBson.Operation, PaymentAllocationBson.Operation })
             Assert.Equal(1L, await data.Rows("idempotencyRecords").CountDocumentsAsync(new BsonDocument("operation", operation)));
         Assert.Equal(1L, await data.Rows("bankReceipts").CountDocumentsAsync(new BsonDocument()));
+
+        // Money end state: every figure traces back to the one invoice total, through the declaration, the bank credit, the
+        // verification, the allocation and both balance heads.
+        static decimal Dec(BsonValue value) => Decimal128.ToDecimal(value.AsDecimal128);
+        var total = Dec(invoice["totals"]["total"]); Assert.True(total > 0m);
+        var declared = await data.Rows(PaymentDraftBson.Versions).Find(new BsonDocument("declarationId", head["_id"])).Sort(new BsonDocument("revision", -1)).FirstAsync();
+        Assert.Equal(total, Dec(declared["input"]["declaredAmount"]));
+        var credit = await data.Rows(BankReceiptBson.Receipts).Find(new BsonDocument()).SingleAsync();
+        Assert.Equal(total, Dec(credit["amount"])); Assert.False(credit["journalId"].IsBsonNull, "The bank credit is posted once as a cash journal");
+        Assert.Equal(1L, await data.Rows(BankReceiptBson.Confirmations).CountDocumentsAsync(new BsonDocument()));
+        Assert.Equal(1L, await data.Rows("idempotencyRecords").CountDocumentsAsync(new BsonDocument("operation", BankReceiptBson.Operation)));
+        Assert.Equal(credit["_id"], verification["receiptId"]);
+        Assert.Equal(verification["_id"], allocation["verificationId"]); Assert.Equal(credit["_id"], allocation["receiptId"]);
+        Assert.Equal(total, Dec(allocation["amount"])); Assert.Equal(0m, Dec(allocation["unapplied"]));
+        var line = Assert.Single(allocation["lines"].AsBsonArray); Assert.Equal(total, Dec(line["amount"])); Assert.Equal(0m, Dec(line["remaining"]));
+        var owed = await data.Rows(PaymentAllocationBson.Invoices).Find(new BsonDocument("_id", invoice["_id"])).SingleAsync();
+        Assert.Equal(total, Dec(owed["total"])); Assert.Equal(total, Dec(owed["paid"])); Assert.Equal(0m, Dec(owed["credited"]));
+        var funds = await data.Rows(PaymentAllocationBson.Receipts).Find(new BsonDocument("_id", credit["_id"])).SingleAsync();
+        Assert.Equal(total, Dec(funds["total"])); Assert.Equal(total, Dec(funds["allocated"])); Assert.Equal(0m, Dec(funds["reservedForRefund"]));
+        // The checker's correction of the OCR reading is the saved review version, and it holds the invoice total.
+        var correction = await data.Rows(PaymentCorrectionBson.Versions).Find(new BsonDocument("declarationId", head["_id"])).SingleAsync();
+        Assert.Equal(checker, correction["recordedBy"].AsInt64);
+        var amountField = correction["fields"].AsBsonArray.Single(field => field["field"].AsString == "amount");
+        Assert.Equal(total, decimal.Parse(amountField["value"].AsString, CultureInfo.InvariantCulture));
+        Assert.Contains("Pengajuan " + head["_id"].AsInt64.ToString(CultureInfo.InvariantCulture), lines);
     }
 
     /// <summary>Extra personas, service wiring and named fixture actions a stage adds to the order world.</summary>
