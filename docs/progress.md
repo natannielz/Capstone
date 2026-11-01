@@ -1,10 +1,10 @@
 # Unit Toko progress
 
-- **Done:** 1 Nov: J14 green on feat/j14-warehouse (27/27 at 8801e831). Product fixes: reconciliation review clock (bc5de5a5) and 360 px history buttons (f586d2ec). Three rehearsals updated to F-021/G-012/U-040 with owner approval. 4/15 passing.
+- **Done:** 1 Nov: J05 green on feat/j05-procurement: Golden B plus the 8 procurement desk rehearsals for steps 3–6 (owner approved the flip criteria and two Golden B selector edits for F-021 labels). 5/15 passing.
 - **Next:** J04, invoice release to payment: un-skip Golden A2.
-- **Blockers:** Phase F (D01–D08) still needs owner inputs. J14 PR into pc-sync is not merged. Three more rehearsals still expect the old sign-in page (docs/debt.md).
+- **Blockers:** Phase F (D01–D08) still needs owner inputs. PurchaseOrderBrowserTests (2) and PurchaseOrderInboundBrowserTests still expect pre-F-021/F-023 copy and an order reply without `inboundPools`; fixing them needs owner approval. Three more rehearsals still expect the old sign-in page (docs/debt.md).
 
-## 4/15 passing
+## 5/15 passing
 
 | ID | Journey | Passes | Evidence |
 | --- | --- | --- | --- |
@@ -12,7 +12,7 @@
 | J02 | Buyer fills the keranjang and checks out an order | **yes** | 31 Oct on main: OrderSubmission, OrderView and FunctionGap (second order, buyer cancellation) browser tests green |
 | J03 | Order to dispatch to receipt across personas | **yes** | 31 Oct on main: Golden A1 (`Golden_order_to_receipt_across_personas_shows_each_result_and_order_number`) green |
 | J04 | Invoice release to verified buyer payment | no | Golden A2 is skipped (`Pending.BrowserLatency`); seals (dcdd97aa) should unblock it |
-| J05 | Procurement request to received and valued goods | no | All 11 procurement desk rehearsals green (9d8959e6); cross-persona Golden B last green 22 Oct |
+| J05 | Procurement request to received and valued goods | **yes** | 1 Nov on feat/j05-procurement: Golden B (request → SP- → arrival → koli received) plus Funding, Disbursement, Inspection, QualityAcceptance, StockReceipt, StockValuation, SupplierPayable and Settlement browser tests green |
 | J06 | Substitution proposal and buyer consent | **yes** | 31 Oct on main: OrderSubstitutionBrowserTests green |
 | J07 | Returns, replacement, credit and refund | no | F09 partial |
 | J08 | Branch requests, spending policy and approvals | no | Branch-request rehearsal green only on the fix-order branch |

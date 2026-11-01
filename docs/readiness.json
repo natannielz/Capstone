@@ -70,8 +70,8 @@
       "Accepted goods become stock and are valued",
       "The supplier payable and its bank settlement are recorded"
     ],
-    "test": "GoldenJourneyBrowserTests.Golden_procurement_request_to_received_goods_across_personas_shows_each_result_and_number",
-    "passes": false
+    "test": "GoldenJourneyBrowserTests.Golden_procurement_request_to_received_goods_across_personas_shows_each_result_and_number + ProcurementFundingBrowserTests + ProcurementDisbursementBrowserTests + ProcurementInspectionBrowserTests + ProcurementQualityAcceptanceBrowserTests + ProcurementStockReceiptBrowserTests + ProcurementStockValuationBrowserTests + ProcurementSupplierPayableBrowserTests + ProcurementSettlementBrowserTests",
+    "passes": true
   },
   {
     "id": "J06",
