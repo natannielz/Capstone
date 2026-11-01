@@ -1,14 +1,14 @@
 # Unit Toko progress
 
-- **Done:** 1 Nov: J05 green on feat/j05-procurement: Golden B plus the 8 procurement desk rehearsals for steps 3–6 (owner approved the flip criteria and two Golden B selector edits for F-021 labels). 5/15 passing.
+- **Done:** 1 Nov: J01 green on feat/j01-guest-catalog: CatalogPublicSampleTests 12/12, and the catalog identifier and stock release rehearsals now follow the G-012 sign-in redirect (owner approved). The accounting books rehearsal was green unchanged. 6/15 passing. Earlier: J05 green on feat/j05-procurement (5/15).
 - **Next:** J04, invoice release to payment: un-skip Golden A2.
-- **Blockers:** Phase F (D01–D08) still needs owner inputs. PurchaseOrderBrowserTests (2) and PurchaseOrderInboundBrowserTests still expect pre-F-021/F-023 copy and an order reply without `inboundPools`; fixing them needs owner approval. Three more rehearsals still expect the old sign-in page (docs/debt.md).
+- **Blockers:** Phase F (D01–D08) still needs owner inputs. PurchaseOrderBrowserTests (2) and PurchaseOrderInboundBrowserTests still expect pre-F-021/F-023 copy and an order reply without `inboundPools`; fixing them needs owner approval.
 
-## 5/15 passing
+## 6/15 passing
 
 | ID | Journey | Passes | Evidence |
 | --- | --- | --- | --- |
-| J01 | Guest browses the sample catalog and signs in | no | Guest-sample test exists; no commit from the last week shows it green |
+| J01 | Guest browses the sample catalog and signs in | **yes** | 1 Nov on feat/j01-guest-catalog: CatalogPublicSampleTests 12/12 (samples only, no price, no private photo, non-sample hidden). Signed-out staff URL redirect proven by the catalog identifier and stock release browser rehearsals; buyer redirect by the frontend unit tests |
 | J02 | Buyer fills the keranjang and checks out an order | **yes** | 31 Oct on main: OrderSubmission, OrderView and FunctionGap (second order, buyer cancellation) browser tests green |
 | J03 | Order to dispatch to receipt across personas | **yes** | 31 Oct on main: Golden A1 (`Golden_order_to_receipt_across_personas_shows_each_result_and_order_number`) green |
 | J04 | Invoice release to verified buyer payment | no | Golden A2 is skipped (`Pending.BrowserLatency`); seals (dcdd97aa) should unblock it |
@@ -36,7 +36,7 @@ These are ordered by what unblocks order to dispatch (F03, V06, V07, U04, Q05).
 2. **J08, branch requests and approvals.**
    - Its branch-request rehearsal was green only on the fix-order branch, which is now merged; rerun it on main.
 3. **J13, catalog, identifiers, photos and prices.**
-   - verify-catalog-identifier-browser.mjs still expects the old sign-in page (docs/debt.md); fix it with owner approval first.
+   - CatalogIdentifierBrowserTests is green again since the J01 slice (G-012 redirect).
 
 ## Parked work (not resumed)
 

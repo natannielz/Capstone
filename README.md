@@ -7,7 +7,7 @@
 <p align="center">
   Platform operasional toko koperasi untuk cabang BNI dan akun bisnis yang disetujui.<br>
   <a href="https://github.com/natannielz/Capstone/actions/workflows/quality.yml"><img src="https://github.com/natannielz/Capstone/actions/workflows/quality.yml/badge.svg?event=pull_request" alt="Status CI Focused quality"></a>
-  <a href="#status-saat-ini"><img src="https://img.shields.io/badge/kesiapan-5%2F15_journey-yellow?style=flat" alt="Kesiapan 5/15 journey"></a>
+  <a href="#status-saat-ini"><img src="https://img.shields.io/badge/kesiapan-6%2F15_journey-yellow?style=flat" alt="Kesiapan 6/15 journey"></a>
 </p>
 
 <p align="center">
@@ -51,11 +51,11 @@ Akses diberikan dari enam templat peran ([izin](docs/architecture/permissions.md
 
 ### Status saat ini
 
-Kemajuan diukur dengan journey end-to-end di [docs/readiness.json](docs/readiness.json): **5 dari 15 journey lulus** (1 November 2026). Catatan harian ada di [docs/progress.md](docs/progress.md).
+Kemajuan diukur dengan journey end-to-end di [docs/readiness.json](docs/readiness.json): **6 dari 15 journey lulus** (1 November 2026). Catatan harian ada di [docs/progress.md](docs/progress.md).
 
 | ID | Journey | Status |
 | --- | --- | --- |
-| J01 | Tamu menjelajah katalog contoh lalu masuk | belum |
+| J01 | Tamu menjelajah katalog contoh lalu masuk | **lulus** |
 | J02 | Buyer mengisi keranjang dan checkout | **lulus** |
 | J03 | Pesanan → dispatch → penerimaan lintas persona | **lulus** |
 | J04 | Rilis invoice → pembayaran buyer terverifikasi | belum |

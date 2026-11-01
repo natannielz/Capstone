@@ -10,7 +10,7 @@
       "Sign in as a buyer; the full catalog with your contract prices replaces the samples"
     ],
     "test": "CatalogPublicSampleTests.Guest_sees_only_approved_samples_without_prices",
-    "passes": false
+    "passes": true
   },
   {
     "id": "J02",
