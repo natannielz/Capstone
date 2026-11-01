@@ -37,14 +37,14 @@ internal sealed class ProcurementStockReceiptTestData : IAsyncDisposable
         Inspection.Receiving.OrderId, 1, Inspection.Receiving.ApprovalId, InspectionId, 1, packages, PoolId, 1, reference,
         InspectionLine.LotCode ?? "SYNTHETIC-LOT-UNKNOWN-EXPIRY", InspectionLine.ExpiryDate, Reason);
     internal static async Task<ProcurementStockReceiptTestData> CreateAsync(MongoFixture fixture, ProcurementRoute route = ProcurementRoute.Ddo,
-        Func<ProcurementInspectionInput, ProcurementInspectionInput>? inspectionInput = null) {
+        Func<ProcurementInspectionInput, ProcurementInspectionInput>? inspectionInput = null, bool unboundOrder = false) {
         var data = new ProcurementStockReceiptTestData();
         try {
             data.Claims = await SupplierClaimTestData.CreateAsync(fixture, route, inspectionInput: input => {
                 var observed = inspectionInput is null ? input : inspectionInput(input);
                 data.InspectionLine = observed.Lines[0];
                 return observed;
-            }, boundStock: true);
+            }, boundStock: true, unboundOrder: unboundOrder);
             var scope = ProcurementRequestTestData.Scope;
             data.Maker = await data.Base.AddActorAsync(720, scope, Permissions.ProcurementRead, Permissions.StockRead, Permissions.StockReceive);
             data.Reader = await data.Base.AddActorAsync(721, scope, Permissions.ProcurementRead, Permissions.StockRead);

@@ -48,9 +48,10 @@ internal sealed class ProcurementReceivingTestData(PurchaseOrderTestData orders)
 
     internal static async Task<ProcurementReceivingTestData> CreateAsync(MongoFixture fixture,
         ProcurementRoute route = ProcurementRoute.Ddo, bool onReceipt = false, decimal requiredAdvance = 0, bool boundStock = false, bool activateEmptySource = false, bool useSystemClock = false,
-        long reviewedSafetyBufferBaseUnits = 12)
+        long reviewedSafetyBufferBaseUnits = 12, bool unboundOrder = false)
     {
         if (activateEmptySource && !boundStock) throw new ArgumentException("Empty activation needs the bound stock fixture", nameof(activateEmptySource));
+        if (unboundOrder && !boundStock) throw new ArgumentException("An unbound order beside a reviewed source needs the bound stock fixture", nameof(unboundOrder));
         var orders = await PurchaseOrderTestData.CreateAsync(fixture, activateEmptySource, useSystemClock, reviewedSafetyBufferBaseUnits);
         try {
             var data = new ProcurementReceivingTestData(orders) { Route = route };
@@ -70,6 +71,9 @@ internal sealed class ProcurementReceivingTestData(PurchaseOrderTestData orders)
                 await orders.PrepareBoundSourceAsync(reviewedSafetyBufferBaseUnits: reviewedSafetyBufferBaseUnits);
                 data.SourceMaker = orders.SourceMaker; data.SourceChecker = orders.SourceChecker;
                 data.PoolId = orders.PoolId; data.PolicyId = orders.PolicyId;
+            }
+            // unboundOrder keeps the reviewed source but approves the base order the pre-binding way (a genuine legacy order).
+            if (boundStock && !unboundOrder) {
                 var selection = new PurchaseOrderInboundPoolSelection([.. input.Lines.Select(line => new PurchaseOrderInboundAllocation(line.RequestSkuId, line.Packages, data.PoolId, 1))]);
                 var inbound = await orders.Service.PreviewInboundAsync(orders.Maker, input, selection);
                 data.Proposal = await orders.Service.ProposeInboundAsync(orders.Maker, input, selection, inbound["binding"].AsString, PurchaseOrderTestData.Meta("receiving-fixture-po"));
