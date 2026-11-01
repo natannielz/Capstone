@@ -7,6 +7,27 @@
 <p align="center">
   Platform operasional toko koperasi untuk cabang BNI dan akun bisnis yang disetujui.<br>
   <a href="https://github.com/natannielz/Capstone/actions/workflows/quality.yml"><img src="https://github.com/natannielz/Capstone/actions/workflows/quality.yml/badge.svg?event=pull_request" alt="Status CI Focused quality"></a>
+  <a href="#status-saat-ini"><img src="https://img.shields.io/badge/kesiapan-4%2F15_journey-yellow?style=flat" alt="Kesiapan 4/15 journey"></a>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/C%23-512BD4?style=flat&logo=dotnet&logoColor=white" alt="C#">
+  <img src="https://img.shields.io/badge/TypeScript-3178C6?style=flat&logo=typescript&logoColor=white" alt="TypeScript">
+  <img src="https://img.shields.io/badge/Python-3776AB?style=flat&logo=python&logoColor=white" alt="Python">
+  <img src="https://img.shields.io/badge/PowerShell-5391FE?style=flat" alt="PowerShell">
+</p>
+
+<p align="center">
+  <a href="https://dotnet.microsoft.com/"><img src="https://img.shields.io/badge/.NET-10.0-512BD4?style=flat&logo=dotnet&logoColor=white" alt=".NET 10.0"></a>
+  <a href="https://nextjs.org/"><img src="https://img.shields.io/badge/Next.js-16.4-000000?style=flat&logo=nextdotjs&logoColor=white" alt="Next.js 16.4"></a>
+  <a href="https://react.dev/"><img src="https://img.shields.io/badge/React-19.3-61DAFB?style=flat&logo=react&logoColor=black" alt="React 19.3"></a>
+  <a href="https://tailwindcss.com/"><img src="https://img.shields.io/badge/Tailwind_CSS-4.3-06B6D4?style=flat&logo=tailwindcss&logoColor=white" alt="Tailwind CSS 4.3"></a>
+  <a href="https://www.mongodb.com/"><img src="https://img.shields.io/badge/MongoDB-8.2-47A248?style=flat&logo=mongodb&logoColor=white" alt="MongoDB 8.2"></a>
+  <a href="https://auth0.com/"><img src="https://img.shields.io/badge/Auth0-OIDC-EB5424?style=flat&logo=auth0&logoColor=white" alt="Auth0 OIDC"></a>
+  <a href="https://github.com/tesseract-ocr/tesseract"><img src="https://img.shields.io/badge/Tesseract_OCR-5.5-3A7BD5?style=flat" alt="Tesseract OCR 5.5"></a>
+  <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/Node.js-24-5FA04E?style=flat&logo=nodedotjs&logoColor=white" alt="Node.js 24"></a>
+  <a href="https://vercel.com/"><img src="https://img.shields.io/badge/Vercel-frontend-000000?style=flat&logo=vercel&logoColor=white" alt="Vercel frontend"></a>
+  <a href="https://github.com/features/actions"><img src="https://img.shields.io/badge/GitHub_Actions-CI-2088FF?style=flat&logo=githubactions&logoColor=white" alt="GitHub Actions CI"></a>
 </p>
 
 ## Apa itu Unit Toko
@@ -30,7 +51,7 @@ Akses diberikan dari enam templat peran ([izin](docs/architecture/permissions.md
 
 ### Status saat ini
 
-Kemajuan diukur dengan journey end-to-end di [docs/readiness.json](docs/readiness.json): **3 dari 15 journey lulus** (31 Oktober 2026). Catatan harian ada di [docs/progress.md](docs/progress.md).
+Kemajuan diukur dengan journey end-to-end di [docs/readiness.json](docs/readiness.json): **4 dari 15 journey lulus** (1 November 2026). Catatan harian ada di [docs/progress.md](docs/progress.md).
 
 | ID | Journey | Status |
 | --- | --- | --- |
@@ -47,7 +68,7 @@ Kemajuan diukur dengan journey end-to-end di [docs/readiness.json](docs/readines
 | J11 | Workspace staf: satu shell, satu antrean | belum |
 | J12 | Akun, sign-in, delegasi dan tinjauan akses | belum |
 | J13 | Katalog, identifier, foto dan harga dikelola staf | belum |
-| J14 | Gudang: pemindaian, sumber stok dan hitung stok | belum |
+| J14 | Gudang: pemindaian, sumber stok dan hitung stok | **lulus** |
 | J15 | Operasi: rilis, pemantauan dan restore | belum |
 
 [Frontend di Vercel](https://unit-toko-bni.vercel.app/) masih berupa pratinjau; API, worker, MongoDB dan Auth0 hosted belum diterima untuk produksi. Identitas dan data contoh bersifat sintetis.
