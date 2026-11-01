@@ -2,6 +2,9 @@
 import assert from 'node:assert/strict';
 import { resolve } from 'node:path';
 
+// The app prints calendar dates via formatDate ("31 Okt 2026"), not ISO (F-021).
+const shownDate = iso => { const p = Object.fromEntries(new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Jakarta' }).formatToParts(new Date(iso)).map(part => [part.type, part.value])); return `${p.day} ${p.month.replace(/\.$/, '')} ${p.year}`; };
+
 export async function verifyProcurementStockReceiptBrowser({ config, maker, user, origin, directory, stockReceiptWrites, stockReceiptRecoveries, dropNext, dropped }) {
   const { page, context } = maker, path = '/procurement/stock-receipts', api = '/api/v1/procurement/stock-receipts', purpose = 'procurement-stock-receipt-review';
   const input = config.receiptInput, where = input.location, canonical = [where.organizationId, where.shopId, where.warehouseId, where.channelId].join(':');
@@ -16,13 +19,13 @@ export async function verifyProcurementStockReceiptBrowser({ config, maker, user
     await current.getByRole('heading', { name: 'Penerimaan stok ditahan', exact: true }).waitFor({ timeout: 60000 }); const choice = current.getByLabel('Organisasi / toko / gudang / kanal', { exact: true });
     await choice.locator(`option[value="${canonical}"]`).waitFor({ state: 'attached', timeout: 60000 }); await choice.selectOption(canonical); await current.getByRole('heading', { name: 'Riwayat penerimaan stok', exact: true }).waitFor({ timeout: 60000 });
   }
-  const row = current => current.getByRole('button').filter({ has: current.locator('strong').filter({ hasText: input.receiptReference + ' · ' }) });
+  const row = current => current.getByRole('button').filter({ has: current.locator('.data-list-title').filter({ hasText: input.receiptReference + ' · ' }) });
   async function open(current) { await row(current).click(); const detail = current.getByRole('region', { name: 'Rincian penerimaan stok', exact: true }); await detail.getByRole('heading', { name: 'Saat penerimaan · stok ditahan dan belum dinilai', exact: true }).waitFor({ timeout: 60000 }); return detail; }
   async function facts(current, region, source, pool) {
     const text = await region.innerText(); for (const value of [input.receiptReference, input.lotReference, input.reason, source.inspectionReference, pool.label, pool.physicalKey, pool.reconciliationProcedureReference, pool.outageProcedureReference, 'tersedia untuk dijual 0', 'Harga pesanan tidak otomatis menjadi biaya persediaan']) assert.ok(text.includes(value), value);
     const observed = source.lines.find(item => item.lineNumber === input.inspectionLineNumber).input, list = region.getByRole('list', { name: 'Rincian kondisi dan lot', exact: true });
     for (const [label, expected] of [['Kemasan dinyatakan / diterima', `${observed.declaredPackages} / ${observed.receivedPackages}`], ['Rusak / kedaluwarsa / terbuka', `${observed.damagedPackages} / ${observed.expiredPackages} / ${observed.openedPackages}`]]) assert.equal(await list.getByText(label, { exact: true }).locator('..').locator('dd').innerText(), expected);
-    for (const value of [observed.lotCode, observed.expiryDate, observed.putawayReference, observed.discrepancy]) if (value !== null) assert.ok((await list.innerText()).includes(value), value);
+    for (const value of [observed.lotCode, observed.expiryDate && shownDate(observed.expiryDate), observed.putawayReference, observed.discrepancy]) if (value !== null) assert.ok((await list.innerText()).includes(value), value);
     assert.equal(await current.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true); assert.equal(await list.evaluate(element => { for (let parent = element; parent; parent = parent.parentElement) { const style = getComputedStyle(parent); if (['auto', 'scroll', 'hidden'].includes(style.overflowY) && parent.scrollHeight > parent.clientHeight + 1 && parent !== document.documentElement) return false; } return true; }), true);
   }
   await page.goto(origin.origin + path); await choose(page); await page.getByText('Belum ada penerimaan stok ditahan.', { exact: true }).waitFor(); const listBody = { purpose, location: where };

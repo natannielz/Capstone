@@ -241,7 +241,7 @@ button:disabled{cursor:not-allowed}
 .ui-button--icon.ui-button--compact{width:var(--control-h-compact)}
 .ui-button--large{height:48px}
 /* A label that may wrap in a narrow column (two catalogue cards per phone row): still at least 44 px, never clipped. */
-.ui-button--wrap{height:auto;min-height:var(--control-h);padding-block:var(--space-2);white-space:normal;text-align:center}
+.ui-button--wrap{height:auto;min-height:var(--control-h);padding-block:var(--space-2);white-space:normal;overflow-wrap:anywhere;text-align:center}
 .ui-button:disabled{background:var(--muted);border-color:transparent;color:var(--muted-foreground);cursor:not-allowed}
 .ui-button--secondary:disabled,.ui-button--danger:disabled{background:var(--card);border-color:var(--border)}
 .ui-button--tertiary:disabled{background:transparent}

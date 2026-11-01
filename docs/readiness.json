@@ -195,8 +195,8 @@
       "Run a blind stock count with separate approval",
       "Replenishment suggests quantities from lead time"
     ],
-    "test": "OperationalScanReceivingBrowserTests + OperationalScanFulfillmentBrowserTests + StockCountBrowserTests + StockSourceReconciliationBrowserTests",
-    "passes": false
+    "test": "OperationalScanReceivingBrowserTests + OperationalScanFulfillmentBrowserTests + StockCountBrowserTests + StockSourceReconciliationBrowserTests + ReplenishmentBrowserTests + ReplenishmentTests + ReplenishmentServiceTests",
+    "passes": true
   },
   {
     "id": "J15",

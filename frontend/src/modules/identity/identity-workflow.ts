@@ -81,8 +81,11 @@ export function stepUpFields(session: IdentitySession, operation: string, return
   return { expectedActorId: session.account.userId, operation, returnPath };
 }
 
+/** Server clock estimate: serverTime plus the time elapsed since the session was observed. */
+export const sessionNow = (session: IdentitySession, elapsedMs: number) => Date.parse(session.serverTime) + Math.max(0, elapsedMs);
+
 export function sessionTiming(session: IdentitySession, elapsedMs: number) {
-  const now = Date.parse(session.serverTime) + Math.max(0, elapsedMs);
+  const now = sessionNow(session, elapsedMs);
   const expired = !session.authenticated || session.idleExpiresAt === null || session.absoluteExpiresAt === null ||
     now >= Math.min(Date.parse(session.idleExpiresAt), Date.parse(session.absoluteExpiresAt));
   return { expired, fresh: !expired && session.freshFactorUntil !== null && now < Date.parse(session.freshFactorUntil) };

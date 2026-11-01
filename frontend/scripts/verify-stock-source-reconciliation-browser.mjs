@@ -45,7 +45,7 @@ export async function verifyStockSourceReconciliationBrowser({ config, maker, us
     const region = current.getByRole('region', { name: 'Rincian pengajuan rekonsiliasi', exact: true });
     await region.getByRole('heading', { name: heading, exact: true }).waitFor({ timeout: 60000 }); return region;
   }
-  const when = value => new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'medium', timeZone: 'Asia/Jakarta' }).format(new Date(value)) + ' WIB';
+  const when = value => new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'medium', timeZone: 'Asia/Jakarta' }).format(new Date(value)).replace(', ', ' ') + ' WIB';
   async function entered(current, checker, original) {
     const who = checker ? 'pemeriksa' : 'pengaju', reference = checker ? config.checkerSourceReference : config.makerSourceReference;
     const at = new Date(Math.floor(Date.now() / 1000) * 1000), local = new Date(at.getTime() + 7 * 3600000).toISOString().slice(0, 19);

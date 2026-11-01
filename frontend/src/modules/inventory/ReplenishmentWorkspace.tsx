@@ -184,7 +184,7 @@ function Desk({account, refresh}: {account: Account; refresh: () => void}) {
       description="Hasil terdahulu untuk gudang ini. Setiap hasil merekam kondisi dan dasar angka saat diperiksa."
       actions={<Button disabled={locked} onClick={() => void loadHistory()}>Muat riwayat terbaru</Button>}>
       {history !== null && history.length === 0 && <StateView kind="empty" title="Belum ada hasil pada halaman ini." />}
-      {history && <ul>{history.map(item => <li key={item.id}><Button variant="secondary" disabled={locked}
+      {history && <ul>{history.map(item => <li key={item.id}><Button variant="secondary" className="ui-button--wrap" disabled={locked}
         onClick={() => void work(async ctx => {const saved = await gateway.read(item.id, ctx); if (ctx.isCurrent()) {
           if (!saved) throw new AccessFailure(409, 'replenishment_view_stale'); remember(saved);
         }})}>{item.skuCode} · {item.packageLabel} · {when(item.observedAt)} · Saran: {amount(item.suggestedPurchasePackages)}{item.suggestedPurchasePackages !== null ? ' kemasan' : ''}</Button></li>)}</ul>}

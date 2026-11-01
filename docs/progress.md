@@ -1,10 +1,10 @@
 # Unit Toko progress
 
-- **Done:** 31 Oct: J02, J03 and J06 ran green on main. J02 had regressed; fixed the data-list title flex (6469f1f8) and the cancel-tab step in the golden rehearsal. 3/15 passing.
-- **Next:** J14, warehouse: scan pick and dispatch against the Surat Jalan, plus a blind stock count with approval.
-- **Blockers:** Phase F (D01–D08) still needs owner inputs. wr/follow-fe is unmerged (50+ UI fixes; its M-3 line is now on main).
+- **Done:** 1 Nov: J14 green on feat/j14-warehouse (27/27 at 8801e831). Product fixes: reconciliation review clock (bc5de5a5) and 360 px history buttons (f586d2ec). Three rehearsals updated to F-021/G-012/U-040 with owner approval. 4/15 passing.
+- **Next:** J04, invoice release to payment: un-skip Golden A2.
+- **Blockers:** Phase F (D01–D08) still needs owner inputs. J14 PR into pc-sync is not merged. Three more rehearsals still expect the old sign-in page (docs/debt.md).
 
-## 3/15 passing
+## 4/15 passing
 
 | ID | Journey | Passes | Evidence |
 | --- | --- | --- | --- |
@@ -21,23 +21,22 @@
 | J11 | Staff workspaces: one shell, one queue, consistent pages | no | No journey test yet; page acceptance scripts only |
 | J12 | Accounts, sign-in, delegation and access review | no | R11 unproven |
 | J13 | Catalog, identifiers, photos and prices | no | No recent run |
-| J14 | Warehouse: scanning, stock sources and counts | no | No recent run |
+| J14 | Warehouse: scanning, stock sources and counts | **yes** | 1 Nov on feat/j14-warehouse (8801e831): receiving, fulfillment, stock count, source reconciliation and replenishment browser tests plus Replenishment(Service)Tests green, 27/27 |
 | J15 | Operations: release, monitoring and restore | no | No test; Q09, Q10 and Q12 open |
 
-J02, J03 and J06 were rerun on main on 31 Oct. The other rows still rest on commit evidence. Branch-only runs don't count.
+J02, J03 and J06 were rerun on main on 31 Oct. J14 ran green on its slice branch, which goes to pc-sync by PR. The other rows still rest on commit evidence. Branch-only runs don't count, except a slice branch on its way to pc-sync.
 
 ## Next 3 slices
 
 These are ordered by what unblocks order to dispatch (F03, V06, V07, U04, Q05).
 
-1. **J14, warehouse.**
-   - Scan pick and dispatch against the Surat Jalan, plus blind stock count with approval.
-   - These are the stock steps (F03, F04, F10) inside order to dispatch.
-2. **J04, invoice release to payment.**
+1. **J04, invoice release to payment.**
    - Un-skip Golden A2: its latency cause was unsealed fixtures, fixed in dcdd97aa.
    - This continues order to dispatch into invoice and payment.
-3. **J08, branch requests and approvals.**
+2. **J08, branch requests and approvals.**
    - Its branch-request rehearsal was green only on the fix-order branch, which is now merged; rerun it on main.
+3. **J13, catalog, identifiers, photos and prices.**
+   - verify-catalog-identifier-browser.mjs still expects the old sign-in page (docs/debt.md); fix it with owner approval first.
 
 ## Parked work (not resumed)
 
