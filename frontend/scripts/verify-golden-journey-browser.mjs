@@ -325,16 +325,16 @@ async function procurementToReceipt() {
     await capture(pengadaan.page, 'B3-order-review');
     await review.getByRole('button', { name: 'Kirim usulan pesanan', exact: true }).click();
     await pengadaan.page.getByRole('heading', { name: 'Menunggu pemeriksaan', exact: true }).waitFor();
-    await pengadaan.page.getByText(/^Usulan [0-9]+ · /).waitFor();
+    await pengadaan.page.getByText(/^Usulan pesanan [0-9]+ · /).waitFor();
     // Same as B1: the proposal list beside the saved proposal still says "Belum ada usulan pesanan." (F-022).
-    console.log('GOLDEN_JOURNEY_OBSERVATION ' + JSON.stringify({ step: 'B3', proposalListedWithoutReload: await pengadaan.page.getByRole('button', { name: /Usulan [0-9]+$/ }).count() > 0 }));
+    console.log('GOLDEN_JOURNEY_OBSERVATION ' + JSON.stringify({ step: 'B3', proposalListedWithoutReload: await pengadaan.page.getByRole('button', { name: /Usulan pesanan [0-9]+$/ }).count() > 0 }));
     await capture(pengadaan.page, 'B3-order-proposed');
     const proposed = writes.filter(record => record.path === '/api/v1/procurement/purchase-orders/proposals' && record.status === 200);
     assert.equal(proposed.length, 1); assert.equal(proposed[0].actor, pengadaan.id);
   });
   await step('B4', 'penyetuju-pengadaan', 'approves the supplier order internally', async () => {
     await renew(penyetuju); await penyetuju.page.goto(origin.origin + '/procurement/purchase-orders'); await choose(penyetuju.page, 'Rincian pesanan pembelian');
-    await penyetuju.page.getByRole('button', { name: /Usulan [0-9]+$/ }).first().click();
+    await penyetuju.page.getByRole('button', { name: /Usulan pesanan [0-9]+$/ }).first().click();
     await penyetuju.page.getByLabel('Alasan keputusan', { exact: true }).fill('Pemasok, kemasan dan nilai diperiksa');
     await penyetuju.page.getByRole('button', { name: 'Tinjau persetujuan pesanan', exact: true }).click();
     const decision = penyetuju.page.getByRole('region', { name: 'Rincian keputusan pesanan', exact: true }); await decision.waitFor();
@@ -384,7 +384,7 @@ async function procurementToReceipt() {
     assert.ok((await review.innerText()).includes('Tidak ada penambahan stok barang atau penempatan rak otomatis.'));
     await review.getByRole('checkbox').check(); await capture(gudang.page, 'B6-intake-review');
     await review.getByRole('button', { name: /^Simpan penerimaan/ }).click();
-    await gudang.page.getByRole('region', { name: 'Riwayat penerimaan fisik', exact: true }).getByText('SYNTHETIC-CONTAINER-INTAKE-GOLDEN', { exact: false }).waitFor();
+    await gudang.page.getByRole('region', { name: 'Riwayat penerimaan fisik', exact: true }).getByText('SYNTHETIC-CONTAINER-INTAKE-GOLDEN', { exact: false }).first().waitFor();
     await capture(gudang.page, 'B6-received');
   });
   return { request, order };
