@@ -44,16 +44,19 @@ internal sealed class ProcurementStockReceiptTestData : IAsyncDisposable
                 var observed = inspectionInput is null ? input : inspectionInput(input);
                 data.InspectionLine = observed.Lines[0];
                 return observed;
-            }, boundStock: true, unboundOrder: unboundOrder);
+            }, boundStock: !unboundOrder);
+            // A genuine legacy order predates its reviewed source: causal coverage refuses unbound orders once a pool covers the location.
+            var orders = data.Inspection.Receiving.Orders;
+            if (unboundOrder) await orders.PrepareBoundSourceAsync();
             var scope = ProcurementRequestTestData.Scope;
             data.Maker = await data.Base.AddActorAsync(720, scope, Permissions.ProcurementRead, Permissions.StockRead, Permissions.StockReceive);
             data.Reader = await data.Base.AddActorAsync(721, scope, Permissions.ProcurementRead, Permissions.StockRead);
             data.Outsider = await data.Base.AddActorAsync(722, new(GrantScopeKind.FulfillmentWarehouse, 100,
                 ShopId: data.Inspection.Receiving.Procurement.ForeignShopId, WarehouseId: data.Inspection.Receiving.Procurement.ForeignWarehouseId, ChannelId: 103), Permissions.ProcurementRead, Permissions.StockRead, Permissions.StockReceive);
-            data.SourceMaker = data.Inspection.Receiving.SourceMaker;
-            data.SourceChecker = data.Inspection.Receiving.SourceChecker;
-            data.PoolId = data.Inspection.Receiving.PoolId;
-            data.PolicyId = data.Inspection.Receiving.PolicyId;
+            data.SourceMaker = orders.SourceMaker;
+            data.SourceChecker = orders.SourceChecker;
+            data.PoolId = orders.PoolId;
+            data.PolicyId = orders.PolicyId;
             await PersonTestData.SeedDistinctPeopleAsync(data.Database, data.Clock, data.Maker.UserId, data.Reader.UserId, data.Outsider.UserId);
             Assert.False((await data.Rows("inventoryPools").Find(new BsonDocument("_id", data.PoolId)).SingleAsync())["active"].AsBoolean);
             return data;
