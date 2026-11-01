@@ -1,17 +1,17 @@
 # Unit Toko progress
 
-- **Done:** 1 Nov: J01 green on feat/j01-guest-catalog: CatalogPublicSampleTests 12/12, and the catalog identifier and stock release rehearsals now follow the G-012 sign-in redirect (owner approved). The accounting books rehearsal was green unchanged. 6/15 passing. Earlier: J05 green on feat/j05-procurement (5/15).
-- **Next:** J04, invoice release to payment: un-skip Golden A2.
-- **Blockers:** Phase F (D01–D08) still needs owner inputs. PurchaseOrderBrowserTests (2) and PurchaseOrderInboundBrowserTests still expect pre-F-021/F-023 copy and an order reply without `inboundPools`; fixing them needs owner approval.
+- **Done:** 1 Nov: J04 green on feat/j04-payment: Golden A2 written and un-skipped (A10 release → A11 invoice → A12 payment with proof and OCR → A13 verify, allocate, buyer sees it), green on runs j04-a2-5 and j04-a2-rebased; A1 still green. Step 4 reworded with owner approval (OCR is advisory after submit). 7/15 passing. Earlier: J01 (6/15), J05 (5/15).
+- **Next:** J08, branch requests and approvals: rerun the branch-request rehearsal on staging.
+- **Blockers:** Phase F (D01–D08) still needs owner inputs. OCR misread the A2 proof (100.00 instead of Rp22.000, no reference), so OCR quality is unproven. PurchaseOrderBrowserTests (2) and PurchaseOrderInboundBrowserTests still expect pre-F-021/F-023 copy and an order reply without `inboundPools`; fixing them needs owner approval.
 
-## 6/15 passing
+## 7/15 passing
 
 | ID | Journey | Passes | Evidence |
 | --- | --- | --- | --- |
 | J01 | Guest browses the sample catalog and signs in | **yes** | 1 Nov on feat/j01-guest-catalog: CatalogPublicSampleTests 12/12 (samples only, no price, no private photo, non-sample hidden). Signed-out staff URL redirect proven by the catalog identifier and stock release browser rehearsals; buyer redirect by the frontend unit tests |
 | J02 | Buyer fills the keranjang and checks out an order | **yes** | 31 Oct on main: OrderSubmission, OrderView and FunctionGap (second order, buyer cancellation) browser tests green |
 | J03 | Order to dispatch to receipt across personas | **yes** | 31 Oct on main: Golden A1 (`Golden_order_to_receipt_across_personas_shows_each_result_and_order_number`) green |
-| J04 | Invoice release to verified buyer payment | no | Golden A2 is skipped (`Pending.BrowserLatency`); seals (dcdd97aa) should unblock it |
+| J04 | Invoice release to verified buyer payment | **yes** | 1 Nov on feat/j04-payment: Golden A2 (`Golden_invoice_release_to_verified_payment_across_personas_shows_each_result_and_invoice_number`) green, invoice issue 11.9 s under the 30 s bound |
 | J05 | Procurement request to received and valued goods | **yes** | 1 Nov on feat/j05-procurement: Golden B (request → SP- → arrival → koli received) plus Funding, Disbursement, Inspection, QualityAcceptance, StockReceipt, StockValuation, SupplierPayable and Settlement browser tests green |
 | J06 | Substitution proposal and buyer consent | **yes** | 31 Oct on main: OrderSubstitutionBrowserTests green |
 | J07 | Returns, replacement, credit and refund | no | F09 partial |
@@ -30,13 +30,12 @@ J02, J03 and J06 were rerun on main on 31 Oct. J14 ran green on its slice branch
 
 These are ordered by what unblocks order to dispatch (F03, V06, V07, U04, Q05).
 
-1. **J04, invoice release to payment.**
-   - Un-skip Golden A2: its latency cause was unsealed fixtures, fixed in dcdd97aa.
-   - This continues order to dispatch into invoice and payment.
-2. **J08, branch requests and approvals.**
-   - Its branch-request rehearsal was green only on the fix-order branch, which is now merged; rerun it on main.
-3. **J13, catalog, identifiers, photos and prices.**
+1. **J08, branch requests and approvals.**
+   - Its branch-request rehearsal was green only on the fix-order branch, which is now merged; rerun it on staging.
+2. **J13, catalog, identifiers, photos and prices.**
    - CatalogIdentifierBrowserTests is green again since the J01 slice (G-012 redirect).
+3. **J09, bank statement, receipts and reconciliation.**
+   - Follows J04's verified payment into the bank side; no recent run.
 
 ## Parked work (not resumed)
 

@@ -51,12 +51,12 @@
       "Store finance proposes an invoice release for a received order; a second person decides it",
       "The invoice is issued with its number",
       "Buyer opens the invoice and uploads a payment proof (camera or file) with a preview",
-      "OCR suggests amount and reference; the buyer confirms and submits",
+      "Buyer submits; OCR shows advisory amount/reference to buyer and checker; the checker corrects it against the original",
       "Payment checker reviews the proof and verifies or rejects it",
       "The payment is allocated to the invoice; the buyer sees the paid status"
     ],
     "test": "GoldenJourneyBrowserTests.Golden_invoice_release_to_verified_payment_across_personas_shows_each_result_and_invoice_number",
-    "passes": false
+    "passes": true
   },
   {
     "id": "J05",
