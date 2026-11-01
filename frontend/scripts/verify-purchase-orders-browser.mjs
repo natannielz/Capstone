@@ -1,6 +1,7 @@
 // Actual shared Next/HTTPS/Kestrel/Mongo; producer records are real and all operational inputs are synthetic.
 import assert from 'node:assert/strict';
 import { resolve } from 'node:path';
+import { displayDate } from './workspace-rehearsal.mjs';
 
 export async function verifyPurchaseOrdersBrowser({ config, maker, user, origin, directory, purchaseOrderWrites, purchaseOrderRecoveries, dropNext, dropped }) {
   const { page, context } = maker, path = '/procurement/purchase-orders', api = '/api/v1/procurement/purchase-orders';
@@ -42,7 +43,7 @@ export async function verifyPurchaseOrdersBrowser({ config, maker, user, origin,
     const text = await region.innerText();
     for (const value of [config.organizationName, config.shopName, config.warehouseName, config.channelName, config.supplierName, config.supplierSubject,
       config.skuCode, config.familyName, config.packageLabel, config.specification, '12 piece per kemasan', '3 kemasan', '36 piece', '000001', '000012', reference,
-      'Rp10.000,00', 'Rp30.000,00', 'Rp3.300,00', 'Rp700,00', 'Rp34.000,00', description, config.dueDate]) assert.ok(text.includes(value), value);
+      'Rp10.000,00', 'Rp30.000,00', 'Rp3.300,00', 'Rp700,00', 'Rp34.000,00', description, displayDate(config.dueDate)]) assert.ok(text.includes(value), value);
   }
   async function reviewReady(region, heading, button) {
     await region.waitFor(); assert.equal(await region.getByRole('heading', { name: heading, exact: true }).evaluate(element => element === document.activeElement), true);
@@ -94,7 +95,7 @@ export async function verifyPurchaseOrdersBrowser({ config, maker, user, origin,
   const history = await query(page, config.makerId, api + '/proposals/query', readBody); assert.equal(history.status, 200); assert.equal(history.body.items.length, 1);
   const proposal = history.body.items[0], proposalPath = api + '/proposals/' + proposal.id; assert.equal(proposal.state, 'pending'); assert.equal(proposal.decision, null);
   assert.deepEqual(proposal.totals, { net: '30000.00', tax: '3300.00', supplierCharges: '700.00', total: '34000.00' });
-  const row = current => current.getByRole('button', { name: new RegExp('Usulan ' + proposal.id + '$') });
+  const row = current => current.getByRole('button', { name: new RegExp('Usulan pesanan ' + proposal.id + '$') });
   await row(page).click(); assert.equal(await page.getByRole('button', { name: 'Tinjau persetujuan pesanan', exact: true }).count(), 0);
   const checker = await user(config.checkerToken); await checker.page.goto(origin.origin + path); await choose(checker.page); await row(checker.page).click();
   await checker.page.getByLabel('Alasan keputusan', { exact: true }).fill('Peninjauan sintetis independen atas pemasok, spesifikasi, kapasitas dan semua nilai');
@@ -106,12 +107,16 @@ export async function verifyPurchaseOrdersBrowser({ config, maker, user, origin,
   assert.equal((await query(checker.page, config.checkerId, proposalPath + '/decisions', { decision: 'approve', binding: preview.body.binding, reason: 'Synthetic missing precondition probe' }, { headers: { 'Idempotency-Key': probeKey } })).status, 400);
   dropNext(); await decision.getByRole('button', { name: 'Setujui pesanan secara internal', exact: true }).click(); await checker.page.getByRole('button', { name: 'Periksa hasil', exact: true }).waitFor();
   assert.equal(completed().length, 2); const approved = completed()[1]; assert.equal(approved.path, proposalPath + '/decisions'); assert.equal(approved.actor, config.checkerId); assert.equal(approved.version, '"1"');
-  await pending(checker.page, approved, 'procurement.purchase.order.approve'); await recover(checker.page); assert.equal(completed().length, 2); assert.equal(dropped(), 2); await row(checker.page).click();
+  await pending(checker.page, approved, 'procurement.purchase.order.approve'); await recover(checker.page); assert.equal(completed().length, 2); assert.equal(dropped(), 2);
+  // Once approved the list names the order by its SP number, not the proposal (F-021).
+  const shown = await query(checker.page, config.checkerId, proposalPath + '/query', { purpose: 'purchase-order-review' }); assert.equal(shown.status, 200); assert.equal(shown.body.state, 'approved');
+  const orderRow = current => current.getByRole('button', { name: new RegExp('SP-' + String(shown.body.decision.orderId).padStart(6, '0') + '$') });
+  await orderRow(checker.page).click();
   await checker.page.getByRole('heading', { name: 'Disetujui secara internal', exact: true }).waitFor(); await facts(checker.page.getByRole('region', { name: 'Rincian pesanan pembelian', exact: true }));
   assert.equal(await checker.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true); await checker.page.screenshot({ path: resolve(directory, 'purchase-order-approved-mobile.png'), fullPage: true });
   assert.equal(purchaseOrderRecoveries.length, 3); assert.equal(purchaseOrderRecoveries[0].status, 409);
   for (const [index, write] of [proposed, approved].entries()) { assert.equal(purchaseOrderRecoveries[index + 1].status, 200); assert.equal(purchaseOrderRecoveries[index + 1].body.key, write.key); }
-  const reader = await user(config.readerToken); await reader.page.goto(origin.origin + path); await choose(reader.page); await row(reader.page).click();
+  const reader = await user(config.readerToken); await reader.page.goto(origin.origin + path); await choose(reader.page); await orderRow(reader.page).click();
   await reader.page.getByRole('region', { name: 'Rincian pesanan pembelian', exact: true }).getByRole('heading', { name: 'Disetujui secara internal', exact: true }).waitFor();
   await facts(reader.page.getByRole('region', { name: 'Rincian pesanan pembelian', exact: true })); assert.equal(await reader.page.getByRole('button', { name: 'Buat pesanan pembelian', exact: true }).count(), 0);
   const remaining = await query(reader.page, config.readerId, api + '/requests/query', readBody); assert.equal(remaining.status, 200); assert.equal(remaining.body.items.length, 1);

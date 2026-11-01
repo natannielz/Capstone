@@ -24,7 +24,8 @@ internal sealed class PurchaseOrderInboundBindingTestData(ProcurementStockReceip
     internal PurchaseOrderInboundPoolSelection Selection => new([new(Input.Lines[0].RequestSkuId, 2, Data.PoolId, 1)]);
     internal IMongoCollection<BsonDocument> Rows(string name) => Data.Rows(name);
     internal static async Task<PurchaseOrderInboundBindingTestData> CreateAsync(MongoFixture fixture) {
-        var data = await ProcurementStockReceiptTestData.CreateAsync(fixture);
+        // The existing PO stays a genuine legacy order (no inbound binding) beside the reviewed inactive pool.
+        var data = await ProcurementStockReceiptTestData.CreateAsync(fixture, unboundOrder: true);
         try {
             var result = new PurchaseOrderInboundBindingTestData(data);
             result.Maker = await data.Base.AddActorAsync(8810, ProcurementRequestTestData.Scope,

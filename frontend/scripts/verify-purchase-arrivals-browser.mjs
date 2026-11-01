@@ -26,7 +26,7 @@ export async function verifyPurchaseArrivalsBrowser({config, maker, user, restar
     const location = current.getByLabel('Organisasi / toko / gudang / kanal', {exact: true});
     await location.locator('option[value="' + canonical + '"]').waitFor({state: 'attached'});
     await location.selectOption(canonical);
-    await current.getByRole('button', {name: new RegExp('Usulan ' + config.orderProposalId + '$')}).click();
+    await current.getByRole('button', {name: new RegExp('SP-' + String(config.orderId).padStart(6, '0') + '$')}).click();
     const section = panel(current), sku = section.getByLabel('Barang dan kemasan untuk jadwal');
     await sku.locator('option[value="' + config.skuId + '"]').waitFor({state: 'attached'});
     assert.equal(await sku.inputValue(), ''); await sku.selectOption(config.skuId);

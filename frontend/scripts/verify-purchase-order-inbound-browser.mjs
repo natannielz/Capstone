@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict';
 import { writeFileSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
+import { displayDate } from './workspace-rehearsal.mjs';
 
 export async function verifyPurchaseOrderInboundBrowser({ config, maker, user, origin, directory, purchaseOrderWrites, purchaseOrderRecoveries, dropNext, dropped }) {
   const { page, context } = maker, path = '/procurement/purchase-orders', api = '/api/v1/procurement/purchase-orders';
@@ -47,7 +48,7 @@ export async function verifyPurchaseOrderInboundBrowser({ config, maker, user, o
     const text = await region.innerText();
     for (const value of [config.organizationName, config.shopName, config.warehouseName, config.channelName, config.supplierName, config.supplierSubject,
       config.skuCode, config.familyName, config.packageLabel, config.specification, '12 piece per kemasan', '2 kemasan', '24 piece', '000001', '000012', reference,
-      'Rp10.000,00', 'Rp20.000,00', 'Rp3.300,00', 'Rp700,00', 'Rp24.000,00', description, config.dueDate]) assert.ok(text.includes(value), value);
+      'Rp10.000,00', 'Rp20.000,00', 'Rp3.300,00', 'Rp700,00', 'Rp24.000,00', description, displayDate(config.dueDate)]) assert.ok(text.includes(value), value);
     const plan = region.getByRole('region', { name: 'Rencana tujuan penerimaan', exact: true });
     const details = await plan.innerText(); for (const value of [config.poolLabel, 'Referensi tujuan ' + config.poolId + ', revisi ' + config.poolRevision, '2 kemasan', disclaimer, 'jumlah berlebih']) assert.ok(details.includes(value), value);
   }
@@ -73,7 +74,7 @@ export async function verifyPurchaseOrderInboundBrowser({ config, maker, user, o
   const readBody = { purpose: 'purchase-order-review', location };
   const legacy = await query(page, config.makerId, api + '/proposals/' + config.legacyProposalId + '/query', { purpose: 'purchase-order-review' });
   assert.equal(legacy.status, 200); assert.equal(legacy.body.state, 'approved'); assert.equal(Object.hasOwn(legacy.body, 'inboundPools'), false);
-  await page.getByRole('button', { name: new RegExp('Usulan ' + config.legacyProposalId + '$') }).click();
+  await page.getByRole('button', { name: new RegExp('SP-' + String(legacy.body.decision.orderId).padStart(6, '0') + '$') }).click();
   await page.getByText('Tujuan penerimaan belum diikat pada pesanan ini. Jangan menyimpulkan tujuan dari lokasi saat ini atau penerimaan yang terjadi kemudian.', { exact: true }).waitFor();
   await page.getByRole('button', { name: 'Buat pesanan pembelian', exact: true }).click();
   const request = page.getByLabel('Permintaan yang disetujui', { exact: true }), supplier = page.getByLabel('Pemasok yang disetujui', { exact: true });
@@ -139,7 +140,7 @@ export async function verifyPurchaseOrderInboundBrowser({ config, maker, user, o
   const proposal = history.body.items.find(item => item.input.commercialReference.reference === reference); assert.ok(proposal); assert.equal(proposal.state, 'pending');
   assert.equal(proposal.decision, null); checkPlan(proposal.inboundPools, 'proposed', null); assert.equal(proposal.inboundPools.selectionId, proposal.id);
   assert.deepEqual(proposal.totals, { net: '20000.00', tax: '3300.00', supplierCharges: '700.00', total: '24000.00' });
-  const proposalPath = api + '/proposals/' + proposal.id, row = current => current.getByRole('button', { name: new RegExp('Usulan ' + proposal.id + '$') });
+  const proposalPath = api + '/proposals/' + proposal.id, row = current => current.getByRole('button', { name: new RegExp('Usulan pesanan ' + proposal.id + '$') });
   await row(page).click(); await facts(page.getByRole('region', { name: 'Rincian pesanan pembelian', exact: true }), proposal.inboundPools.selectionId); assert.equal(await page.getByRole('button', { name: 'Tinjau persetujuan pesanan', exact: true }).count(), 0);
   const checker = await user(config.checkerToken); await checker.page.goto(origin.origin + path); await choose(checker.page); await row(checker.page).click();
   await checker.page.getByLabel('Alasan keputusan', { exact: true }).fill('Pemeriksa sintetis independen meninjau pembagian dua kemasan dan sumber penerimaan yang tetap tidak aktif');
@@ -148,12 +149,16 @@ export async function verifyPurchaseOrderInboundBrowser({ config, maker, user, o
   assert.ok((await decision.getByRole('region', { name: 'Kapasitas terkini', exact: true }).innerText()).includes('tersisa 3'));
   dropNext(); await decision.getByRole('button', { name: 'Setujui pesanan secara internal', exact: true }).click(); await checker.page.getByRole('button', { name: 'Periksa hasil', exact: true }).waitFor({ timeout: 60000 });
   assert.equal(completed().length, 2); const approved = completed()[1]; assert.equal(approved.path, proposalPath + '/decisions'); assert.equal(approved.actor, config.checkerId); assert.equal(approved.version, '"1"');
-  await pending(checker.page, approved, 'procurement.purchase.order.approve'); await recover(checker.page); await row(checker.page).click();
+  await pending(checker.page, approved, 'procurement.purchase.order.approve'); await recover(checker.page);
+  // Once approved the list names the order by its SP number, not the proposal (F-021).
+  const shown = await query(checker.page, config.checkerId, proposalPath + '/query', { purpose: 'purchase-order-review' }); assert.equal(shown.status, 200); assert.equal(shown.body.state, 'approved');
+  const orderRow = current => current.getByRole('button', { name: new RegExp('SP-' + String(shown.body.decision.orderId).padStart(6, '0') + '$') });
+  await orderRow(checker.page).click();
   await checker.page.getByRole('heading', { name: 'Disetujui secara internal', exact: true }).waitFor(); await facts(checker.page.getByRole('region', { name: 'Rincian pesanan pembelian', exact: true }), proposal.inboundPools.selectionId); await screen(checker.page, 'approved-mobile');
-  await page.reload(); await choose(page); await row(page).click(); await facts(page.getByRole('region', { name: 'Rincian pesanan pembelian', exact: true }), proposal.inboundPools.selectionId); await screen(page, 'reloaded-maker-desktop');
+  await page.reload(); await choose(page); await orderRow(page).click(); await facts(page.getByRole('region', { name: 'Rincian pesanan pembelian', exact: true }), proposal.inboundPools.selectionId); await screen(page, 'reloaded-maker-desktop');
   const final = await query(page, config.makerId, proposalPath + '/query', { purpose: 'purchase-order-review' }); assert.equal(final.status, 200); assert.equal(final.body.state, 'approved');
   checkPlan(final.body.inboundPools, 'approve', final.body.decision.id); assert.equal(final.body.inboundPools.selectionHash, proposal.inboundPools.selectionHash);
-  const reader = await user(config.readerToken); await reader.page.goto(origin.origin + path); await choose(reader.page); await row(reader.page).click();
+  const reader = await user(config.readerToken); await reader.page.goto(origin.origin + path); await choose(reader.page); await orderRow(reader.page).click();
   await facts(reader.page.getByRole('region', { name: 'Rincian pesanan pembelian', exact: true }), proposal.inboundPools.selectionId); assert.equal(await reader.page.getByRole('button', { name: 'Buat pesanan pembelian', exact: true }).count(), 0);
   const read = await query(reader.page, config.readerId, proposalPath + '/query', { purpose: 'purchase-order-review' }); assert.equal(read.status, 200); assert.deepEqual(read.body, final.body);
   const remaining = await query(reader.page, config.readerId, api + '/requests/query', readBody); assert.equal(remaining.status, 200); assert.equal(remaining.body.items.length, 1);
