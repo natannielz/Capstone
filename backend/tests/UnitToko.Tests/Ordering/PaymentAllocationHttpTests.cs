@@ -57,4 +57,31 @@ public sealed class PaymentAllocationHttpTests(MongoFixture fixture)
         Assert.Equal("3000.00", current.GetProperty("available").GetString()); Assert.Equal("1000.00", current.GetProperty("invoices")[0].GetProperty("paid").GetString());
         Assert.False(current.TryGetProperty("policy", out _)); Assert.False(current.TryGetProperty("accountNumber", out _)); Assert.True(balances.Headers.CacheControl!.NoStore);
     }
+
+    [WindowsStorageFact]
+    public async Task The_verifier_without_payment_allocate_is_refused_and_nothing_is_allocated() {
+        // F-007 maker/checker: the person who verified the payment (payment.verify, no payment.allocate) cannot allocate it.
+        await using var data = await PaymentAllocationTests.Data.CreateAsync(fixture); var preview = await data.Service.PreviewAsync(data.Actor, data.VerificationId, data.Input(0, 1000m));
+        var verifier = data.Source.Reviewer;
+        using var keys = new IdentityRuntimeTests.RuntimeKeys(); var settings = IdentityRuntimeTests.Settings(keys); settings["Mongo:Database"] = data.Source.Read.Database.DatabaseNamespace.DatabaseName;
+        using var factory = IdentityRuntimeTests.Factory(settings).WithWebHostBuilder(web => web.ConfigureTestServices(services => {
+            services.RemoveAll<IClock>(); services.AddSingleton<IClock>(data.Source.Read.Catalog.Clock);
+            services.RemoveAll<MongoIdentitySessionStore>(); services.AddSingleton(data.Source.Read.Catalog.Sessions);
+            services.RemoveAll<PaymentAllocationService>(); services.AddSingleton(data.Service);
+        }));
+        const string origin = "https://portal.unit-toko.co.id";
+        using var client = factory.CreateClient(new() { BaseAddress = new(origin), AllowAutoRedirect = false });
+        client.DefaultRequestHeaders.Add("Cookie", OpaqueSessionCookie.Name + "=" + data.Source.Read.Catalog.Issued[verifier.UserId].OpaqueToken);
+        var actions = (await client.GetFromJsonAsync<JsonElement>("/api/v1/access/current")).GetProperty("allowedActions").EnumerateArray().Select(item => item.GetString()).ToArray();
+        Assert.Contains("payment.verify", actions); Assert.DoesNotContain("payment.allocate", actions);
+        var csrf = (await client.GetFromJsonAsync<JsonElement>("/api/v1/identity/csrf")).GetProperty("requestToken").GetString()!;
+        var input = new { expectedReceiptVersion = "0", lines = new[] { new { invoiceId = data.InvoiceId.ToString(), expectedVersion = "0", amount = "1000.00" } } };
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"/api/v1/billing/payment-verifications/{data.VerificationId}/allocations") {
+            Content = JsonContent.Create(new { binding = preview.Binding, input, reason = "Synthetic allocation by the verifier" }) };
+        request.Headers.Add("Origin", origin); request.Headers.Add("X-Expected-Actor-Id", verifier.UserId.ToString()); request.Headers.Add("X-CSRF-Token", csrf);
+        request.Headers.Add("Idempotency-Key", "http-allocation-verifier"); request.Headers.Add("If-Match", "\"0\"");
+        using var response = await client.SendAsync(request); Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Contains("\"permission_denied\"", await response.Content.ReadAsStringAsync()); // the missing grant, not a person-independence refusal
+        Assert.Equal(0L, await data.Rows(PaymentAllocationBson.Events).CountDocumentsAsync(new MongoDB.Bson.BsonDocument()));
+    }
 }
