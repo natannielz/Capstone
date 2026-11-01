@@ -3,7 +3,7 @@ name: Focused quality
 on:
   # The changes job picks affected checks from the PR diff; Release validation stays manual.
   pull_request:
-    branches: [pc-sync, main]
+    branches: [staging, main]
   workflow_dispatch:
 
 permissions:

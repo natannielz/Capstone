@@ -199,7 +199,7 @@ flowchart LR
 ```mermaid
 flowchart LR
     f["feat/nama-slice<br/>(slice besar)"] -- "pull request" --> ci1{"CI Focused quality"}
-    ci1 -- "hijau + review" --> pc["pc-sync"]
+    ci1 -- "hijau + review" --> pc["staging"]
     pc -- "PR hanya atas<br/>keputusan pemilik" --> ci2{"CI Focused quality"}
     ci2 -- "hijau" --> m["main"]
     m -- "deploy otomatis" --> v["Vercel produksi"]
@@ -207,10 +207,10 @@ flowchart LR
 ```
 
 - Perbaikan kecil, dokumen dan konfigurasi boleh ikut di branch yang sedang berjalan.
-- **Focused quality** ([quality.yml](.github/workflows/quality.yml)) berjalan pada setiap pull request ke `pc-sync` dan `main` (sekitar 5 menit); job dipilih menurut path yang berubah (frontend, backend, supply chain).
+- **Focused quality** ([quality.yml](.github/workflows/quality.yml)) berjalan pada setiap pull request ke `staging` dan `main` (sekitar 5 menit); job dipilih menurut path yang berubah (frontend, backend, supply chain).
 - Regresi otoritas transaksional (uji MongoDB, lebih dari 30 menit) tidak berjalan pada PR. Bila PR mengubah path identitas/otorisasi/stok, CI memberi peringatan; jalankan Focused quality secara manual (`workflow_dispatch`) di branch itu sebelum merge.
 - **Release validation** ([release-validation.yml](.github/workflows/release-validation.yml)) hanya dijalankan manual.
-- `main` men-deploy ke Vercel produksi, jadi merge `pc-sync` → `main` hanya atas keputusan pemilik.
+- `main` men-deploy ke Vercel produksi, jadi merge `staging` → `main` hanya atas keputusan pemilik.
 
 ## Menjalankan secara lokal
 

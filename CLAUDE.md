@@ -7,9 +7,9 @@
 - Hardening, performance, seals and rehearsal tooling count only when a readiness item or a named launch requirement needs them. Otherwise add a `shortcut:` comment or one line to `docs/debt.md` and go back to the slice.
 
 ## Branches and PRs
-- Big slices go on `feat/<short-name>` branches, one PR into `pc-sync` (not `main`). Small fixes, docs and config ride along on the current branch.
-- `pc-sync` → `main` only when I say so: merging `main` deploys to Vercel production.
-- CI: Focused quality (`.github/workflows/quality.yml`) runs on every PR into `pc-sync` and `main` (~5 min); Release validation stays manual.
+- Big slices go on `feat/<short-name>` branches, one PR into `staging` (not `main`). Small fixes, docs and config ride along on the current branch.
+- `staging` → `main` only when I say so: merging `main` deploys to Vercel production.
+- CI: Focused quality (`.github/workflows/quality.yml`) runs on every PR into `staging` and `main` (~5 min); Release validation stays manual.
 - Its Mongo authority regression (30+ min) runs only on manual dispatch. When a PR warns "Authority regression not run", dispatch Focused quality on that branch before merging.
 
 ## Progress
