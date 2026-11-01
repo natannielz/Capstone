@@ -44,8 +44,8 @@ const advances = z.object({ location, receiptId: id, items: z.array(advanceChoic
 const policies = z.object({ items: z.array(policy).max(25), nextPolicyId: id.nullable() }).strict().refine(value => descending(value.items.map(item => item.id), value.nextPolicyId));
 const recovery = z.object({ state: z.enum(['not_confirmed', 'confirmed']), result: result.nullable() }).strict().refine(value => (value.state === 'confirmed') === (value.result !== null));
 const invalid = (): never => { throw new AccessFailure(502, 'advance_return_response_invalid'); };
-function parse<T>(schema: z.ZodType<T, z.ZodTypeDef, unknown>, value: unknown): T { try { const checked = schema.safeParse(value); return checked.success ? checked.data : invalid(); } catch { return invalid(); } }
-function entered<T>(schema: z.ZodType<T, z.ZodTypeDef, unknown>, value: unknown): T { try { const checked = schema.safeParse(value); if (checked.success) return checked.data; } catch { /* Reject before dispatch. */ } throw new RequestNotSentError(400, 'procurement_advance_return_invalid'); }
+function parse<T>(schema: z.ZodType<T, unknown>, value: unknown): T { try { const checked = schema.safeParse(value); return checked.success ? checked.data : invalid(); } catch { return invalid(); } }
+function entered<T>(schema: z.ZodType<T, unknown>, value: unknown): T { try { const checked = schema.safeParse(value); if (checked.success) return checked.data; } catch { /* Reject before dispatch. */ } throw new RequestNotSentError(400, 'procurement_advance_return_invalid'); }
 function data<T>(value: { data?: T; error?: unknown; response: Response }): T { if (!value.response.ok || value.data === undefined) throw new AccessFailure(value.response.status, (value.error as { code?: string })?.code ?? 'request_failed'); return value.data; }
 const headers = (actorId: string) => ({ 'X-Expected-Actor-Id': parse(id, actorId) });
 const purpose = 'procurement-advance-return-review';

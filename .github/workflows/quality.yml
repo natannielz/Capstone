@@ -1,8 +1,9 @@
 name: Focused quality
 
 on:
-  # Implementation is verified locally; run every preserved job manually on
-  # the integrated candidate. Repository protection is managed separately.
+  # The changes job picks affected checks from the PR diff; Release validation stays manual.
+  pull_request:
+    branches: [pc-sync, main]
   workflow_dispatch:
 
 permissions:
@@ -43,7 +44,7 @@ jobs:
           # pass does not prove the generated file matches the published OpenAPI.
           backend = infrastructure or any(p.startswith(("backend/", "frontend/src/api/generated/")) for p in files)
           frontend = infrastructure or any(p.startswith(("frontend/", "backend/contracts/")) for p in files)
-          security = infrastructure or any(p.startswith((
+          authority = infrastructure or any(p.startswith((
               "backend/src/UnitToko.Platform/Authorization/", "backend/src/UnitToko.Platform/Identity/",
               "backend/src/UnitToko.Modules/Identity/", "backend/src/UnitToko.Platform/Mongo/",
               "backend/src/UnitToko.Platform/Sessions/", "backend/src/UnitToko.Api/Identity/",
@@ -51,6 +52,10 @@ jobs:
               "backend/src/UnitToko.Api/Inventory/", "backend/tests/UnitToko.Tests/Inventory/",
               "backend/tests/UnitToko.Tests/Authorization/", "backend/tests/UnitToko.Tests/Identity/"
           )) for p in files)
+          # The Mongo authority regression takes over 30 minutes, so PRs only flag it; run this workflow manually before merging.
+          security = authority and manual
+          if authority and not manual:
+              print("::warning title=Authority regression not run::Shared authority paths changed; dispatch Focused quality manually on this branch before merging.")
           with open(os.environ["GITHUB_OUTPUT"], "a") as output:
               for name, value in {"frontend": frontend, "backend": backend, "security": security}.items():
                   output.write(f"{name}={str(value).lower()}\n")
@@ -118,7 +123,8 @@ jobs:
     needs: changes
     if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 35
+    # Manual runs include the authority regression (over 30 minutes); PR runs finish in about 5.
+    timeout-minutes: ${{ github.event_name == 'workflow_dispatch' && 90 || 35 }}
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: '1'
       DOTNET_NOLOGO: '1'

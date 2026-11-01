@@ -28,8 +28,8 @@ const difference = z.object({ balanceId: id, baselinePackages: quantity, observe
 const result = z.object({ proposalId: id, decisionId: id.nullable(), poolId: id, revision: z.literal('1'), status: z.enum(['proposed', 'reconciled', 'rejected']), recordedAt: time }).strict().refine(value => (value.status === 'proposed') === (value.decisionId === null));
 const purpose = 'stock-source-reconciliation-review';
 const invalid = (): never => { throw new AccessFailure(502, 'stock_source_reconciliation_response_invalid'); };
-function parse<T>(schema: z.ZodType<T, z.ZodTypeDef, unknown>, value: unknown): T { try { const checked = schema.safeParse(value); return checked.success ? checked.data : invalid(); } catch { return invalid(); } }
-function entered<T>(schema: z.ZodType<T, z.ZodTypeDef, unknown>, value: unknown): T { try { const checked = schema.safeParse(value); if (checked.success) return checked.data; } catch { /* Exact malformed input is rejected before dispatch. */ } throw new RequestNotSentError(400, 'invalid_stock_source_reconciliation'); }
+function parse<T>(schema: z.ZodType<T, unknown>, value: unknown): T { try { const checked = schema.safeParse(value); return checked.success ? checked.data : invalid(); } catch { return invalid(); } }
+function entered<T>(schema: z.ZodType<T, unknown>, value: unknown): T { try { const checked = schema.safeParse(value); if (checked.success) return checked.data; } catch { /* Exact malformed input is rejected before dispatch. */ } throw new RequestNotSentError(400, 'invalid_stock_source_reconciliation'); }
 function data<T>(value: { data?: T; error?: unknown; response: Response }): T { if (!value.response.ok || value.data === undefined) throw new AccessFailure(value.response.status, (value.error as { code?: string })?.code ?? 'request_failed'); return value.data; }
 const headers = (actorId: string) => ({ 'X-Expected-Actor-Id': parse(id, actorId) });
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
