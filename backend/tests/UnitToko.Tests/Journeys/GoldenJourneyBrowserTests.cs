@@ -67,7 +67,7 @@ public sealed class GoldenJourneyBrowserTests(MongoFixture fixture, ITestOutputH
 
     /// <summary>A2 (journeys.md §5.2 A10–A13): the received order from A1 is invoiced and paid. keuangan-tagihan proposes the invoice
     /// release and pemeriksa-pembayaran approves it; keuangan-tagihan issues the invoice; pemohon pays with original evidence;
-    /// pemeriksa-pembayaran verifies against the bank's credit and allocates it to the invoice; pemohon sees the allocation.</summary>
+    /// pemeriksa-pembayaran verifies against the bank's credit; keuangan-tagihan allocates it to the invoice (F-007); pemohon sees the allocation.</summary>
     [LocalStockBrowserFact]
     public async Task Golden_invoice_release_to_verified_payment_across_personas_shows_each_result_and_invoice_number()
     {
@@ -94,8 +94,12 @@ public sealed class GoldenJourneyBrowserTests(MongoFixture fixture, ITestOutputH
         var head = await data.Rows(PaymentDraftBson.Heads).Find(new BsonDocument()).SingleAsync(); Assert.Equal("submitted", head["state"].AsString);
         var verification = await data.Rows(PaymentVerificationBson.Decisions).Find(new BsonDocument()).SingleAsync(); Assert.Equal(checker, verification["actorId"].AsInt64);
         Assert.Equal(head["_id"], verification["declarationId"]);
-        var allocation = await data.Rows(PaymentAllocationBson.Events).Find(new BsonDocument()).SingleAsync(); Assert.Equal(checker, allocation["actorId"].AsInt64);
+        // F-007 maker/checker: pemeriksa-pembayaran verified, keuangan-tagihan allocated; two different people.
+        var allocation = await data.Rows(PaymentAllocationBson.Events).Find(new BsonDocument()).SingleAsync(); Assert.Equal(maker, allocation["actorId"].AsInt64);
+        Assert.NotEqual(verification["actorId"].AsInt64, allocation["actorId"].AsInt64);
         Assert.Equal(invoice["_id"].AsInt64, Assert.Single(allocation["lines"].AsBsonArray)["invoiceId"].AsInt64);
+        var allocationJournal = await data.Rows("journalEntries").Find(new BsonDocument("source.namespace", "billing.payment-allocation")).SingleAsync();
+        Assert.Equal(allocation["journalId"], allocationJournal["_id"]); Assert.Equal(maker, allocationJournal["actorId"].AsInt64);
         // One committed command per step: no duplicate receipt for any of the money-moving operations.
         foreach (var operation in new[] { InvoiceReleaseBson.Prefix + "propose", InvoiceReleaseBson.Prefix + "approve", InvoiceBson.Operation, PaymentDraftBson.Operation,
             "billing.payment.submit", PaymentVerificationBson.Operation, PaymentAllocationBson.Operation })

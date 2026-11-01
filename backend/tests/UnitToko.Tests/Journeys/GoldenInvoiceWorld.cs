@@ -31,9 +31,12 @@ internal static class GoldenInvoiceWorld
         await data.Base.AddGrantAsync(data.Buyer, 719103, CatalogAuthoringTestData.Audience, [Permissions.InvoiceRead, Permissions.PaymentEvidence]);
         string[] release = [Permissions.InvoiceRead, Permissions.InvoiceReleaseRead];
         string[] bank = [Permissions.BankReceiptRead, Permissions.BankStatementRead, Permissions.ReceivingAccountRead, Permissions.ReceivingAccountDetailsRead];
-        actors["keuangan-tagihan"] = await data.Base.AddActorAsync(719120, shop, [.. release, Permissions.InvoiceReleasePropose, Permissions.InvoiceIssue]);
+        // F-007 (owner decision 1 Nov): keuangan-tagihan allocates what pemeriksa-pembayaran verified; neither holds the other's side.
+        // The bank reads: reading or allocating a verified payment checks its bank receipt (BankReceiptService.Required).
+        actors["keuangan-tagihan"] = await data.Base.AddActorAsync(719120, shop, [.. release, Permissions.InvoiceReleasePropose, Permissions.InvoiceIssue,
+            Permissions.PaymentReviewRead, Permissions.PaymentAllocate, .. bank]);
         actors["pemeriksa-pembayaran"] = await data.Base.AddActorAsync(719121, shop, [.. release, Permissions.InvoiceReleaseApprove, Permissions.PaymentReviewRead,
-            Permissions.PaymentReviewCorrect, Permissions.PaymentVerify, Permissions.PaymentAllocate, .. bank]);
+            Permissions.PaymentReviewCorrect, Permissions.PaymentVerify, .. bank]);
         await PersonTestData.SeedDistinctPeopleAsync(data.Database, data.Clock, actors["keuangan-tagihan"].UserId, actors["pemeriksa-pembayaran"].UserId);
         PaymentOcrProcessor? ocr = null;
 
