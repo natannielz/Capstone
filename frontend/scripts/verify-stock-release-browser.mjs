@@ -113,8 +113,9 @@ async function signIn(account, actorId) {
     if (url.origin === origin.origin && (url.pathname.startsWith("/api/v1/") || url.pathname.startsWith("/auth/")))
       console.log("RELEASE_BROWSER_RESPONSE " + JSON.stringify({ account, path: url.pathname, status: response.status() }));
   });
-  await page.goto(origin.origin + route); await page.getByRole("heading", { name: /^(Masuk untuk melanjutkan|Sesi Anda perlu diperbarui)$/ }).waitFor();
-  await page.locator('section[aria-labelledby="workspace-access-state"]').getByRole("link", { name: /^Masuk( kembali)?$/ }).click(); await page.getByRole("button", { name: "Lanjutkan ke layanan akun", exact: true }).click();
+  // Signed-out visitors are redirected to the sign-in page by the proxy (G-012).
+  await page.goto(origin.origin + route); await page.waitForURL(origin.origin + "/identity/login?returnPath=" + encodeURIComponent(route));
+  await page.getByRole("heading", { name: "Masuk ke Unit Toko" }).waitFor(); await page.getByRole("button", { name: "Lanjutkan ke layanan akun", exact: true }).click();
   await page.waitForURL(origin.origin + route);
   try { await page.getByLabel("Gudang dan kanal", { exact: true }).waitFor(); }
   catch (error) {

@@ -243,8 +243,9 @@ try {
   page.on("dialog", dialog => dialog.accept());
   await check("real sign-in callback delivers the protected browser session", async () => {
     await page.goto(origin.origin + "/inventory/counts");
-    await page.getByRole("heading", { name: /^(Masuk untuk melanjutkan|Sesi Anda perlu diperbarui)$/ }).waitFor();
-    await page.locator('section[aria-labelledby="workspace-access-state"]').getByRole("link", { name: /^Masuk( kembali)?$/ }).click();
+    // Signed-out visitors are redirected to the sign-in page by the proxy (G-012).
+    await page.waitForURL(origin.origin + "/identity/login?returnPath=%2Finventory%2Fcounts");
+    await page.getByRole("heading", { name: "Masuk ke Unit Toko" }).waitFor();
     await page.getByRole("button", { name: "Lanjutkan ke layanan akun", exact: true }).click();
     await page.waitForURL(origin.origin + "/inventory/counts");
     await page.getByLabel("Gudang dan kanal", { exact: true }).waitFor();
