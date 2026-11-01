@@ -1,0 +1,7 @@
+# CodeRabbit auto-reviews only PRs into the default branch (main) unless told otherwise.
+language: id-ID
+reviews:
+  auto_review:
+    enabled: true
+    base_branches:
+      - pc-sync
