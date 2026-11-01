@@ -54,7 +54,11 @@ function forward(req, res, port, isApi) {
     const chunks = []; response.on('data', chunk => chunks.push(chunk));
     response.once('end', () => {
       const body = Buffer.concat(chunks); let value = null; try { value = body.length ? JSON.parse(body.toString('utf8')) : null; } catch { value = null; }
-      responses.push({ path: req.url.split('?')[0], method: req.method, status: response.statusCode, value });
+      const actor = req.headers['x-expected-actor-id'], path = req.url.split('?')[0];
+      responses.push({ path, method: req.method, status: response.statusCode, value, actor });
+      // Every refused API read or command, with the persona and the page that sent it, so a denial banner can be traced to its request.
+      if (response.statusCode >= 400 && response.statusCode < 500) console.log('GOLDEN_JOURNEY_API_4XX ' + JSON.stringify({ persona: Object.keys(journey.actorIds ?? {}).find(name => journey.actorIds[name] === actor) ?? null,
+        page: req.headers.referer ? new URL(req.headers.referer).pathname : null, method: req.method, path, status: response.statusCode, code: value?.code ?? null }));
       if (record) { record.status = response.statusCode; record.response = value; }
       if (res.destroyed) return; res.writeHead(response.statusCode ?? 502, response.headers); res.end(body);
     });
@@ -259,10 +263,12 @@ async function invoiceToPayment() {
     const text = (await region.locator('dl > div').filter({ has: region.page().locator('dt', { hasText: /^Jumlah transfer$/ }) }).locator('dd > span').first().innerText()).trim();
     assert.notEqual(text, 'Belum diketahui'); assert.match(text, /[0-9]/, 'The OCR panel reads an amount'); return text;
   };
-  const openOriginal = async (person, region, bytes) => {
+  // reopen: how the person gets the region back when the page closes it after a refused read (the review desk closes the submission).
+  const openOriginal = async (person, region, bytes, reopen = null) => {
     let original;
-    // A read racing the page's automatic first reads on the same submission can meet version_conflict; the person asks again.
-    for (let attempt = 0; attempt < 3 && (!original || original.status() === 409); attempt++) {
+    // A read racing the page's automatic first reads on the same submission can meet version_conflict; only then the person asks again.
+    for (let attempt = 0; attempt < 3 && (!original || original.status() === 409 && (await original.json().catch(() => null))?.code === 'version_conflict'); attempt++) {
+      if (original && reopen) await reopen();
       const response = person.page.waitForResponse(value => value.url().endsWith('/original/query'));
       await region.getByRole('button', { name: 'Lihat bukti asli', exact: true }).click(); original = await response;
     }
@@ -370,18 +376,27 @@ async function invoiceToPayment() {
   });
   // F-007 maker/checker: keuangan-tagihan reads payment reviews to allocate, and is offered no verification of the submitted payment.
   const verificationControls = /^(Pilih penerimaan bank|Periksa keputusan verifikasi|Simpan verifikasi pembayaran)$/;
-  // The page's automatic first reads can meet a concurrent read's version_conflict ("Data atau izin telah berubah"); reload until the panel answers.
-  const reloadVerification = async (panel, shown) => {
-    for (let attempt = 0; attempt < 10 && !await shown.isVisible(); attempt++) {
-      await panel.getByRole('button', { name: 'Muat ulang hasil verifikasi', exact: true }).click(); await shown.waitFor({ timeout: 2000 }).catch(() => {});
+  // The page's automatic first read of the verification can meet a concurrent read's version_conflict ("Data atau izin telah berubah").
+  // Only that refusal is asked again; any other failure of the read fails the step.
+  // since: the length of `responses` before the person opened the submission, so only this opening's reads count.
+  const reloadVerification = async (person, panel, shown, since) => {
+    const reads = () => responses.slice(since).filter(record => record.actor === person.id && /\/verification\/query$/.test(record.path));
+    for (let attempt = 0; attempt < 10; attempt++) {
+      if (await shown.waitFor({ timeout: 2000 }).then(() => true, () => false)) return;
+      for (const end = Date.now() + 30000; reads().length === 0 && Date.now() < end;) await new Promise(yes => setTimeout(yes, 100));
+      const last = reads().at(-1), seen = reads().length;
+      if (last?.status === 200) break; // the read answered: the panel must show it without asking again
+      assert.ok(last?.status === 409 && last.value?.code === 'version_conflict', 'Only a version_conflict verification read is retried: ' + JSON.stringify(last ? { status: last.status, code: last.value?.code } : null));
+      await panel.getByRole('button', { name: 'Muat ulang hasil verifikasi', exact: true }).click();
+      for (const end = Date.now() + 30000; reads().length === seen && Date.now() < end;) await new Promise(yes => setTimeout(yes, 100));
     }
     await shown.waitFor();
   };
   await step('A13a0', 'keuangan-tagihan', 'opens the submitted payment and is offered no verification controls', async () => {
     await renew(keuangan); await keuangan.page.goto(origin.origin + '/billing/payment-reviews');
-    await keuangan.page.getByRole('button', { name: 'Periksa pengajuan ' + declarationId, exact: true }).click();
+    const since = responses.length; await keuangan.page.getByRole('button', { name: 'Periksa pengajuan ' + declarationId, exact: true }).click();
     const panel = keuangan.page.getByRole('region', { name: 'Verifikasi pembayaran', exact: true });
-    await reloadVerification(panel, panel.getByText('Belum ada verifikasi pembayaran yang tersimpan.', { exact: true }));
+    await reloadVerification(keuangan, panel, panel.getByText('Belum ada verifikasi pembayaran yang tersimpan.', { exact: true }), since);
     await panel.getByText('Akun ini dapat membaca hasil; verifikasi memerlukan kewenangan tersendiri dan pemeriksa independen.', { exact: true }).waitFor();
     assert.equal(await keuangan.page.getByRole('button', { name: verificationControls }).count(), 0, 'keuangan-tagihan has no verification control');
     await capture(keuangan.page, 'A13-maker-no-verification');
@@ -391,7 +406,9 @@ async function invoiceToPayment() {
     await pemeriksa.page.goto(origin.origin + '/billing/payment-reviews'); await pemeriksa.page.getByRole('heading', { name: 'Pemeriksaan pembayaran', exact: true }).waitFor();
     await pemeriksa.page.getByRole('button', { name: 'Periksa pengajuan ' + declarationId, exact: true }).click();
     const review = pemeriksa.page.getByRole('region', { name: 'Rincian pengajuan pembayaran', exact: true }); await review.waitFor();
-    await openOriginal(pemeriksa, review, image);
+    await openOriginal(pemeriksa, review, image, async () => {
+      await review.waitFor({ state: 'detached' }); await pemeriksa.page.getByRole('button', { name: 'Periksa pengajuan ' + declarationId, exact: true }).click(); await review.waitFor();
+    });
     const original = review.getByRole('region', { name: 'Bukti asli untuk pemeriksaan', exact: true }); await original.getByRole('img').evaluate(element => element.decode());
     await capture(pemeriksa.page, 'A13-original'); await original.getByRole('button', { name: 'Tutup bukti', exact: true }).click();
     const ocr = review.getByRole('region', { name: 'Pembacaan bukti otomatis', exact: true });
@@ -432,9 +449,9 @@ async function invoiceToPayment() {
   await step('A13b', 'keuangan-tagihan', 'allocates the payment pemeriksa-pembayaran verified to the invoice', async () => {
     await paceApi(120); await renew(keuangan); assert.equal(await reachesFromWorkspace(keuangan, 'Pemeriksaan pembayaran'), '/billing/payment-reviews');
     const page = keuangan.page; await page.goto(origin.origin + '/billing/payment-reviews'); await page.getByRole('heading', { name: 'Pemeriksaan pembayaran', exact: true }).waitFor();
-    await page.getByRole('button', { name: 'Periksa pengajuan ' + declarationId, exact: true }).click();
+    const since = responses.length; await page.getByRole('button', { name: 'Periksa pengajuan ' + declarationId, exact: true }).click();
     const verification = page.getByRole('region', { name: 'Verifikasi pembayaran', exact: true });
-    await reloadVerification(verification, verification.getByRole('heading', { name: 'Pembayaran terverifikasi', exact: true }));
+    await reloadVerification(keuangan, verification, verification.getByRole('heading', { name: 'Pembayaran terverifikasi', exact: true }), since);
     assert.equal(await page.getByRole('button', { name: verificationControls }).count(), 0, 'keuangan-tagihan still has no verification control');
     const panel = page.getByRole('region', { name: 'Alokasi pembayaran', exact: true });
     await panel.getByRole('button', { name: 'Muat saldo alokasi', exact: true }).click(); await panel.getByRole('heading', { name: 'Saldo dana dan tagihan', exact: true }).waitFor();
@@ -461,6 +478,17 @@ async function invoiceToPayment() {
     await timeline.getByText(new RegExp('^Penerimaan bank diverifikasi .+ oleh akun ' + pemeriksa.id + '[.]$')).waitFor();
     await timeline.getByText(new RegExp('^Pembayaran dialokasikan ke invoice ' + String(invoice.id) + ' · .+ · Dicatat akun ' + keuangan.id + '$')).waitFor();
     await capture(pemohon.page, 'A13-buyer-sees-allocation');
+    // The buyer's invoice page states this invoice paid in full: in its own row and in its opened detail.
+    await pemohon.page.goto(origin.origin + '/billing/invoices'); const open = pemohon.page.getByRole('button', { name: 'Buka invoice ' + number, exact: true });
+    const paidInFull = async region => {
+      const status = region.getByText(/^Status pembayaran: /); await status.waitFor(); assert.equal(await status.count(), 1);
+      const shown = /^Status pembayaran: Lunas · Dibayar (Rp[0-9.]+,[0-9]{2}) · Sisa tagihan Rp0,00$/.exec((await status.innerText()).trim());
+      assert.ok(shown, 'The invoice states Lunas with nothing left to pay'); assert.equal(decimal(shown[1]), total, 'The invoice states the allocated payment');
+    };
+    const row = pemohon.page.getByRole('list', { name: 'Invoice terbit', exact: true }).getByRole('listitem').filter({ has: open });
+    await open.waitFor(); assert.equal(await row.count(), 1); await paidInFull(row); await capture(pemohon.page, 'A13-buyer-invoice-paid');
+    await open.click(); const detail = pemohon.page.getByRole('region', { name: 'Invoice terbit', exact: true });
+    await detail.getByRole('heading', { name: 'Invoice ' + number, exact: true }).waitFor(); await paidInFull(detail); await capture(pemohon.page, 'A13-buyer-invoice-paid-detail');
   });
   await step('A13d', 'pemohon', 'cannot reach the payment verification desk', async () => {
     await pemohon.page.goto(origin.origin + '/billing/payment-reviews'); await pemohon.page.getByRole('heading', { name: 'Halaman ini di luar tugas akun Anda', exact: true }).waitFor();

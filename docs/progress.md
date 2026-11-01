@@ -1,17 +1,17 @@
 # Unit Toko progress
 
-- **Done:** 1 Nov: Golden A2 written and un-skipped on feat/j04-payment (A10 release → A11 invoice → A12 payment with proof and OCR → A13 verify and allocate), with money end state asserted in Mongo; F-007 (owner decision): pilot keuangan-tagihan now reads payment reviews and bank receipts and allocates what pemeriksa-pembayaran verified; A2 proves each persona lacks the other's controls, plus HTTP 403 tests. Green: j04-f007-a2d, j04-f007-a1, LocalPilot.Tests 21/21, PaymentAllocation/VerificationHttpTests 5/5. Step 4 reworded with owner approval. J04 stays **no**: the buyer sees no paid state. 6/15 passing.
-- **Next:** J04 last gap: the buyer sees no paid state on `/billing/invoices` or `/billing/payments` (no buyer-readable invoice balance; PaymentWorkspace still says "belum dialokasikan" after allocation).
-- **Blockers:** Phase F (D01–D08) still needs owner inputs. OCR misread the A2 proof (100.00 instead of Rp22.000, no reference), so OCR quality is unproven. Payment review reads sometimes return 409 `version_conflict`; A2 retries them (docs/debt.md). PurchaseOrderBrowserTests (2) and PurchaseOrderInboundBrowserTests still expect pre-F-021/F-023 copy and an order reply without `inboundPools`; fixing them needs owner approval.
+- **Done:** 1 Nov: J04 green on feat/j04-buyer-paid. The buyer's `/billing/invoices` now shows "Status pembayaran: Lunas · Dibayar … · Sisa tagihan Rp0,00" (invoice view carries the receivable balance, no new endpoint or permission). Green: Golden A2 j04-paid-a2-green (red first at A13c, j04-paid-a2-red3), A1 j04-paid-a1, InvoiceTests + InvoiceHttpTests 16/16, frontend 1525/1525, contracts checks. Earlier the same day: Golden A2 written, F-007 allocation persona (PR #6). 7/15 passing.
+- **Next:** J08, branch requests and approvals: rerun the branch-request rehearsal on staging.
+- **Blockers:** Phase F (D01–D08) still needs owner inputs. OCR misread the A2 proof (100.00 instead of Rp22.000, no reference), so OCR quality is unproven. Payment review and order-timeline reads sometimes return 409 `version_conflict`; A2 retries only those (docs/debt.md).
 
-## 6/15 passing
+## 7/15 passing
 
 | ID | Journey | Passes | Evidence |
 | --- | --- | --- | --- |
 | J01 | Guest browses the sample catalog and signs in | **yes** | 1 Nov on feat/j01-guest-catalog: CatalogPublicSampleTests 12/12 (samples only, no price, no private photo, non-sample hidden). Signed-out staff URL redirect proven by the catalog identifier and stock release browser rehearsals; buyer redirect by the frontend unit tests |
 | J02 | Buyer fills the keranjang and checks out an order | **yes** | 31 Oct on main: OrderSubmission, OrderView and FunctionGap (second order, buyer cancellation) browser tests green |
 | J03 | Order to dispatch to receipt across personas | **yes** | 31 Oct on main: Golden A1 (`Golden_order_to_receipt_across_personas_shows_each_result_and_order_number`) green |
-| J04 | Invoice release to verified buyer payment | no | 1 Nov on feat/j04-payment: Golden A2 green (j04-a2-fix5) for steps 1–5 and allocation; step 6 "buyer sees the paid status" has no buyer UI, and allocation uses a grant no pilot persona holds (F-007) |
+| J04 | Invoice release to verified buyer payment | **yes** | 1 Nov on feat/j04-buyer-paid: Golden A2 (`Golden_invoice_release_to_verified_payment_across_personas_shows_each_result_and_invoice_number`) green, j04-paid-a2-green: release by two people, numbered invoice, proof + advisory OCR, checker correction and verification, keuangan-tagihan allocation (F-007), buyer sees Lunas on `/billing/invoices`; money end state asserted in Mongo |
 | J05 | Procurement request to received and valued goods | **yes** | 1 Nov on feat/j05-procurement: Golden B (request → SP- → arrival → koli received) plus Funding, Disbursement, Inspection, QualityAcceptance, StockReceipt, StockValuation, SupplierPayable and Settlement browser tests green |
 | J06 | Substitution proposal and buyer consent | **yes** | 31 Oct on main: OrderSubstitutionBrowserTests green |
 | J07 | Returns, replacement, credit and refund | no | F09 partial |

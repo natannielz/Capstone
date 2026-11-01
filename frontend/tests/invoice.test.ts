@@ -1,14 +1,24 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createUnitTokoClient } from '../src/api/client';
-import { createInvoiceGateway, parseInvoice, prepareInvoice } from '../src/modules/billing/invoice-client';
+import { createInvoiceGateway, invoicePayment, parseInvoice, prepareInvoice } from '../src/modules/billing/invoice-client';
 import { OperationJournal, operationRecoveryCapabilities, reconcileOperationRecovery } from '../src/modules/administration/operation-journal';
 
 const actor = '9007199254740993', receipt = { shipmentId: '9007199254740994', receiptId: '9007199254740995' };
 const detail = { review: 'a'.repeat(64), buyerName: 'Cabang Tebet', sellerName: 'Omi', issueDate: '2026-09-30', dueDate: '2026-10-30', grouping: 'buying_org_period_channel' as const,
   periodFrom: '2026-09-01', periodTo: '2026-09-30', termOrigin: 'issue_date' as const, termDays: 30, dayRule: 'calendar_days' as const, taxDocumentProcess: 'Proses pajak fixture',
   net: '100.00', tax: '10.00', charges: '2.00', total: '112.00', lines: [{ orderId: '91', ...receipt, skuId: '92', skuCode: 'ATK01', productName: 'Kertas', packageLabel: 'Karton', baseUnitsPerPackage: 12, baseUnitCode: 'rim', acceptedBaseUnits: '6', net: '100.00', tax: '10.00', charges: '2.00' }] };
-const invoice = { id: '9007199254740996', numberEntity: '100', numberChannel: '103', numberYear: 2026, number: '1', issuedAt: '2026-09-30T03:00:00Z', detail, documentHash: 'b'.repeat(64), documentLength: 1000 };
+const invoice = { id: '9007199254740996', numberEntity: '100', numberChannel: '103', numberYear: 2026, number: '1', issuedAt: '2026-09-30T03:00:00Z', detail, documentHash: 'b'.repeat(64), documentLength: 1000,
+  paid: '0.00', credited: '0.00', outstanding: '112.00', paymentState: 'unpaid' as const, aging: 'not_due' as const };
+test('invoice states its payment to the buyer and refuses a balance that does not add up to its total', () => {
+  assert.equal(invoicePayment(parseInvoice(invoice)), 'Status pembayaran: Belum dibayar · Dibayar Rp0,00 · Sisa tagihan Rp112,00');
+  assert.equal(invoicePayment(parseInvoice({ ...invoice, paid: '12.00', outstanding: '100.00', paymentState: 'partial' })), 'Status pembayaran: Dibayar sebagian · Dibayar Rp12,00 · Sisa tagihan Rp100,00');
+  assert.equal(invoicePayment(parseInvoice({ ...invoice, paid: '112.00', outstanding: '0.00', paymentState: 'paid', aging: 'settled' })), 'Status pembayaran: Lunas · Dibayar Rp112,00 · Sisa tagihan Rp0,00');
+  assert.equal(invoicePayment(parseInvoice({ ...invoice, paid: '100.00', credited: '12.00', outstanding: '0.00', paymentState: 'paid', aging: 'settled' })), 'Status pembayaran: Lunas · Dibayar Rp100,00 · Kredit Rp12,00 · Sisa tagihan Rp0,00');
+  assert.equal(invoicePayment(parseInvoice({ ...invoice, credited: '112.00', outstanding: '0.00', paymentState: 'credited', aging: 'settled' })), 'Status pembayaran: Dikreditkan · Dibayar Rp0,00 · Kredit Rp112,00 · Sisa tagihan Rp0,00');
+  for (const value of [{ ...invoice, paid: '12.00' }, { ...invoice, paymentState: 'paid' }, { ...invoice, paid: '112.00', outstanding: '0.00', paymentState: 'paid' }, { ...invoice, paymentState: undefined }])
+    assert.throws(() => parseInvoice(value));
+});
 test('invoice freezes reviewed receipts and exact totals; malformed money and duplicate accepted lines are refused', () => {
   assert.deepEqual(parseInvoice(invoice), invoice); const command = prepareInvoice(actor, [receipt], detail, 'Penerimaan telah diperiksa');
   assert.ok(Object.isFrozen(command.body.receipts)); assert.ok(Object.isFrozen(command.detail.lines[0]));
