@@ -56,7 +56,7 @@
       "The payment is allocated to the invoice; the buyer sees the paid status"
     ],
     "test": "GoldenJourneyBrowserTests.Golden_invoice_release_to_verified_payment_across_personas_shows_each_result_and_invoice_number",
-    "passes": false
+    "passes": true
   },
   {
     "id": "J05",
