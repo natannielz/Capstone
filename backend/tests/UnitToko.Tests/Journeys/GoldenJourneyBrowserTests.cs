@@ -22,7 +22,9 @@ using UnitToko.Modules.Identity.Contracts;
 using UnitToko.Modules.Inventory;
 using UnitToko.Modules.Organizations;
 using UnitToko.Platform;
+using UnitToko.Platform.Billing;
 using UnitToko.Platform.Fulfillment;
+using UnitToko.Platform.Integrity;
 using UnitToko.Platform.Identity;
 using UnitToko.Platform.Inventory;
 using UnitToko.Platform.Mongo;
@@ -63,25 +65,90 @@ public sealed class GoldenJourneyBrowserTests(MongoFixture fixture, ITestOutputH
             Assert.Equal(1L, await data.Rows("idempotencyRecords").CountDocumentsAsync(new BsonDocument("operation", B.Operation)));
         });
 
-    /// <summary>A2 (journeys.md §5.2 A10–A13): keuangan-tagihan proposes the invoice release and pemeriksa-pembayaran approves it;
-    /// keuangan-tagihan issues the invoice; pemohon pays with original evidence; pemeriksa-pembayaran verifies against the bank
-    /// receipt. Pending: issuing through the real release still exceeds the 30 s browser bound (F-004, retired-tests.md), so the
-    /// browser stage is not written past that point and the bound is not raised.</summary>
-    [LocalStockBrowserFact(Skip = Pending.BrowserLatency)]
-    public async Task Golden_invoice_release_to_verified_payment_across_personas_shows_each_result_and_invoice_number() =>
-        await OrderWorldAsync(fixture, output, "invoice-to-payment", "GOLDEN_JOURNEY_INVOICE_TO_PAYMENT_PASS", null, (_, _, _) => Task.CompletedTask);
+    /// <summary>A2 (journeys.md §5.2 A10–A13): the received order from A1 is invoiced and paid. keuangan-tagihan proposes the invoice
+    /// release and pemeriksa-pembayaran approves it; keuangan-tagihan issues the invoice; pemohon pays with original evidence;
+    /// pemeriksa-pembayaran verifies against the bank's credit; keuangan-tagihan allocates it to the invoice (F-007); pemohon sees the allocation.</summary>
+    [LocalStockBrowserFact]
+    public async Task Golden_invoice_release_to_verified_payment_across_personas_shows_each_result_and_invoice_number()
+    {
+        // Production-like: a deployed API runs with a provenance seal ring, so the receipt and dispatch are sealed as they are written;
+        // without it every read takes the full-proof fallback, which is what once exceeded the 30 s browser bound (F-004).
+        var ownsRing = ProvenanceSealRing.Current is null;
+        if (ownsRing) ProvenanceSealRing.Configure(SealKeyRing.ForKeys("golden-invoice", new Dictionary<string, byte[]> { ["golden-invoice"] = RandomNumberGenerator.GetBytes(32) }));
+        try {
+            await OrderWorldAsync(fixture, output, "invoice-to-payment", "GOLDEN_JOURNEY_INVOICE_TO_PAYMENT_PASS", null, VerifyInvoiceToPaymentAsync, GoldenInvoiceWorld.PrepareAsync);
+        } finally { if (ownsRing) ProvenanceSealRing.Configure(null); }
+    }
+
+    private static async Task VerifyInvoiceToPaymentAsync(GenuineFiniteDispatchTestData data, Dictionary<string, ActorContext> actors, string lines)
+    {
+        var maker = actors["keuangan-tagihan"].UserId; var checker = actors["pemeriksa-pembayaran"].UserId; var buyer = actors["pemohon"].UserId;
+        var events = await data.Rows(InvoiceReleaseBson.Events).Find(new BsonDocument()).Sort(new BsonDocument("revision", 1)).ToListAsync();
+        Assert.Equal(new[] { "propose", "approve" }, events.Select(row => row["action"].AsString)); Assert.Equal(new[] { maker, checker }, events.Select(row => row["actorId"].AsInt64));
+        var invoice = await data.Rows(InvoiceBson.Invoices).Find(new BsonDocument()).SingleAsync(); Assert.Equal(maker, invoice["issuedBy"].AsInt64);
+        var binding = await data.Rows(InvoiceReleaseBson.Bindings).Find(new BsonDocument()).SingleAsync();
+        Assert.Equal(invoice["_id"], binding["invoiceId"]); Assert.Equal(events[1]["_id"], binding["decisionId"]);
+        var number = string.Join('/', invoice["numberEntity"].AsInt64, invoice["numberChannel"].AsInt64, invoice["numberYear"].AsInt64, invoice["number"].AsInt64);
+        Assert.Contains("\"invoice\":\"" + number + "\"", lines);
+        var submission = await data.Rows("paymentSubmissions").Find(new BsonDocument()).SingleAsync(); Assert.Equal(buyer, submission["recordedBy"].AsInt64);
+        var head = await data.Rows(PaymentDraftBson.Heads).Find(new BsonDocument()).SingleAsync(); Assert.Equal("submitted", head["state"].AsString);
+        var verification = await data.Rows(PaymentVerificationBson.Decisions).Find(new BsonDocument()).SingleAsync(); Assert.Equal(checker, verification["actorId"].AsInt64);
+        Assert.Equal(head["_id"], verification["declarationId"]);
+        // F-007 maker/checker: pemeriksa-pembayaran verified, keuangan-tagihan allocated; two different people.
+        var allocation = await data.Rows(PaymentAllocationBson.Events).Find(new BsonDocument()).SingleAsync(); Assert.Equal(maker, allocation["actorId"].AsInt64);
+        Assert.NotEqual(verification["actorId"].AsInt64, allocation["actorId"].AsInt64);
+        Assert.Equal(invoice["_id"].AsInt64, Assert.Single(allocation["lines"].AsBsonArray)["invoiceId"].AsInt64);
+        var allocationJournal = await data.Rows("journalEntries").Find(new BsonDocument("source.namespace", "billing.payment-allocation")).SingleAsync();
+        Assert.Equal(allocation["journalId"], allocationJournal["_id"]); Assert.Equal(maker, allocationJournal["actorId"].AsInt64);
+        // One committed command per step: no duplicate receipt for any of the money-moving operations.
+        foreach (var operation in new[] { InvoiceReleaseBson.Prefix + "propose", InvoiceReleaseBson.Prefix + "approve", InvoiceBson.Operation, PaymentDraftBson.Operation,
+            "billing.payment.submit", PaymentVerificationBson.Operation, PaymentAllocationBson.Operation })
+            Assert.Equal(1L, await data.Rows("idempotencyRecords").CountDocumentsAsync(new BsonDocument("operation", operation)));
+        Assert.Equal(1L, await data.Rows("bankReceipts").CountDocumentsAsync(new BsonDocument()));
+
+        // Money end state: every figure traces back to the one invoice total, through the declaration, the bank credit, the
+        // verification, the allocation and both balance heads.
+        static decimal Dec(BsonValue value) => Decimal128.ToDecimal(value.AsDecimal128);
+        var total = Dec(invoice["totals"]["total"]); Assert.True(total > 0m);
+        var declared = await data.Rows(PaymentDraftBson.Versions).Find(new BsonDocument("declarationId", head["_id"])).Sort(new BsonDocument("revision", -1)).FirstAsync();
+        Assert.Equal(total, Dec(declared["input"]["declaredAmount"]));
+        var credit = await data.Rows(BankReceiptBson.Receipts).Find(new BsonDocument()).SingleAsync();
+        Assert.Equal(total, Dec(credit["amount"])); Assert.False(credit["journalId"].IsBsonNull, "The bank credit is posted once as a cash journal");
+        Assert.Equal(1L, await data.Rows(BankReceiptBson.Confirmations).CountDocumentsAsync(new BsonDocument()));
+        Assert.Equal(1L, await data.Rows("idempotencyRecords").CountDocumentsAsync(new BsonDocument("operation", BankReceiptBson.Operation)));
+        Assert.Equal(credit["_id"], verification["receiptId"]);
+        Assert.Equal(verification["_id"], allocation["verificationId"]); Assert.Equal(credit["_id"], allocation["receiptId"]);
+        Assert.Equal(total, Dec(allocation["amount"])); Assert.Equal(0m, Dec(allocation["unapplied"]));
+        var line = Assert.Single(allocation["lines"].AsBsonArray); Assert.Equal(total, Dec(line["amount"])); Assert.Equal(0m, Dec(line["remaining"]));
+        var owed = await data.Rows(PaymentAllocationBson.Invoices).Find(new BsonDocument("_id", invoice["_id"])).SingleAsync();
+        Assert.Equal(total, Dec(owed["total"])); Assert.Equal(total, Dec(owed["paid"])); Assert.Equal(0m, Dec(owed["credited"]));
+        var funds = await data.Rows(PaymentAllocationBson.Receipts).Find(new BsonDocument("_id", credit["_id"])).SingleAsync();
+        Assert.Equal(total, Dec(funds["total"])); Assert.Equal(total, Dec(funds["allocated"])); Assert.Equal(0m, Dec(funds["reservedForRefund"]));
+        // The checker's correction of the OCR reading is the saved review version, and it holds the invoice total.
+        var correction = await data.Rows(PaymentCorrectionBson.Versions).Find(new BsonDocument("declarationId", head["_id"])).SingleAsync();
+        Assert.Equal(checker, correction["recordedBy"].AsInt64);
+        var amountField = correction["fields"].AsBsonArray.Single(field => field["field"].AsString == "amount");
+        Assert.Equal(total, decimal.Parse(amountField["value"].AsString, CultureInfo.InvariantCulture));
+        Assert.Contains("Pengajuan " + head["_id"].AsInt64.ToString(CultureInfo.InvariantCulture), lines);
+    }
+
+    /// <summary>Extra personas, service wiring and named fixture actions a stage adds to the order world.</summary>
+    internal sealed record WorldExtension(Action<IServiceCollection> Services, Func<string, Task<object?>> Change);
 
     /// <summary>The order-to-cash world: stock with value, prices, spending and commercial policy, approved admissions and a
     /// courier roster, with one persona per step. <paramref name="change"/> adds named world changes for the browser.</summary>
     internal static async Task OrderWorldAsync(MongoFixture fixture, ITestOutputHelper output, string stage, string marker,
-        Func<GenuineFiniteDispatchTestData, string, Task<object?>>? change, Func<GenuineFiniteDispatchTestData, Dictionary<string, ActorContext>, string, Task> verify)
+        Func<GenuineFiniteDispatchTestData, string, Task<object?>>? change, Func<GenuineFiniteDispatchTestData, Dictionary<string, ActorContext>, string, Task> verify,
+        Func<GenuineFiniteDispatchTestData, Dictionary<string, ActorContext>, Task<WorldExtension>>? extend = null)
     {
         var root = RepositoryRoot(); var node = Environment.GetEnvironmentVariable("UNITTOKO_BROWSER_NODE");
         var playwright = Environment.GetEnvironmentVariable("UNITTOKO_BROWSER_PLAYWRIGHT_PACKAGE");
         Assert.True(Path.IsPathFullyQualified(node ?? "") && File.Exists(node)); Assert.True(Path.IsPathFullyQualified(playwright ?? "") && File.Exists(playwright));
         var buildPath = Path.Combine(root, "frontend", ".next-full", "BUILD_ID"); Assert.True(File.Exists(buildPath));
         await using var data = await GenuineFiniteDispatchTestData.CreateAsync(fixture, converted: false, cogs: true,
-            createOrder: false, reviewedSafetyBufferBaseUnits: 0, useSystemClock: true);
+            createOrder: false, reviewedSafetyBufferBaseUnits: 0, useSystemClock: true,
+            // An extended world invoices and takes payment, so the book carries the customer receivable and cash mappings.
+            includeCustomerMappings: extend is not null, includeCustomerCashMappings: extend is not null);
         var shop = new GrantScope(GrantScopeKind.FulfillmentShop, 100, ShopId: 101, ChannelId: 103);
         // The buyer template's own read/receipt grants; the fixture buyer already holds catalog/order submit/read/cancel.
         await data.Base.AddGrantAsync(data.Buyer, 719101, CatalogAuthoringTestData.Audience, [Permissions.ShipmentRead, Permissions.ReceiptAccept]);
@@ -95,6 +162,7 @@ public sealed class GoldenJourneyBrowserTests(MongoFixture fixture, ITestOutputH
             ["pemohon"] = data.Buyer, ["penyetuju-cabang"] = data.Spender, ["peninjau-toko"] = reviewer,
             ["petugas-gudang"] = warehouse, ["petugas-kirim"] = shipping, ["kurir"] = data.Courier
         };
+        var extension = extend is null ? null : await extend(data, actors);
         foreach (var actor in actors.Values) if (!await data.Rows("accountProfiles").Find(new BsonDocument("_id", actor.UserId)).AnyAsync()) {
             var at = data.Clock.UtcNow;
             await data.Rows("accountProfiles").InsertOneAsync(new BsonDocument { { "_id", actor.UserId }, { "schemaVersion", 1 }, { "version", 1L },
@@ -121,7 +189,9 @@ public sealed class GoldenJourneyBrowserTests(MongoFixture fixture, ITestOutputH
             services.RemoveAll<IdAllocator>(); services.AddSingleton(new IdAllocator(data.Database));
             services.RemoveAll<IClock>(); services.AddSingleton<IClock>(data.Clock);
             services.RemoveAll<MongoIdentitySessionStore>(); services.AddSingleton(data.Catalog.Sessions);
-            services.AddSingleton<IStartupFilter>(new RenewControl(controlKey, async name => actors.ContainsKey(name) ? (await Issue(name)).OpaqueToken : null, change is null ? null : action => change(data, action)));
+            extension?.Services(services);
+            services.AddSingleton<IStartupFilter>(new RenewControl(controlKey, async name => actors.ContainsKey(name) ? (await Issue(name)).OpaqueToken : null,
+                change is null ? extension?.Change : action => change(data, action)));
         }));
         factory.UseKestrel(options => options.Listen(IPAddress.Loopback, 0)); factory.StartServer();
         var apiAddress = Assert.Single(factory.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses);

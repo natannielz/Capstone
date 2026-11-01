@@ -68,9 +68,11 @@ public static class PilotPersonas
         new("petugas-kirim", 3007, "Petugas pengiriman · SINTETIS", [Grant("store-staff", Warehouse, Permissions.ShipmentAssign, Permissions.OrganizationAddressRead)]),
         new("kurir", 3008, "Kurir · SINTETIS", [Grant("courier", Courier)]),
         // Finance maker: invoice release proposal, invoice issue, bank statement staging (the maker side of bank receipt confirmation and disbursement
-        // verification), receiving accounts and stock valuation proposals. No complaints or payment-review pages (F-027).
-        new("keuangan-tagihan", 3009, "Keuangan penagihan · SINTETIS", [Finance(["billing"], Shop, Permissions.InvoiceReleaseRead, Permissions.InvoiceReleasePropose,
-            Permissions.BankStatementRead, Permissions.BankStatementStage, Permissions.ReceivingAccountRead, Permissions.ReceivingAccountDetailsRead, Permissions.ReceivingAccountPropose, Permissions.ProcurementStockValuationRead,
+        // verification), receiving accounts and stock valuation proposals. It reads payment reviews to allocate payments pemeriksa-pembayaran verified
+        // (F-007, owner decision 1 Nov; no payment.verify) and reads bank receipts, because reading or allocating a verified payment checks its bank
+        // receipt; it still has no complaints pages (F-027).
+        new("keuangan-tagihan", 3009, "Keuangan penagihan · SINTETIS", [Finance(["billing"], Shop, Permissions.InvoiceReleaseRead, Permissions.InvoiceReleasePropose, Permissions.PaymentReviewRead,
+            Permissions.BankReceiptRead, Permissions.BankStatementRead, Permissions.BankStatementStage, Permissions.ReceivingAccountRead, Permissions.ReceivingAccountDetailsRead, Permissions.ReceivingAccountPropose, Permissions.ProcurementStockValuationRead,
             Permissions.ProcurementStockValuationPropose, Permissions.ProcurementDisbursementRead, Permissions.ProcurementDisbursementEvidenceRead,
             Permissions.ProcurementRead, Permissions.StockRead, Permissions.OrderRead, Permissions.OrganizationAddressRead)]),
         // Finance checker: payment verification, invoice release approval, bank receipt confirmation, receiving account decisions, valuation, stock release and funding

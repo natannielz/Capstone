@@ -196,9 +196,9 @@ flowchart LR
     i2 -- "tolak" --> i1
     i2 -- "setuju" --> i3["Invoice terbit bernomor"]
     i3 --> i4["Buyer unggah bukti bayar<br/>(kamera / berkas)"]
-    i4 --> i5["OCR menyarankan nominal<br/>dan referensi"]
-    i5 --> i6["Buyer konfirmasi dan kirim"]
-    i6 --> i7{"Pemeriksa pembayaran"}
+    i4 --> i5["Buyer mengajukan<br/>pembayaran"]
+    i5 --> i6["OCR memberi saran nominal<br/>dan referensi (hanya saran)"]
+    i6 --> i7{"Pemeriksa mengoreksi<br/>terhadap bukti asli"}
     i7 -- "tolak" --> i4
     i7 -- "verifikasi" --> i8["Alokasi ke invoice,<br/>status lunas"]
 ```

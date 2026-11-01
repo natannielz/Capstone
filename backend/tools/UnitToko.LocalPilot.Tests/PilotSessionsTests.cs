@@ -155,7 +155,13 @@ public sealed class PilotSessionsTests
         Assert.Contains(Permissions.BankStatementStage, Held("keuangan-tagihan"));
         // F-027: each persona holds only its role's grants, so its workspace shows only its own work.
         Assert.Equal(new[] { Permissions.CatalogPublicApprove, Permissions.CatalogRead, Permissions.OrderRead, Permissions.PricingApprove }, Held("peninjau-katalog").Order(StringComparer.Ordinal));
-        Assert.DoesNotContain(Permissions.CaseRead, Held("keuangan-tagihan")); Assert.DoesNotContain(Permissions.PaymentReviewRead, Held("keuangan-tagihan"));
+        Assert.DoesNotContain(Permissions.CaseRead, Held("keuangan-tagihan"));
+        // F-007 (owner decision 1 Nov): keuangan-tagihan allocates payments pemeriksa-pembayaran verified; neither holds the other's side.
+        Assert.Contains(Permissions.PaymentReviewRead, Held("keuangan-tagihan"));
+        // Reading or allocating a verified payment checks its bank receipt (BankReceiptService.Required).
+        Assert.Contains(Permissions.BankReceiptRead, Held("keuangan-tagihan"));
+        Assert.Contains(Permissions.PaymentAllocate, Held("keuangan-tagihan")); Assert.DoesNotContain(Permissions.PaymentVerify, Held("keuangan-tagihan"));
+        Assert.Contains(Permissions.PaymentVerify, Held("pemeriksa-pembayaran")); Assert.DoesNotContain(Permissions.PaymentAllocate, Held("pemeriksa-pembayaran"));
         Assert.DoesNotContain(Permissions.StockSourceRead, Held("petugas-gudang")); Assert.DoesNotContain(Permissions.StockSourceReconciliationRead, Held("petugas-gudang"));
         Assert.DoesNotContain(Permissions.OrderSpendingPolicyRead, Held("penyetuju-cabang"));
         // The access checker approves what admin-akses proposes and cannot propose itself.

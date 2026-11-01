@@ -71,4 +71,32 @@ public sealed class PaymentVerificationHttpTests(MongoFixture fixture)
         if (manual) { Assert.Equal("1", detail.GetProperty("reviewRevision").GetString()); Assert.False(detail.TryGetProperty("people", out _)); }
         else { Assert.Equal("verified", detail.GetProperty("state").GetString()); Assert.False(detail.GetProperty("verification").TryGetProperty("people", out _)); }
     }
+
+    [WindowsStorageFact]
+    public async Task A_payment_review_reader_without_payment_verify_is_refused_and_nothing_is_verified() {
+        // F-007 maker/checker: keuangan-tagihan reads payment reviews (payment.review.read) to allocate, but cannot verify.
+        await using var data = await PaymentVerificationTestData.CreateAsync(fixture);
+        var view = await data.PreviewAsync(); var input = PaymentVerificationTestData.Input(view); var reader = data.Reader;
+        using var keys = new IdentityRuntimeTests.RuntimeKeys(); var settings = IdentityRuntimeTests.Settings(keys); settings["Mongo:Database"] = data.Read.Database.DatabaseNamespace.DatabaseName;
+        using var factory = IdentityRuntimeTests.Factory(settings).WithWebHostBuilder(web => web.ConfigureTestServices(services => {
+            services.RemoveAll<IClock>(); services.AddSingleton<IClock>(data.Read.Catalog.Clock);
+            services.RemoveAll<MongoIdentitySessionStore>(); services.AddSingleton(data.Read.Catalog.Sessions);
+            services.RemoveAll<PaymentVerificationService>(); services.AddSingleton(data.Service);
+        }));
+        const string origin = "https://portal.unit-toko.co.id";
+        using var client = factory.CreateClient(new() { BaseAddress = new(origin), AllowAutoRedirect = false });
+        client.DefaultRequestHeaders.Add("Cookie", OpaqueSessionCookie.Name + "=" + data.Read.Catalog.Issued[reader.UserId].OpaqueToken);
+        var actions = (await client.GetFromJsonAsync<JsonElement>("/api/v1/access/current")).GetProperty("allowedActions").EnumerateArray().Select(item => item.GetString()).ToArray();
+        Assert.Contains("payment.review.read", actions); Assert.DoesNotContain("payment.verify", actions);
+        var csrf = (await client.GetFromJsonAsync<JsonElement>("/api/v1/identity/csrf")).GetProperty("requestToken").GetString()!;
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"/api/v1/billing/payment-reviews/{data.Read.DeclarationId}/verification") {
+            Content = JsonContent.Create(new { receiptId = data.ReceiptId.ToString(), binding = view.Binding, payerVerificationReference = input.PayerVerificationReference,
+                imageReviewed = true, bankReviewed = true, payerVerified = true, resolutions = input.Resolutions.Select(item => new { field = item.Field, reason = item.Reason }),
+                reason = "Synthetic verification by a reader" }) };
+        request.Headers.Add("Origin", origin); request.Headers.Add("X-Expected-Actor-Id", reader.UserId.ToString()); request.Headers.Add("X-CSRF-Token", csrf);
+        request.Headers.Add("Idempotency-Key", "http-verify-reader"); request.Headers.Add("If-Match", "\"0\"");
+        using var response = await client.SendAsync(request); Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Contains("\"permission_denied\"", await response.Content.ReadAsStringAsync()); // the missing grant, not a person-independence refusal
+        Assert.Equal(0L, await data.Rows(PaymentVerificationBson.Decisions).CountDocumentsAsync(new MongoDB.Bson.BsonDocument()));
+    }
 }
