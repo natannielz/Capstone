@@ -775,7 +775,7 @@ async function branchRequests() {
   const pemohon = await persona('pemohon'), peninjau = await persona('peninjau-toko');
   async function compose(note) {
     await pemohon.page.goto(origin.origin + '/ordering/requests');
-    const tabs = pemohon.page.getByRole('navigation', { name: 'Bagian permintaan', exact: true });
+    const tabs = pemohon.page.getByRole('group', { name: 'Bagian permintaan', exact: true });
     await tabs.getByRole('button', { name: 'Buat permintaan', exact: true }).click();
     const picker = pemohon.page.getByRole('region', { name: 'Pilih kemasan permintaan', exact: true });
     await picker.getByRole('combobox').first().selectOption(journey.branch);
@@ -818,7 +818,7 @@ async function branchRequests() {
     second = await compose('Kebutuhan tambahan');
     await decide(second, false); await capture(peninjau.page, 'R3-rejected');
     await pemohon.page.goto(origin.origin + '/ordering/requests');
-    await pemohon.page.getByRole('navigation', { name: 'Bagian permintaan', exact: true }).getByRole('button', { name: 'Riwayat permintaan', exact: true }).click();
+    await pemohon.page.getByRole('group', { name: 'Bagian permintaan', exact: true }).getByRole('button', { name: 'Riwayat permintaan', exact: true }).click();
     await pemohon.page.getByRole('button', { name: 'Lihat ' + second, exact: true }).click();
     const detail = pemohon.page.getByRole('region', { name: 'Rincian permintaan', exact: true });
     await detail.getByText('Kemasan ini sedang tidak dijual', { exact: false }).waitFor();
