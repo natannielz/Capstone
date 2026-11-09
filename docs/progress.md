@@ -1,7 +1,7 @@
 # Unit Toko progress
 
-- **Done:** 1 Nov: J04 green on feat/j04-buyer-paid. The buyer's `/billing/invoices` now shows "Status pembayaran: Lunas · Dibayar … · Sisa tagihan Rp0,00" (invoice view carries the receivable balance, no new endpoint or permission). Green: Golden A2 j04-paid-a2-green (red first at A13c, j04-paid-a2-red3), A1 j04-paid-a1, InvoiceTests + InvoiceHttpTests 16/16, frontend 1525/1525, contracts checks. Earlier the same day: Golden A2 written, F-007 allocation persona (PR #6). 7/15 passing.
-- **Next:** J08, branch requests and approvals: rerun the branch-request rehearsal on staging.
+- **Done:** 9 Nov on feat/basis-path-tests (report section 4.3 evidence): basis-path white-box tests (frontend/tests/basis-path.test.ts, 16/16), frontend 1541/1541, backend OrderQuotePolicy/BranchOrderRequestRules/Policy 35/35, BranchOrderRequestService 1/1, OrderDecision 12/12, OrderRead 15/15, OrderSubmissionService 25/25; browser Golden A1, FunctionGap 3/3, OrderSubmission, StockCount green. R81 (branch requests) was red on staging only because the rehearsal looked for the view tabs as a navigation; they render as a group since the workspace kit, so the locator was updated and R81 is green again. Still 7/15: J08 also needs its spending-policy rehearsal.
+- **Next:** J08, branch requests and approvals: R81 is green again; run OrderSpendingPolicyBrowserTests and the maker/checker and inactive-branch steps.
 - **Blockers:** Phase F (D01–D08) still needs owner inputs. OCR misread the A2 proof (100.00 instead of Rp22.000, no reference), so OCR quality is unproven. Payment review and order-timeline reads sometimes return 409 `version_conflict`; A2 retries only those (docs/debt.md).
 
 ## 7/15 passing
